@@ -1,0 +1,46 @@
+appId: com.wirelessboard.app
+productName: Wirelessboard Server
+files:
+  - '!docs'
+  - '!css'
+  - '!py'
+  - '!static'
+  - '!build/*.sketch'
+  - '!node_modules/.cache'
+extraResources:
+  - from: dist/wirelessboard-service
+    to: dist/wirelessboard-service
+asar: true
+asarUnpack:
+  - dist/**
+directories:
+  buildResources: build
+  output: release/${platform}
+mac:
+  category: public.app-category.utilities
+  extendInfo:
+    LSBackgroundOnly: true
+    LSUIElement: true
+  target:
+    - dmg
+    - zip
+  artifactName: wirelessboard-server-${version}-mac.${ext}
+win:
+  target:
+    - nsis
+  artifactName: wirelessboard-server-${version}-win.${ext}
+  legalTrademarks: Wirelessboard
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+linux:
+  category: Utility
+  target:
+    - AppImage
+  artifactName: wirelessboard-server-${version}-${arch}.${ext}
+  maintainer: Wirelessboard Maintainers <wirelessboard@example.com>
+  synopsis: Wirelessboard monitoring server
+  description: |
+    Wirelessboard bundles a Python-based Shure monitoring backend with an Electron tray application
+    that makes launching and managing the service simple across desktop platforms.

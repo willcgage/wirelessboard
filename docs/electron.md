@@ -9,29 +9,47 @@ The Wirelessboard server is written in Python. [PyInstaller](https://pyinstaller
 
 The Electron wrapper is written in JavaScript. It provides a menubar app with access to Wirelessboard, its configuration directory, and the Wirelessboard logs. The menu labels continue to include “Micboard” when running in legacy compatibility mode.
 
-## Building the Electron Wrapper
-Here are the steps to generate `wirelessboard-server.app`. If you need to ship a legacy build, replace occurrences of `wirelessboard` with `micboard` in the commands below.
+## Building Cross-Platform Releases
+Wirelessboard now ships with repeatable release scripts and a GitHub Actions workflow that publish artefacts for macOS, Windows, and Raspberry Pi. The Python backend is bundled with PyInstaller while [`electron-builder`](https://www.electron.build) produces the desktop shells.
 
-Download Wirelessboard and install dependencies.
-```shell
-wirelessboard@wirelessboard:~$ git clone https://github.com/willcgage/wirelessboard
-wirelessboard@wirelessboard:~$ cd wirelessboard/
-wirelessboard@wirelessboard:~/wirelessboard$ pip3 install -r py/requirements.txt
-wirelessboard@wirelessboard:~/wirelessboard$ pip3 install pyinstaller
-wirelessboard@wirelessboard:~/wirelessboard$ npm install
+### Prerequisites
+* Node.js 18+ (Node 20 is used in CI)
+* Python 3.9+ with `pip`
+* Xcode command-line tools (macOS) or Build Tools for Visual Studio (Windows) for native module compilation
+
+Run `npm install` once per machine; the postinstall hook provisions `.venv/` with the Python dependencies listed in `py/requirements.txt`.
+
+### Desktop release commands
+The scripts below generate artefacts in the `release/<platform>/` directories. They automatically build the webpack bundles, run PyInstaller, and invoke Electron Builder with the shared `electron-builder.yml` configuration.
+
+```bash
+# macOS: produces DMG and ZIP bundles in release/mac/
+npm run release:mac
+
+# Windows 11: produces an NSIS installer in release/win/
+npm run release:win
 ```
 
-Build the frontend JavaScript using webpack.
-```shell
-wirelessboard@wirelessboard:~/wirelessboard$ npm run build
+Electron Builder configuration lives in `electron-builder.yml`. You can still call the helper script directly when you need fine-grained control over targets:
+
+```bash
+BUILD_TARGET=linux node electron-build.js
 ```
 
-Package the Wirelessboard server application using [PyInstaller](https://pyinstaller.readthedocs.io/en/stable/).
-```shell
-wirelessboard@wirelessboard:~/wirelessboard$ npm run binary
+### Raspberry Pi bundle
+The Pi distribution remains a headless PyInstaller service packaged as a tarball together with the `wirelessboard.service` systemd unit. Run the release task on an ARM host (or a self-hosted GitHub runner):
+
+```bash
+npm run release:pi
 ```
 
-Wrap the PyInstaller-generated executable within an Electron app using Electron Builder.
-```shell
-wirelessboard@wirelessboard:~/wirelessboard$ npm run pack
-```
+The tarball is written to `release/pi/wirelessboard-pi.tar.gz`. Extract it on the Raspberry Pi, copy the service directory into place (for example `/opt/wirelessboard`), and install the bundled unit file into `/etc/systemd/system/`.
+
+### Continuous integration
+The workflow in `.github/workflows/releases.yml` executes the following pipeline whenever you push a tag starting with `v` or trigger it manually:
+
+1. Lint/build job on Ubuntu validates the webpack bundle and compiles all Python sources.
+2. macOS and Windows runners build desktop packages and upload them as workflow artefacts.
+3. An optional Raspberry Pi job can be enabled for teams with a self-hosted ARM runner; it generates the server tarball described above.
+
+When cutting a public release, create a tag (`git tag v1.2.3 && git push --tags`) and download the artefacts from the workflow run to publish on the Releases page.

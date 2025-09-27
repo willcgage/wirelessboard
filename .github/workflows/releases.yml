@@ -1,0 +1,101 @@
+name: Build and Package Wirelessboard
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_pi:
+        description: 'Build Raspberry Pi tarball (requires self-hosted ARM runner)'
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    name: Lint and Build Assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Node dependencies
+        run: npm install
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r py/requirements.txt
+      - name: Build frontend bundle
+        run: npm run build
+      - name: Check Python sources compile
+        run: python -m compileall py
+
+  package-desktop:
+    name: Package desktop apps
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            release_script: npm run release:mac
+            artifact_folder: release/mac
+            artifact_name: wirelessboard-macos
+          - runner: windows-latest
+            release_script: npm run release:win
+            artifact_folder: release/win
+            artifact_name: wirelessboard-windows
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Node dependencies
+        run: npm install
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r py/requirements.txt
+          python -m pip install pyinstaller
+      - name: Build desktop release
+        run: ${{ matrix.release_script }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-${{ github.ref_name }}
+          path: ${{ matrix.artifact_folder }}
+
+  package-pi:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_pi == true
+    name: Package Raspberry Pi bundle
+    runs-on: [self-hosted, linux, arm64]
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Node dependencies
+        run: npm install
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r py/requirements.txt
+          python -m pip install pyinstaller
+      - name: Build Raspberry Pi release
+        run: npm run release:pi
+      - name: Upload Pi artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wirelessboard-pi-${{ github.ref_name }}
+          path: release/pi/wirelessboard-pi.tar.gz

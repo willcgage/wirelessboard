@@ -1,39 +1,22 @@
 'use strict';
 
-const builder = require("electron-builder");
-const Platform = builder.Platform
+const builder = require('electron-builder');
 
-// Promise is returned
+const TARGET_MAP = {
+  mac: builder.Platform.MAC,
+  win: builder.Platform.WINDOWS,
+  linux: builder.Platform.LINUX,
+};
+
+function resolveTarget() {
+  const input = process.env.BUILD_TARGET ? process.env.BUILD_TARGET.toLowerCase() : 'mac';
+  return TARGET_MAP[input] || TARGET_MAP.mac;
+}
+
 builder.build({
-  targets: Platform.MAC.createTarget(),
-  config: {
-  appId: 'com.wirelessboard.app',
-  productName: 'Wirelessboard Server',
-    asar: true,
-    asarUnpack: [
-  'dist/wirelessboard-service',
-      'build/trayTemplate.png',
-      'build/trayTemplate@2x.png',
-    ],
-    mac: {
-      identity: null,
-      category: 'public.app-category.utilities',
-      extendInfo: {
-        LSBackgroundOnly: 1,
-        LSUIElement: 1,
-      },
-    },
-    files: [
-  'dist/wirelessboard-service',
-      'main.js',
-      'build/trayTemplate.png',
-      'build/trayTemplate@2x.png',
-    ],
-  },
-})
-  .then(() => {
-    // handle result
-  })
-  .catch((error) => {
-    // handle error
-  })
+  targets: resolveTarget().createTarget(),
+  config: 'electron-builder.yml',
+}).catch((error) => {
+  console.error('Electron Builder failed', error);
+  process.exitCode = 1;
+});
