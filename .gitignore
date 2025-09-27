@@ -1,0 +1,12 @@
+# Dependency directories
+node_modules/
+
+# Python virtual environments
+.venv/
+
+# Logs and runtime artifacts
+*.log
+config/*.log
+
+# macOS metadata
+.DS_Store
