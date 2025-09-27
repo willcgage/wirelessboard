@@ -1,34 +1,34 @@
-# Micboard Multivenue Server
+# Wirelessboard Multivenue Server
 
-![micboard multivenue](img/multivenue.png)
-
-
-A single server can provide separate instances of micboard for multiple venues across a campus.
-
-For Micboard multivenue, [NGINX](https://www.nginx.com) is used as a transparent proxy server.  NGINX internally routes traffic for each venue to the correct micboard instance based on the URL.  `micboard.local/venue-a` renders the instance for venue-a while `/venue-b` serves the instance for venue b.
-
-## Micboard Configuration
-Setup and enable systemd service for each venue.
+![wirelessboard multivenue](img/multivenue.png)
 
 
-`$ cp micboard.service micboard-venue-a.service`
+A single Wirelessboard host can provide separate instances for multiple venues across a campus.
+
+Wirelessboard uses [NGINX](https://www.nginx.com) as a transparent proxy server in multivenue deployments. NGINX internally routes traffic for each venue to the correct Wirelessboard instance based on the URL. For example, `wirelessboard.local/venue-a` renders the instance for venue A while `/venue-b` serves venue B.
+
+## Wirelessboard Configuration
+Create and enable a dedicated systemd service for each venue.
+
+
+`$ cp wirelessboard.service wirelessboard-venue-a.service`
 
 ```
 [Unit]
-Description=Micboard Service
+Description=Wirelessboard Service
 After=network.target
 
 [Service]
-# Set the network port for micboard venue-a to 8080
-Environment=MICBOARD_PORT=8080
-# Direct micboard to use a separate configuration path for the venue-a venue
-ExecStart=/usr/bin/python3 -u py/micboard.py -f ~/.local/share/micboard/venue-a
-WorkingDirectory=/home/micboard/micboard
+# Set the network port for the venue-a instance to 8080
+Environment=WIRELESSBOARD_PORT=8080
+# Direct Wirelessboard to use a separate configuration path for the venue-a venue
+ExecStart=/usr/bin/python3 -u py/wirelessboard.py -f ~/.local/share/wirelessboard/venue-a
+WorkingDirectory=/home/wirelessboard/wirelessboard
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-# Run the service as user micboard
-User=micboard
+# Run the service as user wirelessboard
+User=wirelessboard
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 [Install]
@@ -37,10 +37,12 @@ WantedBy=multi-user.target
 
 Install the service
 ```
-$ sudo cp micboard-venue-a.service /etc/systemd/system/
-$ sudo systemctl start micboard-venue-a.service
-$ sudo systemctl enable micboard-venue-a.service
+$ sudo cp wirelessboard-venue-a.service /etc/systemd/system/
+$ sudo systemctl start wirelessboard-venue-a.service
+$ sudo systemctl enable wirelessboard-venue-a.service
 ```
+
+> Legacy deployments: copy the generated unit to `/etc/systemd/system/micboard-venue-a.service` if you still rely on the old unit naming convention.
 
 ## Configure Landing Page
 ```
@@ -73,10 +75,10 @@ $ sudo systemctl restart nginx
 ```
 
 ## Setup Background Fileshare
-Setup [Samba](fileshare.md) to map to the micboard `backgrounds` folder.  Multiple venues can share or have separate background image repositories.
+Setup [Samba](fileshare.md) to map to the Wirelessboard `backgrounds` folder. Multiple venues can share or have separate background image repositories.
 
-Micboard defaults to a separate backgrounds folder for each instance.  A shared directory can be set via `-b`.  For micboard multivenue, this can be set in the systemd /etc/systemd/service/micboard-venue.service file.
+Wirelessboard defaults to a separate backgrounds folder for each instance. A shared directory can be set via `-b`. For multivenue deployments, set this in the systemd `/etc/systemd/system/wirelessboard-venue.service` file.
 
 ```bash
-ExecStart=/usr/bin/python3 -u py/micboard.py -f ~/.local/share/micboard/venue-a -b ~/.local/share/micboard/backgrounds
+ExecStart=/usr/bin/python3 -u py/wirelessboard.py -f ~/.local/share/wirelessboard/venue-a -b ~/.local/share/wirelessboard/backgrounds
 ```

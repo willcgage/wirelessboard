@@ -1,4 +1,6 @@
 # Electron Wrapper (Discontinued)
+
+> Legacy reference: This document mirrors the original Micboard-branded instructions. Modern Wirelessboard builds use the same steps with `wirelessboard` naming. Refer to `../electron.md` for the up-to-date guide.
 Python & JavaScript dependencies can be wrapped with electron to make deployment a bit easer for those running macOS.  This is far from the ideal way to package and deploy an application for the mac, but it eliminates the need for the command line during the install process.  A Cocoa or Swift wrapper should be made, Electron adds ~300mb to the ~19mb micboard executable.
 
 There are a few different layers.

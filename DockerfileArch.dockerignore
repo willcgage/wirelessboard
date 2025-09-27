@@ -7,6 +7,6 @@ Dockerfile
 DockerfileArch
 DockerfileArch.dockerignore
 docker-compose.yaml
-micboard.service
+wirelessboard.service
 package-lock.json
 webpack.config.js

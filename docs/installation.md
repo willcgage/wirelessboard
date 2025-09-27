@@ -42,12 +42,13 @@ $ npm run build
 $ python3 py/wirelessboard.py
 ```
 
-Edit `User` and `WorkingDirectory` within `micboard.service` to match your installation and install it as a service (the file name is kept for compatibility).
+Edit `User` and `WorkingDirectory` within `wirelessboard.service` to match your installation and install it as a service.
 ```
-$ sudo cp micboard.service /etc/systemd/system/
-$ sudo systemctl start micboard.service
-$ sudo systemctl enable micboard.service
+$ sudo cp wirelessboard.service /etc/systemd/system/
+$ sudo systemctl start wirelessboard.service
+$ sudo systemctl enable wirelessboard.service
 ```
+> Maintaining an older deployment? Copy `wirelessboard.service` to `/etc/systemd/system/micboard.service` if you still rely on the legacy unit name.
 
 Check the [configuration](configuration.md) docs for more information on configuring Wirelessboard.
 
