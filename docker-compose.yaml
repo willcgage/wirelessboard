@@ -1,0 +1,14 @@
+services:
+  # -------- Wirelessboard -----------
+  wirelessboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: wirelessboard:local
+    container_name: wirelessboard
+    restart: unless-stopped
+    ports:
+      - '8058:8058'
+    volumes:
+      # Legacy deployments used .../micboard; mount both if you need to migrate existing data.
+      - ./config:/root/.local/share/wirelessboard

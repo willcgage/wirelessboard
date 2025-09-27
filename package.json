@@ -1,0 +1,53 @@
+{
+  "name": "wirelessboard",
+  "version": "1.0.0",
+  "description": "An intelligent wireless device tray for ethernet enabled Shure microphones.",
+  "main": "main.js",
+  "scripts": {
+  "server": "./.venv/bin/python py/wirelessboard.py",
+  "server:venv": "./.venv/bin/python py/wirelessboard.py",
+  "server:sys": "python3 py/wirelessboard.py",
+    "setup:venv": "python3 -m venv .venv && ./.venv/bin/python -m pip install -U pip setuptools wheel && ./.venv/bin/python -m pip install -r py/requirements.txt",
+    "postinstall": "npm run setup:venv",
+  "build": "node node_modules/webpack/bin/webpack.js --mode production --progress --config=webpack.config.js",
+  "build:dev": "node node_modules/webpack/bin/webpack.js --mode development --watch --config=webpack.config.js",
+  "server:watch": "nodemon --watch static --watch demo.html --watch css --watch js --watch py --ignore 'config/config.json' --ignore 'config/**/*.json' --ext js,json,html,css,py --exec \"./.venv/bin/python py/wirelessboard.py\"",
+  "dev": "concurrently \"npm run build:dev\" \"npm run server:watch\"",
+  "static": "python -m http.server 8058"
+  },
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/willcgage/wirelessboard.git"
+  },
+  "author": "wirelessboard maintainers",
+  "bugs": {
+    "url": "https://github.com/willcgage/wirelessboard/issues"
+  },
+  "homepage": "https://github.com/willcgage/wirelessboard",
+  "devDependencies": {
+    "@babel/core": "^7.28.4",
+    "@babel/preset-env": "^7.28.3",
+    "@ibm/plex": "^6.4.1",
+    "@popperjs/core": "^2.11.8",
+    "@shopify/draggable": "^1.1.4",
+    "babel-loader": "^9.2.1",
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "concurrently": "^9.2.1",
+    "css-loader": "^7.1.2",
+    "eslint": "^8.6.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.25.4",
+    "nodemon": "^3.1.10",
+    "qrcode": "^1.5.4",
+    "sass": "^1.92.1",
+    "sass-loader": "^16.0.5",
+    "smoothie": "^1.36.1",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.101.3",
+    "webpack-cli": "^6.0.1",
+    "whatwg-fetch": "^3.6.20"
+  }
+}

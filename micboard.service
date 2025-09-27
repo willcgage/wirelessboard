@@ -1,0 +1,16 @@
+[Unit]
+Description=Wirelessboard Service
+After=network.target
+
+[Service]
+Environment=WIRELESSBOARD_PORT=80
+ExecStart=/usr/bin/python3 -u py/wirelessboard.py
+WorkingDirectory=/home/wirelessboard/wirelessboard
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=wirelessboard
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

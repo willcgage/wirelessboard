@@ -1,0 +1,378 @@
+import os
+import sys
+import json
+import logging
+import logging.handlers
+import argparse
+import uuid
+import time
+from shutil import copyfile
+
+import shure
+import offline
+import tornado_server
+
+APPNAME = 'wirelessboard'
+LEGACY_APPNAME = 'micboard'
+
+CONFIG_FILE_NAME = 'config.json'
+
+FORMAT = '%(asctime)s %(levelname)s:%(message)s'
+
+config_tree = {}
+
+gif_dir = ''
+
+group_update_list = []
+
+args = {}
+
+def uuid_init():
+    if 'uuid' not in config_tree:
+        micboard_uuid = str(uuid.uuid4())
+        logging.info('Adding UUID: {} to config.conf'.format(micboard_uuid))
+        config_tree['uuid'] = micboard_uuid
+        save_current_config()
+
+
+def logging_init():
+    formatter = logging.Formatter(FORMAT)
+    log = logging.getLogger()
+    log.setLevel(logging.DEBUG)
+
+    sthandler = logging.StreamHandler(sys.stdout)
+    fhandler = logging.handlers.RotatingFileHandler(log_file(),
+                                                    maxBytes=10*1024*1024,
+                                                    backupCount=5)
+
+    sthandler.setFormatter(formatter)
+    fhandler.setFormatter(formatter)
+
+    log.addHandler(sthandler)
+    log.addHandler(fhandler)
+
+
+def web_port():
+    if args['server_port'] is not None:
+        return int(args['server_port'])
+
+    elif 'WIRELESSBOARD_PORT' in os.environ:
+        return int(os.environ['WIRELESSBOARD_PORT'])
+    elif 'MICBOARD_PORT' in os.environ:
+        logging.info('Using legacy MICBOARD_PORT environment variable')
+        return int(os.environ['MICBOARD_PORT'])
+
+    return config_tree['port']
+
+
+def os_config_path():
+    path = os.getcwd()
+    if sys.platform.startswith('linux'):
+        path = os.getenv('XDG_DATA_HOME', os.path.expanduser("~/.local/share"))
+    elif sys.platform == 'win32':
+        path = os.getenv('LOCALAPPDATA')
+    elif sys.platform == 'darwin':
+        path = os.path.expanduser('~/Library/Application Support/')
+    return path
+
+
+def config_path(folder=None):
+    if args['config_path'] is not None:
+        if os.path.exists(os.path.expanduser(args['config_path'])):
+            path = os.path.expanduser(args['config_path'])
+        else:
+            logging.warning("Invalid config path")
+            sys.exit()
+
+    else:
+        base_path = os_config_path()
+        preferred_path = os.path.join(base_path, APPNAME)
+        legacy_path = os.path.join(base_path, LEGACY_APPNAME)
+
+        if os.path.exists(preferred_path):
+            path = preferred_path
+        elif os.path.exists(legacy_path):
+            logging.info('Reusing legacy configuration directory at %s', legacy_path)
+            path = legacy_path
+        else:
+            os.makedirs(preferred_path)
+            path = preferred_path
+
+    if folder:
+        return os.path.join(path, folder)
+    return path
+
+def log_file():
+    return config_path(f'{APPNAME}.log')
+
+# https://stackoverflow.com/questions/404744/determining-application-path-in-a-python-exe-generated-by-pyinstaller
+def app_dir(folder=None):
+    if getattr(sys, 'frozen', False):
+        application_path = getattr(sys, '_MEIPASS', None)
+        if application_path is not None:
+            if folder is not None:
+                return os.path.join(application_path, folder)
+            else:
+                return application_path
+        else:
+            return None
+
+    if __file__:
+        application_path = os.path.dirname(__file__)
+    else:
+        application_path = os.getcwd()
+
+    if folder is not None:
+        return os.path.join(os.path.dirname(application_path), folder)
+    else:
+        return os.path.dirname(application_path)
+
+
+def default_gif_dir():
+    path = config_path('backgrounds')
+    if not os.path.exists(path):
+        os.makedirs(path)
+    print("GIFCHECK!")
+    return path
+
+def get_gif_dir():
+    if args['background_directory'] is not None:
+        if os.path.exists(os.path.expanduser(args['background_directory'])):
+            return os.path.expanduser(args['background_directory'])
+        else:
+            logging.warning("invalid config path")
+            sys.exit()
+
+    background_folder = config_tree.get('background-folder')
+    if isinstance(background_folder, str) and background_folder:
+        return os.path.expanduser(background_folder)
+    return default_gif_dir()
+
+def config_file():
+    app_config_path = app_dir(CONFIG_FILE_NAME)
+    if app_config_path is not None and os.path.exists(app_config_path):
+        return app_config_path
+    elif os.path.exists(config_path(CONFIG_FILE_NAME)):
+        return config_path(CONFIG_FILE_NAME)
+    else:
+        demo_config_path = app_dir('democonfig.json')
+        if demo_config_path is not None:
+            copyfile(demo_config_path, config_path(CONFIG_FILE_NAME))
+        return config_path(CONFIG_FILE_NAME)
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--config-path', help='configuration directory')
+    parser.add_argument('-p', '--server-port', help='server port')
+    parser.add_argument('-b', '--background-directory', help='background directory')
+    args,_ = parser.parse_known_args()
+
+    return vars(args)
+
+
+def config():
+    global args
+    args = parse_args()
+    logging_init()
+    read_json_config(config_file())
+    uuid_init()
+
+
+    logging.info('Starting Wirelessboard {}'.format(config_tree['wirelessboard_version']))
+
+
+def config_mix(slots):
+    for slot in slots:
+        current = get_slot_by_number(slot['slot'])
+        if current:
+            if 'extended_id' not in slot and 'extended_id' in current:
+                slot['extended_id'] = current['extended_id']
+
+            if 'extended_name' in slot:
+                if not slot['extended_name']:
+                    slot.pop('extended_name', None)
+            elif 'extended_name' in current:
+                slot['extended_name'] = current['extended_name']
+
+            if 'chan_name_raw' in current:
+                slot['chan_name_raw'] = current['chan_name_raw']
+            elif 'chan_name_raw' in slot:
+                slot.pop('chan_name_raw', None)
+
+    return slots
+
+
+def reconfig(slots):
+    tornado_server.SocketHandler.close_all_ws()
+
+    config_tree['slots'] = config_mix(slots)
+
+    save_current_config()
+
+    config_tree.clear()
+    for device in shure.NetworkDevices:
+        # device.socket_disconnect()
+        device.disable_metering()
+        del device.channels[:]
+
+    del shure.NetworkDevices[:]
+    del offline.OfflineDevices[:]
+
+    time.sleep(2)
+
+    config()
+    for rx in shure.NetworkDevices:
+        rx.socket_connect()
+
+def get_version_number():
+    package_json_path = app_dir('package.json')
+    if package_json_path is None or not os.path.exists(package_json_path):
+        logging.warning("package.json not found.")
+        return "unknown"
+    with open(package_json_path) as package:
+        pkginfo = json.load(package)
+
+    return pkginfo.get('version', 'unknown')
+
+def read_json_config(file):
+    global config_tree
+    global gif_dir
+    with open(file) as config_file:
+        config_tree = json.load(config_file)
+
+        for chan in config_tree['slots']:
+            if chan['type'] in ['uhfr', 'qlxd', 'ulxd', 'axtd', 'p10t']:
+                netDev = shure.check_add_network_device(chan['ip'], chan['type'])
+                netDev.add_channel_device(chan)
+
+            elif chan['type'] == 'offline':
+                offline.add_device(chan)
+
+
+    gif_dir = get_gif_dir()
+    version = get_version_number()
+    config_tree['wirelessboard_version'] = version
+    config_tree['micboard_version'] = version
+
+def write_json_config(data):
+    with open(config_file(), 'w') as f:
+        json.dump(data, f, indent=2, separators=(',', ': '), sort_keys=True)
+
+def save_current_config():
+    return write_json_config(config_tree)
+
+def get_group_by_number(group_number):
+    for group in config_tree['groups']:
+        if group['group'] == int(group_number):
+            return group
+    return None
+
+def update_group(data):
+    group_update_list.append(data)
+    group = get_group_by_number(data['group'])
+    if not group:
+        group = {}
+        group['group'] = data['group']
+        config_tree['groups'].append(group)
+
+    group['slots'] = data['slots']
+    group['title'] = data['title']
+    group['hide_charts'] = data['hide_charts']
+
+    save_current_config()
+
+def get_slot_by_number(slot_number):
+    for slot in config_tree['slots']:
+        if slot['slot'] == slot_number:
+            return slot
+    return None
+
+def update_slot(data):
+    slot_cfg = get_slot_by_number(data['slot'])
+
+    if slot_cfg is None:
+        logging.warning(f"Slot config for slot {data['slot']} not found.")
+        return
+
+    has_extended_id = 'extended_id' in data
+    has_extended_name = 'extended_name' in data
+    has_chan_name = 'chan_name_raw' in data
+
+    if has_extended_id:
+        value = data.get('extended_id')
+        if value:
+            slot_cfg['extended_id'] = value
+        else:
+            slot_cfg.pop('extended_id', None)
+
+    if has_extended_name:
+        value = data.get('extended_name')
+        if value:
+            slot_cfg['extended_name'] = value
+        else:
+            slot_cfg.pop('extended_name', None)
+
+    if has_chan_name:
+        value = data.get('chan_name_raw')
+        if value:
+            slot_cfg['chan_name_raw'] = value
+        else:
+            slot_cfg.pop('chan_name_raw', None)
+
+    save_current_config()
+
+
+def _normalized_slot_set(slots):
+    if slots is None:
+        return {slot_cfg.get('slot') for slot_cfg in config_tree.get('slots', []) if slot_cfg.get('slot') is not None}
+    target = set()
+    try:
+        for entry in slots:
+            try:
+                target.add(int(entry))
+            except (TypeError, ValueError):
+                continue
+    except TypeError:
+        try:
+            target.add(int(slots))
+        except (TypeError, ValueError):
+            return set()
+    return target
+
+
+def clear_device_names(slots=None):
+    """Remove cached device names for the provided slot numbers.
+
+    If *slots* is ``None`` all configured slots will be cleared. Returns the
+    list of slot numbers that were updated. Extended name data is preserved.
+    """
+
+    target_slots = _normalized_slot_set(slots)
+    if not target_slots:
+        return []
+
+    cleared = []
+    dirty = False
+    for slot_cfg in config_tree.get('slots', []):
+        slot_num = slot_cfg.get('slot')
+        if slot_num in target_slots and 'chan_name_raw' in slot_cfg:
+            slot_cfg.pop('chan_name_raw', None)
+            dirty = True
+        if slot_num in target_slots:
+            cleared.append(slot_num)
+
+    if dirty:
+        save_current_config()
+
+    return cleared
+
+def update_pco_config(pco_data):
+    if not isinstance(pco_data, dict):
+        logging.warning('Invalid PCO config payload')
+        return
+    config_tree['pco'] = pco_data
+    save_current_config()
+    try:
+        logging.info('PCO config updated and saved to %s', config_file())
+    except Exception:
+        logging.info('PCO config updated and saved')

@@ -1,0 +1,56 @@
+{
+  "groups": [
+    {
+      "group": 1,
+      "slots": [
+        1,
+        3,
+        2,
+        4
+      ],
+      "title": "Group 1 Title"
+    },
+    {
+      "group": 2,
+      "slots": [
+        4,
+        3,
+        2,
+        1
+      ],
+      "title": "Group 2 Title"
+    },
+    {
+      "group": 9,
+      "slots": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "title": "Group 9 Title"
+    }
+  ],
+  "micboard_version": "0.8.5",
+  "pco": {
+    "auth": {
+      "secret": "pco_pat_96022dd6f79de2873cd6ac1f81fbcbe296555b9dce169f480066adcb3a0a613a513c0811",
+      "token": "bebbe53e28bef1985641b190b6b0b9fe826d3ee03111dfd89b205c49fbb85087"
+    },
+    "enabled": true,
+    "mapping": {
+      "note_category": "Mic / IEM Assignments",
+      "strategy": "note_or_brackets",
+      "team_name_filter": []
+    },
+    "services": {
+      "plan": {
+        "select": "next"
+      },
+      "service_type_id": 0
+    }
+  },
+  "port": 8058,
+  "slots": [],
+  "uuid": "91a79102-6e82-401c-b56f-fa4c7f019e3d"
+}

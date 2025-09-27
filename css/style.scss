@@ -1,0 +1,961 @@
+/* @import '/node_modules/@ibm/plex/css/ibm-plex.css'; */
+
+html,body {
+  background-color: var(--color-background);
+  height: 100%;
+  margin: 0px;
+  padding: 0px;
+}
+
+.fullHeight {
+  height: 100%;
+  padding: 0px !important;
+}
+
+.col-sm {
+  color: var(--color-white);
+  border: 0px;
+  position: relative;
+  // flex-grow: unset;
+  // background-color: var(--color-black);
+}
+
+#micboard,
+.wirelessboard-board {
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(256px, 1fr));
+  align-items: flex-start;
+  align-content: flex-start;
+  grid-gap: 16px;
+}
+
+.deskmode #micboard .col-sm,
+.deskmode .wirelessboard-board .col-sm {
+  /* remove for borderless */
+  // border-color: var(--color-background);
+  border-style: solid;
+  // border-width: 0 8px;
+}
+
+.mic_id {
+  font-family: 'IBM Plex Sans';
+  font-weight: 300;
+  font-style: italic;
+}
+
+.uploadmode .mic_name .mic_id {
+  font-size: 1vw;
+}
+
+
+
+.above-mid .col-sm {
+  // border-color: var(--color-background);
+  padding: 0px;
+}
+
+
+
+.name{
+  font-family: 'IBM Plex Sans';
+  font-weight: 400;
+  font-style: bold;
+}
+
+.ext-name {
+  font-family: 'IBM Plex Sans';
+  font-weight: 300;
+  font-style: italic;
+  font-size: 12pt;
+  color: var(--color-white);
+  opacity: 0.9;
+  margin: 0 1em 0 0;
+  float: right;
+}
+
+
+/* .info-bar components */
+.electrode {
+  position: absolute;
+  left: 0px;
+  bottom: 250px;
+  height: 125px;
+  width: 100%;
+}
+
+.battery-bars {
+  position: absolute;
+  display: table;
+  table-layout: fixed;
+  left:0px;
+  bottom: 225px;
+  height: 25px;
+  width: 100%;
+  background-color: var(--color-black);
+}
+.battery-bar {
+  display: table-cell;
+  height:inherit;
+  border-style: solid;
+  border-width: 2px 1px;
+  border-color: var(--color-gray);
+  box-sizing:border-box;
+}
+
+.batt_led_off{
+  background-color: var(--color-black);
+}
+
+.batt_led_danger{
+  background-color: var(--color-red);
+}
+
+.batt_led_warning {
+  background-color: var(--color-yellow);
+}
+.batt_led_good{
+  background-color: var(--color-green);
+}
+
+canvas.slotgraph {
+  position: absolute;
+  left: 0px;
+  bottom: 25px;
+  width:100%;
+  height:200px;
+}
+
+.offset {
+  position: absolute;
+  bottom: 180px;
+  right: 5px;
+  font-family: 'IBM Plex Mono';
+  font-weight: 100;
+  font-style: italic;
+  color: var(--color-green);
+}
+
+.frequency {
+  position: absolute;
+  bottom: 80px;
+  right: 5px;
+  font-family: 'IBM Plex Mono';
+  font-weight: 100;
+  font-style: italic;
+  color: var(--color-red);
+}
+
+.runtime {
+  position: absolute;
+  bottom: 180px;
+  left: 5px;
+  font-family: 'IBM Plex Mono';
+  font-weight: 100;
+  font-style: italic;
+  color: var(--color-green);
+}
+
+
+.powerlock{
+  display: none;
+  position: absolute;
+  bottom: 15px;
+  left: 5px;
+  // color: #587B7F;
+  color: #DA8F4A;
+  // color: var(--color-yellow-dark);
+}
+
+.quality {
+  position: absolute;
+  bottom: 80px;
+  left: 5px;
+  // font-family: 'IBM Plex Mono';
+  // font-weight: 100;
+  // font-style: italic;
+  color: var(--color-purple);
+}
+
+.diversity {
+  position: absolute;
+  display: table;
+  table-layout: fixed;
+  left: 0px;
+  bottom:0px;
+
+  height: 25px;
+  width: 100%;
+}
+
+.diversity-bar {
+  display: table-cell;
+  height:inherit;
+  border-style: solid;
+  border-width: 1px;
+  border-color: var(--color-gray);
+  box-sizing:border-box;
+}
+
+
+.diversity-bar-blue{
+  background-color: var(--color-blue);
+}
+
+.diversity-bar-red{
+  background-color: var(--color-red);
+}
+
+.diversity-bar-off{
+  background-color: var(--color-black);
+}
+
+
+.errorzone {
+  font-family: IBM Plex Mono;
+  font-weight: 100;
+  font-style: italic;
+  color: var(--color-yellow);
+}
+
+.editzone {
+  position: absolute;
+  font-family: IBM Plex Mono;
+  font-weight: 100;
+  font-style: italic;
+  color: var(--color-yellow);
+  bottom: 10px;
+  display: none;
+}
+
+.editzone .input-group span{
+  background-color: var(--color-black);
+  color: var(--color-white);
+  border-color: var(--color-black);
+}
+
+.editzone input {
+  background-color: var(--color-black);
+  color: var(--color-yellow);
+  border-color: var(--color-gray);
+  text-align: right;
+}
+
+.editzone input:focus {
+  border-color: var(--color-gray);
+  background-color: var(--color-black);
+  color: var(--color-yellow);
+}
+
+.editzone .ext-id {
+  text-align: left;
+}
+
+.editzone .ext-name {
+  text-align: right;
+}
+
+.editzone p.rx-name {
+  padding-left: 5px;
+  color: var(--color-white);
+  font-weight: 300;
+}
+
+.editzone .row {
+  margin-left: 5px;
+  margin-right: 5px;
+}
+
+#save-box {
+  // height: 130px;
+  width: 100%;
+  // position: absolute;
+  // bottom: 15px;
+  display: block;
+}
+
+#save-box .row,
+#paste-box .row {
+  padding-top: 15px;
+}
+
+#paste-box {
+  display: none;
+}
+
+#bulkbox {
+  background-color: var(--color-black);
+  color: var(--color-yellow);
+  border-color: var(--color-gray);
+}
+
+#pco-log-entries {
+  max-height: 240px;
+  overflow-y: auto;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+#pco-log-entries .pco-log-entry + .pco-log-entry {
+  margin-top: 0.25rem;
+}
+
+/* mic storage mode */
+.tvmode {
+  #micboard,
+  .wirelessboard-board {
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    grid-gap: 6px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .col-sm {
+    background: var(--color-black);
+    height: 100vh;
+  }
+
+  background-color: black;
+
+  .blank {
+    background: black;
+  }
+
+  .above-mid {
+    height: 100%;
+  }
+
+  .name {
+    font-size: calc(1vw + 7pt);
+  }
+
+  .mic_id {
+    position: absolute;
+    top: 0px;
+    font-size: 30pt;
+  }
+
+  .mic_name {
+    display: flex;
+    justify-content:center;
+    align-items:center;
+  }
+
+
+  /* electrode & info drawer switch */
+  /* no electrode or info-drawer */
+  .elinfo00 .col-sm .mic_name {
+    height: 100%;
+  }
+
+  .elinfo00 .col-sm .electrode {
+    display: none;
+  }
+
+  .elinfo00 .col-sm .info-drawer {
+    display: none;
+  }
+
+  /* electrode */
+  .elinfo01 .col-sm .mic_name {
+    height: calc(100% - 125px);
+    /* background-color: black; */
+    background: #262626;
+  }
+
+  .elinfo01 .col-sm .electrode {
+    display: block;
+    bottom: 0px;
+  }
+
+  .elinfo01 .col-sm .info-drawer {
+    display: none;
+  }
+
+
+  /* info drawer */
+  .elinfo10 .col-sm .mic_name {
+    height: calc(100% - 250px);
+  }
+
+  .elinfo10 .col-sm .electrode {
+    display: none;
+  }
+
+  .elinfo10 .col-sm .info-drawer {
+    display: block;
+  }
+
+  /* electrode and info drawer */
+  .elinfo11 .col-sm .mic_name {
+    height: calc(100% - 375px);
+    background: var(--color-black);
+  }
+
+  .elinfo11 .col-sm .electrode {
+    display: block;
+  }
+
+  .elinfo11 .col-sm info-drawer {
+    display: block;
+  }
+
+  .errortype{
+    position: absolute;
+    bottom: 80px;
+    right: 5px
+  }
+
+  .ip {
+    position: absolute;
+    bottom: 60px;
+    right: 5px;
+  }
+
+  .rxinfo {
+    position: absolute;
+    bottom: 40px;
+    right: 5px;
+  }
+
+  .navbar {
+    display: none;
+  }
+}
+
+/* browser mode */
+.deskmode {
+  .electrode {
+    display: none;
+  }
+  .info-drawer {
+    height: 130px;
+  }
+
+  .header {
+    display:none;
+
+  }
+
+  .col-sm {
+    vertical-align: middle;
+    min-width: 256px;
+    /* flex-grow: 0; */
+    flex-shrink: 1;
+  }
+
+
+  .mic_id {
+    display: inline;
+    font-weight: 400;
+    font-size: 18pt;
+    text-align: left;
+    padding-left: 1em;
+  }
+
+  .name {
+    float: right;
+    font-size: 12pt;
+    display: inline;
+    font-weight: 400;
+    padding-right: 1em;
+    text-align: right;
+    font-size: 18pt;
+    margin: 0px;
+  }
+
+  .ext-name {
+    float: right;
+    padding-right: 1em;
+    text-align: right;
+    font-size: 11pt;
+    margin: 0px;
+    opacity: 0.85;
+  }
+
+  .battery-bars {
+    height: 15px;
+    bottom: 115px;
+  }
+
+  .battery-bar {
+    border-width:1px;
+  }
+
+  .offset {
+    bottom: 75px;
+    right: 5px;
+  }
+
+  .frequency {
+    bottom: 25px;
+    right: 5px;
+  }
+
+  .runtime {
+    bottom: 75px;
+    left: 5px;
+  }
+
+  .powerlock {
+    bottom: 3px;
+    left: 1px;
+  }
+
+  .quality {
+    bottom: 25px;
+    left: 5px;
+  }
+
+  canvas.slotgraph {
+    height:100px;
+    bottom:15px;
+  }
+
+  .diversity {
+    height: 15px;
+  }
+  .diversity-bar {
+    border-width: 1px;
+  }
+
+  .errortype{
+    position: absolute;
+    bottom: 75px;
+    right: 5px
+  }
+
+  .ip {
+    position: absolute;
+    bottom: 55px;
+    right: 5px;
+  }
+
+  .rxinfo {
+    position: absolute;
+    bottom: 35px;
+    right: 5px;
+  }
+
+  .above-mid {
+    padding-top: 46px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .AUDIO_PEAK {
+    animation: pulse .5s infinite;
+  }
+
+}
+
+
+@media (max-width: 512px) {
+  #micboard,
+  .wirelessboard-board {
+    grid-gap: 0px;
+    padding-top: 38px;
+    padding-left: 0px;
+    padding-right: 0px;
+  }
+
+  .deskmode #micboard .col-sm,
+  .deskmode .wirelessboard-board .col-sm {
+    border-width: 0;
+  }
+
+  .info-drawer {
+    display: none;
+  }
+}
+
+@media (min-width: 513px) {
+
+
+  .deskmode #micboard .col-sm .mic_name,
+  .deskmode .wirelessboard-board .col-sm .mic_name {
+    border-radius: 12px 12px 0 0;
+  }
+}
+
+
+/* Background Colors */
+.GOOD{
+  background: var(--color-green);
+}
+
+.PREV_GOOD{
+  background: var(--color-blue);
+}
+
+.REPLACE {
+  background: var(--color-yellow);
+}
+
+.PREV_REPLACE {
+  background: repeating-linear-gradient(
+  -45deg,
+  var(--color-yellow-dark),
+  var(--color-yellow-dark) 40px,
+  var(--color-black) 40px,
+  var(--color-black) 80px
+);
+}
+
+.CRITICAL, .PREV_CRITICAL {
+  background: var(--color-red);
+}
+
+.PREV_CRITICAL {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-red-dark),
+    var(--color-red-dark) 40px,
+    var(--color-black) 40px,
+    var(--color-black) 80px
+  );
+}
+
+.UNASSIGNED {
+  background: var(--color-black);
+}
+
+.TX_COM_ERROR {
+  background: var(--color-black);
+}
+
+.RX_COM_ERROR {
+  background: var(--color-purple);
+}
+
+.blank {
+  background: var(--color-background);
+}
+
+.blank .mic_name {
+  display: none;
+}
+
+.blank .errortype {
+  display: none;
+}
+
+// .blank .info-drawer inherits default styling.
+
+.sidebar-open #micboard .blank,
+.sidebar-open .wirelessboard-board .blank {
+  .mic_name {
+    display: block;
+    background: var(--color-black);
+  }
+
+  .electrode, .info-drawer {
+    display: block !important;
+  }
+}
+
+.sidebar-open .sidebar-nav .blank .mic_name {
+  display: unset;
+}
+
+
+@keyframes pulse {
+  0% {
+    background: var(--color-red);
+  }
+
+  100% {
+    background-color: var(--color-black);
+  }
+
+}
+
+.electrode.AUDIO_PEAK, .elinfo00 .AUDIO_PEAK, .elinfo10 .AUDIO_PEAK, #hud .AUDIO_PEAK {
+  animation: pulse .5s infinite;
+}
+
+
+#largelink {
+  padding-top: 4em;
+}
+
+.message-board {
+  display: none;
+  background-color: var(--color-blue);
+  color: var(--color-white);
+  padding-left: 50px !important;
+  padding-top: 75px !important;
+  padding: 3em;
+}
+
+.message-board a {
+  color: inherit;
+}
+
+.settings {
+  display: none;
+  // background-color: var(--color-blue);
+  color: var(--color-black);
+  // margin-left: -15px;
+  // margin-right: -15px;
+  // padding: 3em;
+  padding-top: 76px;
+}
+
+.settings .config-header {
+  background-color: var(--color-black);
+  padding: .75rem 1.25rem;
+  border: 1px solid var(--color-gray);
+  // margin-left: -5px;
+  // margin-right: -5px;
+  border-radius: 12px 12px 0 0;
+}
+
+.settings .config-header h3 {
+  padding: 1em;
+  color: var(--color-white);
+}
+
+.settings .config-footer {
+  background-color: var(--color-black);
+  padding: .75rem 1.25rem;
+  border: 1px solid var(--color-gray);
+  // margin-left: -5px;
+  // margin-right: -5px;
+  border-radius: 0 0 12px 12px;
+}
+
+
+#discovered_list input, #discovered_list select{
+  pointer-events: none;
+}
+
+
+
+#discovered_list .slot-number {
+  display: none;
+}
+
+#discovered_list .del-btn {
+  display: none;
+}
+
+#cfg-discovered-col {
+  padding-bottom: 1em;
+}
+
+.settings .navbar-toggler-icon {
+  height: 100%;
+}
+
+.slot-number {
+  color: var(--color-white);
+  font-weight: bold;
+}
+
+.cfg-row {
+  background-color: var(--color-black);
+  padding: 0 1.25rem .75rem 1.25rem;
+  border: 1px solid var(--color-gray);
+  font-family: 'IBM Plex Sans';
+  font-weight: 300;
+}
+
+.cfg-row input, .cfg-row input:focus {
+  background-color: var(--color-black);
+  color: var(--color-white);
+  border-color: var(--color-gray);
+  font-style: italic;
+}
+
+/* Ensure labels are readable on dark rows */
+.cfg-row .form-label,
+.cfg-row .col-form-label,
+.cfg-row .slot-number label {
+  color: var(--color-white) !important;
+  opacity: 0.9;
+}
+
+
+
+.cfg-row select {
+  background-color: var(--color-black);
+  color: var(--color-white);
+  border-color: var(--color-gray);
+  -moz-appearance: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.cfg-row select:focus, .cfg-row select:hover {
+    box-shadow: 0 0 0 3px -moz-mac-focusring;
+    color: var(--color-white);
+    background-color: var(--color-black);
+}
+
+.cfg-row-form {
+  padding-top: .75rem;
+}
+
+.navbar-toggler {
+  border: none;
+}
+
+.navbar {
+  padding-left: 0px;
+  padding-right: 0px;
+}
+
+.navbar-toggler {
+  padding-left: 1em;
+  padding-right: 1em;
+}
+
+.navbar-toggler {
+  outline: none !important;
+}
+
+a:link, a:visited, a:hover, a:active {
+    text-decoration: none;
+}
+
+
+
+.sidebar-nav {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100%;
+  padding-top: 38px;
+  background-color: var(--color-gray);
+  overflow-x: hidden;
+  // transition: .5s;
+}
+
+.row {
+  margin-left: 0px;
+  margin-right: 0px;
+}
+
+.sidebar-open #micboard,
+.sidebar-open .wirelessboard-board {
+  padding-left: 308px;
+}
+
+.sidebar-open .sidebar-nav {
+  display: block;
+  width: 300px;
+  transition: .5s;
+}
+
+.slot-prototype-list .col-sm .info-drawer {
+  display: none;
+}
+
+#eslotlist {
+  height: 400px;
+  // overflow-y: scroll;
+}
+
+#eslotlist .col-sm {
+  padding-left: 0px;
+  padding-right: 0px;
+}
+
+.sidebar-nav h1 {
+  font-family: 'IBM Plex Sans';
+  text-align: center;
+  color: var(--color-white);
+  padding-top: .35em;
+  padding-bottom: .35em;
+}
+
+.sidebar-nav .form-group {
+  padding-left: 1.5em;
+  padding-right: 1.5em;
+}
+
+.sidebar-nav .form-group button {
+  margin-top: .5em;
+}
+
+#grouplist p  {
+  margin-bottom: unset;
+}
+
+.nav-link {
+  display: unset;
+}
+
+.info-drawer {
+  background-color: var(--color-black);
+}
+
+.qr {
+  display: block;
+  padding-top: 1em;
+  padding-bottom: 2em;
+}
+
+#hud {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1060;
+  opacity: 0.85;
+  background-color: var(--color-white);
+  color: var(--color-black);
+  font-family: 'IBM Plex Sans';
+  font-weight: 300;
+  border-radius: 12px;
+  padding: 1em;
+  max-height: calc(100vh - 32px);
+  max-width: min(100vw - 32px, 960px);
+  overflow: auto;
+  box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+}
+
+@media (max-width: 576px) {
+  #hud {
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    bottom: 8px;
+    max-width: none;
+    max-height: none;
+    border-radius: 10px;
+    padding: 0.75em;
+  }
+}
+
+.keyboard-guide {
+  color: var(--color-black);
+}
+
+.color-guide {
+  margin-bottom: .5em;
+}
+
+.color-guide-color p {
+  font-style: italic;
+}
+
+.color-guide-color {
+  color: var(--color-white);
+  font-family: 'IBM Plex Sans';
+  font-weight: 300;
+  padding: .75em;
+  border-radius: 12px;
+  margin: .45em;
+}
+
+.color-guide-color h3 {
+  font-family: 'IBM Plex Sans';
+  font-weight: 600;
+  font-size: 1.5rem;
+}
+.color-guide-color p {
+  font-style: italic;
+  margin-bottom: 0px;
+}
