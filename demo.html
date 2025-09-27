@@ -47,6 +47,11 @@
       </div>
     </nav>
   <div id="hud" class="container collapse">
+        <div class="row hud-version" data-role="hud-version">
+          <div class="col">
+            <p id="hud-version-text" class="text-muted small mb-3">Wirelessboard version loading…</p>
+          </div>
+        </div>
         <div class="row">
           <div class="col-4 keyboard-guide">
             <h2 class="text-center">Keyboard Shortcuts</h2>
@@ -347,6 +352,7 @@
   <template id="column-template">
       <div class="col-sm">
         <div class="mic_name">
+          <div class="slot-media" aria-hidden="true"></div>
           <p class="mic_id"></p>
           <p class="name"></p>
           <p class="ext-name"></p>

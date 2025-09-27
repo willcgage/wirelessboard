@@ -133,7 +133,10 @@ export function keybindings() {
     }
 
     if (e.key === '?') {
-      new Collapse(document.getElementById('hud'), { toggle: true} )
+      const hud = document.getElementById('hud');
+      if (hud) {
+        Collapse.getOrCreateInstance(hud, { toggle: false }).toggle();
+      }
     }
   }, false);
 }

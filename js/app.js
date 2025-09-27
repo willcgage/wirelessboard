@@ -131,6 +131,17 @@ function mapGroups() {
   const navbar = document.getElementById('navbarToggleExternalContent');
   const help = document.getElementById('hud');
   const goHud = document.getElementById('go-hud');
+  const hudCollapse = help ? Collapse.getOrCreateInstance(help, { toggle: false }) : null;
+
+  if (help && !help.dataset.hudBound) {
+    help.addEventListener('shown.bs.collapse', () => {
+      if (goHud) goHud.setAttribute('aria-expanded', 'true');
+    });
+    help.addEventListener('hidden.bs.collapse', () => {
+      if (goHud) goHud.setAttribute('aria-expanded', 'false');
+    });
+    help.dataset.hudBound = 'true';
+  }
   // Ensure single-view visibility helper
   function resetViews() {
     const mb = document.getElementById('micboard');
@@ -152,9 +163,10 @@ function mapGroups() {
       if (mb) mb.style.display = 'grid';
     }
   }
-  if (goHud && help) {
-    goHud.addEventListener('click', () => {
-      try { new Collapse(help).toggle(); } catch (e) {}
+  if (goHud && hudCollapse) {
+    goHud.addEventListener('click', (event) => {
+      event.preventDefault();
+      try { hudCollapse.toggle(); } catch (e) {}
       if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
       resetViews();
     });
@@ -162,8 +174,8 @@ function mapGroups() {
 
   // Helper to hide HUD if visible
   function hideHud() {
-    if (!help) return;
-    try { new Collapse(help).hide(); } catch (e) {}
+    if (!hudCollapse) return;
+    try { hudCollapse.hide(); } catch (e) {}
   }
 
     // Removed explicit HUD close handler; handled centrally via hideHud()
@@ -295,6 +307,46 @@ function displayListChooser() {
 }
 
 
+function ensureHudVersion() {
+  const hud = document.getElementById('hud');
+  if (!hud) return;
+
+  let versionRow = hud.querySelector('[data-role="hud-version"]');
+  if (!versionRow) {
+    versionRow = document.createElement('div');
+    versionRow.className = 'row hud-version';
+    versionRow.dataset.role = 'hud-version';
+    const col = document.createElement('div');
+    col.className = 'col';
+    versionRow.appendChild(col);
+    const firstRow = hud.querySelector('.row');
+    if (firstRow) {
+      hud.insertBefore(versionRow, firstRow);
+    } else if (hud.firstChild) {
+      hud.insertBefore(versionRow, hud.firstChild);
+    } else {
+      hud.appendChild(versionRow);
+    }
+  }
+
+  let versionText = versionRow.querySelector('#hud-version-text');
+  if (!versionText) {
+    versionText = document.createElement('p');
+    versionText.id = 'hud-version-text';
+    versionText.className = 'text-muted small mb-3';
+    let col = versionRow.querySelector('.col');
+    if (!col) {
+      col = document.createElement('div');
+      col.className = 'col';
+      versionRow.appendChild(col);
+    }
+    col.appendChild(versionText);
+  }
+
+  versionText.textContent = 'Wirelessboard version ' + VERSION;
+}
+
+
 
 function initialMap(callback) {
   fetch(dataURL)
@@ -348,6 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (p) p.style.display = 'none';
     if (h) h.classList.remove('show');
   } catch (_) {}
+  try { ensureHudVersion(); } catch (_) {}
   keybindings();
   // Bind PCO navbar and handlers
   try { bindPcoNav(); bindPcoHandlers(); } catch (e) {}
@@ -356,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show HUD only once on initial load
     setTimeout(() => {
       const hudEl = document.getElementById('hud');
-      if (hudEl) { try { new Collapse(hudEl).show(); } catch (e) {} }
+      if (hudEl) { try { Collapse.getOrCreateInstance(hudEl, { toggle: false }).show(); } catch (e) {} }
     }, 100);
     initialMap();
   } else {

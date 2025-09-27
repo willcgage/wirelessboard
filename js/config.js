@@ -28,6 +28,7 @@ function renderDiscoveredDeviceList() {
 }
 'use strict';
 
+import { Collapse } from 'bootstrap';
 import { Sortable, Plugins } from '@shopify/draggable';
 
 import { micboard, updateHash } from './app.js';
@@ -50,9 +51,13 @@ function updateSlotID() {
 function hideHUDOverlay() {
   try {
     const hud = document.getElementById('hud');
-    if (hud) {
-      hud.classList.remove('show');
-    }
+    if (!hud) return;
+    Collapse.getOrCreateInstance(hud, { toggle: false }).hide();
+    hud.classList.remove('show');
+  } catch (_) {}
+  try {
+    const trigger = document.getElementById('go-hud');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
   } catch (_) {}
 }
 

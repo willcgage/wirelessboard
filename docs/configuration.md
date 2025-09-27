@@ -60,7 +60,9 @@ Use a dedicated group for each mic storage display.  Multiple **BLANK** boxes ca
   <img width="60%" src="img/tv_imagebg.png"><img width="40%" src="img/smb_folder.png">
 </p>
 
-Image and video<sup>[1](#mp4)</sup> backgrounds can be used with Wirelessboard. Files in the `backgrounds` folder of the Wirelessboard configuration directory are displayed based on the channel name. With backgrounds enabled, `01 Fatai` will display `fatai.jpg` as a background for the `01 Fatai` slot.
+Image and video<sup>[1](#mp4)</sup> backgrounds can be used with Wirelessboard. Files in the `backgrounds` folder of the Wirelessboard configuration directory are matched against the visible channel name: the name is lowercased and `.jpg` or `.mp4` is appended, so a slot labelled `Fatai` looks for `fatai.jpg`, while `HH01 Delwin` expects `hh01 delwin.mp4` when video mode is enabled. Wirelessboard now renders those assets with dedicated `<img>` / `<video>` tags, so modern browsers (Chrome, Edge, Safari, Firefox) all display motion backgrounds provided the media is encoded in an HTML5-compatible format. The path is exposed over `/bg/<filename>`, so updates take effect as soon as the file is saved—no restart required.
+
+TV mode now keeps each slot at a fixed width so artwork never stretches or shrinks when the number of on-screen channels changes. Backgrounds are rendered at their native resolution, centred at the top of the slot without scaling; if the asset is larger than the slot it will crop, and if it is smaller it will leave the status colour visible around it. The default width is `420px`, controlled by the CSS custom property `--tvmode-slot-width` inside `css/style.scss`, and can be adjusted to suit house templates before rebuilding the frontend.
 
 ### Recommended image dimensions
 
@@ -75,7 +77,7 @@ Typical template sizes:
 | 4K (3840×2160) | 4 columns | **960×2160 px** |
 | 4K (3840×2160) | 5 columns | **768×2160 px** |
 
-Use the closest row that matches your layout, scale proportionally for other resolutions, and keep critical artwork within the central 60% of the canvas to survive edge cropping. Background files live in the configuration directory's `backgrounds/` folder (for macOS: `~/Library/Application Support/wirelessboard/backgrounds`; legacy installs may still use `micboard`).
+Use the closest row that matches your layout, bearing in mind that the slot width is now fixed—start with `420×960` (or change `--tvmode-slot-width` if needed), and keep critical artwork within the central 60% of the canvas to survive edge cropping. Because the media is placed without scaling, oversize artwork will crop to the slot bounds while smaller artwork keeps the slot colour visible. Background files live in the configuration directory's `backgrounds/` folder (for macOS: `~/Library/Application Support/wirelessboard/backgrounds`; legacy installs may still use `micboard`).
 
 
 
@@ -121,4 +123,4 @@ By default, Wirelessboard displays the IP address of the machine as the QR code.
 ```
 
 ## Notes
-<a name="mp4">1</a>: At this time, video backgrounds are only supported on Safari
+<a name="mp4">1</a>: Use H.264/AAC MP4 files for best compatibility. Videos are rendered with muted, looping HTML5 players so they autostart across browsers.

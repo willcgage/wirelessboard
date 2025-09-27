@@ -16,6 +16,7 @@ APPNAME = 'wirelessboard'
 LEGACY_APPNAME = 'micboard'
 
 CONFIG_FILE_NAME = 'config.json'
+DEFAULT_PORT = 8058
 
 FORMAT = '%(asctime)s %(levelname)s:%(message)s'
 
@@ -53,8 +54,9 @@ def logging_init():
 
 
 def web_port():
-    if args['server_port'] is not None:
-        return int(args['server_port'])
+    server_port = args.get('server_port') if isinstance(args, dict) else None
+    if server_port is not None:
+        return int(server_port)
 
     elif 'WIRELESSBOARD_PORT' in os.environ:
         return int(os.environ['WIRELESSBOARD_PORT'])
@@ -62,7 +64,12 @@ def web_port():
         logging.info('Using legacy MICBOARD_PORT environment variable')
         return int(os.environ['MICBOARD_PORT'])
 
-    return config_tree['port']
+    port = config_tree.get('port', DEFAULT_PORT)
+    try:
+        return int(port)
+    except (TypeError, ValueError):
+        logging.warning("Invalid port value '%s' in configuration, falling back to %s", port, DEFAULT_PORT)
+        return DEFAULT_PORT
 
 
 def os_config_path():
@@ -77,9 +84,11 @@ def os_config_path():
 
 
 def config_path(folder=None):
-    if args['config_path'] is not None:
-        if os.path.exists(os.path.expanduser(args['config_path'])):
-            path = os.path.expanduser(args['config_path'])
+    config_path_arg = args.get('config_path') if isinstance(args, dict) else None
+    if config_path_arg is not None:
+        expanded = os.path.expanduser(config_path_arg)
+        if os.path.exists(expanded):
+            path = expanded
         else:
             logging.warning("Invalid config path")
             sys.exit()
@@ -136,9 +145,11 @@ def default_gif_dir():
     return path
 
 def get_gif_dir():
-    if args['background_directory'] is not None:
-        if os.path.exists(os.path.expanduser(args['background_directory'])):
-            return os.path.expanduser(args['background_directory'])
+    background_directory = args.get('background_directory') if isinstance(args, dict) else None
+    if background_directory is not None:
+        expanded = os.path.expanduser(background_directory)
+        if os.path.exists(expanded):
+            return expanded
         else:
             logging.warning("invalid config path")
             sys.exit()
@@ -251,8 +262,13 @@ def read_json_config(file):
 
     gif_dir = get_gif_dir()
     version = get_version_number()
+    config_tree.setdefault('port', DEFAULT_PORT)
     config_tree['wirelessboard_version'] = version
     config_tree['micboard_version'] = version
+
+
+def init_config():
+    config()
 
 def write_json_config(data):
     with open(config_file(), 'w') as f:

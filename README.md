@@ -37,6 +37,12 @@ Wirelessboard supports the following devices -
 Wirelessboard uses IP addresses to connect to RF devices.  RF devices can be addressed through static or reserved IPs.  They just need to be consistent.
 
 
+## Key Features
+* **Cross-browser motion artwork** – Per-channel artwork is rendered with HTML5 `<img>` / `<video>` elements, so JPEG stills or muted, looping MP4s play automatically in Chrome, Edge, Safari, and Firefox. Filenames are matched to the visible channel name; see the [configuration guide](docs/configuration.md#background-images) for details.
+* **TV mode layout controls** – Slots keep a consistent width across channel counts, preventing stretched backgrounds on large displays. The width can be customised via CSS before building.
+* **HUD help overlay with version info** – The in-app help modal now shows the running Wirelessboard version, shortcuts, and quick links without auto-opening on launch.
+
+
 ## Documentation
 * [Installation](docs/installation.md)
 * [Configuration](docs/configuration.md)

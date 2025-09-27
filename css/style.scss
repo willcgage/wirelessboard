@@ -301,9 +301,15 @@ canvas.slotgraph {
 
 /* mic storage mode */
 .tvmode {
+  --tvmode-slot-width: 420px;
+
   #micboard,
   .wirelessboard-board {
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(var(--tvmode-slot-width), 100%), var(--tvmode-slot-width))
+    );
+    justify-content: center;
     grid-gap: 6px;
     padding-left: 6px;
     padding-right: 6px;
@@ -311,6 +317,8 @@ canvas.slotgraph {
 
   .col-sm {
     background: var(--color-black);
+    width: min(var(--tvmode-slot-width), 100%);
+    max-width: var(--tvmode-slot-width);
     height: 100vh;
   }
 
@@ -338,6 +346,36 @@ canvas.slotgraph {
     display: flex;
     justify-content:center;
     align-items:center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mic_name > :not(.slot-media) {
+    position: relative;
+    z-index: 1;
+  }
+
+  .mic_name .slot-media {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    justify-content: center;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .mic_name .slot-media.is-active {
+    display: flex;
+  }
+
+  .mic_name .slot-media img,
+  .mic_name .slot-media video {
+    display: block;
+    max-width: none;
+    max-height: none;
   }
 
 
@@ -914,6 +952,15 @@ a:link, a:visited, a:hover, a:active {
   max-width: min(100vw - 32px, 960px);
   overflow: auto;
   box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+}
+
+#hud .hud-version {
+  margin-bottom: .75em;
+}
+
+#hud .hud-version p {
+  margin-bottom: 0;
+  font-weight: 400;
 }
 
 @media (max-width: 576px) {
