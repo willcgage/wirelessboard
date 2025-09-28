@@ -51,6 +51,7 @@ Wirelessboard uses IP addresses to connect to RF devices.  RF devices can be add
 #### Developer Info
 * [Building the Electron wrapper for macOS](docs/electron.md)
 * [Extending Wirelessboard using the API](docs/api.md)
+* [Versioning and release process](docs/versioning.md)
 
 ### Live development workflow
 
@@ -70,6 +71,16 @@ Python packages live in `py/requirements.txt`, and a fully pinned snapshot is tr
 - `pip3 install -r py/requirements.lock`
 
 When dependencies change, update both files by reinstalling into the project virtualenv and running `npm run pip:lock`. The helper script regenerates `py/requirements.lock` using the current virtualenv so releases and CI pick up the new pins.
+
+### Versioning and releases
+
+Wirelessboard follows [Semantic Versioning](https://semver.org/) for Git tags, desktop bundles, and the Raspberry Pi tarball. The `npm version` command keeps all metadata in sync and prepares a release tag:
+
+1. Choose the appropriate bump (`patch`, `minor`, or `major`) and run `npm version <level>`.
+  * This updates `package.json`, regenerates `py/version.py`, commits the change, and creates a Git tag such as `v1.0.1`.
+2. Push the commit and tag with `git push --follow-tags` to trigger the release workflow.
+
+The GitHub Actions workflow builds platform installers named with the new version, and Raspberry Pi bundles now include the semantic version in their filename.
 
 
 ## Known Issues

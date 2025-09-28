@@ -17,7 +17,7 @@ Wirelessboard now ships with repeatable release scripts and a GitHub Actions wor
 * Python 3.9+ with `pip`
 * Xcode command-line tools (macOS) or Build Tools for Visual Studio (Windows) for native module compilation
 
-Run `npm install` once per machine; the postinstall hook provisions `.venv/` with the Python dependencies listed in `py/requirements.txt`.
+Run `npm install` once per machine; the postinstall hook provisions `.venv/` with the Python dependencies listed in `py/requirements.lock` for repeatable installs.
 
 ### Desktop release commands
 The scripts below generate artefacts in the `release/<platform>/` directories. They automatically build the webpack bundles, run PyInstaller, and invoke Electron Builder with the shared `electron-builder.yml` configuration.
@@ -43,7 +43,20 @@ The Pi distribution remains a headless PyInstaller service packaged as a tarball
 npm run release:pi
 ```
 
-The tarball is written to `release/pi/wirelessboard-pi.tar.gz`. Extract it on the Raspberry Pi, copy the service directory into place (for example `/opt/wirelessboard`), and install the bundled unit file into `/etc/systemd/system/`.
+The tarball is written to `release/pi/wirelessboard-pi-<version>.tar.gz`. Extract it on the Raspberry Pi, copy the service directory into place (for example `/opt/wirelessboard`), and install the bundled unit file into `/etc/systemd/system/`.
+
+### Semantic versioning workflow
+Wirelessboard releases adhere to [Semantic Versioning](https://semver.org/). The `npm version` command updates every place the version is tracked and prepares a tag that triggers the packaging workflow:
+
+```bash
+# Bump patch/minor/major as needed
+npm version patch
+
+# Push the commit and tag so GitHub Actions can build installers
+git push --follow-tags
+```
+
+The helper updates `package.json`, regenerates `py/version.py` for Python artefacts, and creates a Git tag such as `v1.0.1`. Electron Builder, PyInstaller, and the Raspberry Pi tarball all embed that version number in their output names.
 
 ### Continuous integration
 The workflow in `.github/workflows/releases.yml` executes the following pipeline whenever you push a tag starting with `v` or trigger it manually:
@@ -52,4 +65,4 @@ The workflow in `.github/workflows/releases.yml` executes the following pipeline
 2. macOS and Windows runners build desktop packages and upload them as workflow artefacts.
 3. An optional Raspberry Pi job can be enabled for teams with a self-hosted ARM runner; it generates the server tarball described above.
 
-When cutting a public release, create a tag (`git tag v1.2.3 && git push --tags`) and download the artefacts from the workflow run to publish on the Releases page.
+When cutting a public release, run the semantic versioning workflow above and download the artefacts from the workflow run to publish on the Releases page. Tags must be pushed with the `v` prefix for the workflow to execute.

@@ -18,6 +18,8 @@
     "release:win": "npm run build && npm run bundle:server && electron-builder --win --config electron-builder.yml",
     "release:pi": "npm run build && npm run bundle:server && python py/package_pi.py",
     "pip:lock": "node scripts/update-lock.js",
+  "check:version": "node scripts/check-version-sync.js",
+    "version": "node scripts/sync-version.js",
     "pack": "electron-builder --config electron-builder.yml",
     "static": "python -m http.server 8058"
   },

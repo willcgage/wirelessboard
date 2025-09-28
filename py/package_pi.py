@@ -5,6 +5,8 @@ import shutil
 import tarfile
 from pathlib import Path
 
+from version import __version__
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DIST_DIR = PROJECT_ROOT / 'dist'
 SERVICE_DIR = DIST_DIR / 'wirelessboard-service'
@@ -58,7 +60,8 @@ def copy_payload() -> None:
 
 
 def make_tarball() -> Path:
-    tar_path = RELEASE_ROOT / 'wirelessboard-pi.tar.gz'
+    tar_name = f'wirelessboard-pi-{__version__}.tar.gz'
+    tar_path = RELEASE_ROOT / tar_name
     with tarfile.open(tar_path, 'w:gz') as tar:
         tar.add(PACKAGE_ROOT, arcname='wirelessboard')
     return tar_path
