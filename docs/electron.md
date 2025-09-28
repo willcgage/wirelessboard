@@ -65,4 +65,4 @@ The workflow in `.github/workflows/releases.yml` executes the following pipeline
 2. macOS and Windows runners build desktop packages and upload them as workflow artefacts.
 3. An optional Raspberry Pi job can be enabled for teams with a self-hosted ARM runner; it generates the server tarball described above.
 
-When cutting a public release, run the semantic versioning workflow above and download the artefacts from the workflow run to publish on the Releases page. Tags must be pushed with the `v` prefix for the workflow to execute.
+Electron Builder automatically publishes the desktop bundles to the GitHub Release associated with the tag using the workflow token; the uploaded artefacts remain available in the workflow run as well. Tags must be pushed with the `v` prefix for the workflow to execute.

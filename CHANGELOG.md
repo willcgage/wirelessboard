@@ -8,6 +8,12 @@
 ### Fixed
 - Pinned the Electron runtime in development dependencies so `npm run release:mac` can build packages locally and in CI without missing-module failures.
 
+## [1.0.2] - 2025-09-27
+### Changed
+- Documented that macOS and Windows release jobs publish directly to the tag's GitHub Release using the workflow token.
+### Fixed
+- Exported `GH_TOKEN` in the desktop packaging workflow so Electron Builder can upload artefacts during tagged builds.
+
 ## [0.9.0] - 2025-09-27
 ### Added
 - Planning Center Online (PCO) integration: backend endpoints (`GET/POST /api/pco/config`, `GET /api/pco/plans`, `GET /api/pco/people`, `POST /api/pco/sync`).

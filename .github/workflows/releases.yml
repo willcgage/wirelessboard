@@ -49,6 +49,8 @@ jobs:
             artifact_folder: release/win
             artifact_name: wirelessboard-windows
     runs-on: ${{ matrix.runner }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
