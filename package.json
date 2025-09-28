@@ -1,6 +1,6 @@
 {
   "name": "wirelessboard",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "An intelligent wireless device tray for ethernet enabled Shure microphones.",
   "main": "main.js",
   "scripts": {
