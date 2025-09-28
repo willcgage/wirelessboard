@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+### Added
+- Project-wide Python lockfile (`py/requirements.lock`) and `npm run pip:lock` helper to regenerate pinned dependencies alongside `py/requirements.txt`.
+
 ## [0.9.0] - 2025-09-27
 ### Added
 - Planning Center Online (PCO) integration: backend endpoints (`GET/POST /api/pco/config`, `GET /api/pco/plans`, `GET /api/pco/people`, `POST /api/pco/sync`).

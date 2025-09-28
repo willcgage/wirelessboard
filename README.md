@@ -63,6 +63,14 @@ Wirelessboard now ships with a watch-based workflow that keeps the Python server
 
 Press `Ctrl+C` to stop both processes. The traditional one-shot build (`npm run build`) and manual server start (`npm run server`) still work for production-style testing.
 
+### Python dependency lockfile
+
+Python packages live in `py/requirements.txt`, and a fully pinned snapshot is tracked in `py/requirements.lock`. Installations should prefer the lockfile for repeatable builds:
+
+- `pip3 install -r py/requirements.lock`
+
+When dependencies change, update both files by reinstalling into the project virtualenv and running `npm run pip:lock`. The helper script regenerates `py/requirements.lock` using the current virtualenv so releases and CI pick up the new pins.
+
 
 ## Known Issues
 <a name="qlxd">1</a>: [QLX-D Firmware](docs/qlxd.md)

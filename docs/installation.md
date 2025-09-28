@@ -33,8 +33,10 @@ Install Wirelessboard software dependencies via npm and pip
 ```
 $ cd wirelessboard/
 $ npm install --only=prod
-$ pip3 install -r py/requirements.txt
+$ pip3 install -r py/requirements.lock
 ```
+
+> Need to modify dependencies for development? Edit `py/requirements.txt`, reinstall into your virtualenv, and regenerate the lockfile with `npm run pip:lock` before committing.
 
 build the Wirelessboard frontend and start the server
 ```
@@ -81,8 +83,10 @@ Install Wirelessboard software dependencies via npm and pip
 ```
 $ cd wirelessboard/
 $ npm install --only=prod
-$ pip3 install -r py/requirements.txt
+$ pip3 install -r py/requirements.lock
 ```
+
+> Need to modify dependencies for development? Edit `py/requirements.txt`, reinstall into your virtualenv, and regenerate the lockfile with `npm run pip:lock` before committing.
 
 build the Wirelessboard frontend and run the server
 ```
