@@ -64,11 +64,15 @@ jobs:
           python-version: '3.11'
       - name: Install Node dependencies
         run: npm install
-      - name: Install Python dependencies
+      - name: Install Python dependencies (handled by npm postinstall)
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r py/requirements.txt
-          python -m pip install pyinstaller
+          # PyInstaller installation in the virtual environment
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ./.venv/Scripts/python.exe -m pip install pyinstaller
+          else
+            ./.venv/bin/python -m pip install pyinstaller
+          fi
       - name: Build desktop release
         run: ${{ matrix.release_script }}
       - name: Upload artifacts

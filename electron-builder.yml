@@ -22,9 +22,11 @@ mac:
     LSBackgroundOnly: true
     LSUIElement: true
   target:
-    - dmg
-    - zip
-  artifactName: wirelessboard-server-${version}-mac.${ext}
+    - target: dmg
+      arch: [universal]
+    - target: zip
+      arch: [universal]
+  artifactName: wirelessboard-server-${version}-mac-universal.${ext}
 win:
   target:
     - nsis
