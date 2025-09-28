@@ -45,7 +45,7 @@
     "bootstrap-icons": "^1.13.1",
     "concurrently": "^9.2.1",
     "css-loader": "^7.1.2",
-    "electron": "^28.3.3",
+    "electron": "^35.7.5",
     "electron-builder": "^24.9.1",
     "eslint": "^8.6.0",
     "eslint-config-airbnb-base": "^15.0.0",
