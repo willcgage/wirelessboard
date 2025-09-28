@@ -23,11 +23,15 @@ Run `npm install` once per machine; the postinstall hook provisions `.venv/` wit
 The scripts below generate artefacts in the `release/<platform>/` directories. They automatically build the webpack bundles, run PyInstaller, and invoke Electron Builder with the shared `electron-builder.yml` configuration.
 
 ```bash
-# macOS: produces DMG and ZIP bundles in release/mac/
+# macOS: produces DMG and ZIP bundles in release/mac/ (no auto-publish)
 npm run release:mac
 
-# Windows 11: produces an NSIS installer in release/win/
+# Windows 11: produces an NSIS installer in release/win/ (no auto-publish)
 npm run release:win
+
+# CI-only helpers that publish to GitHub Releases when GH_TOKEN is provided
+npm run release:mac:ci
+npm run release:win:ci
 ```
 
 Electron Builder configuration lives in `electron-builder.yml`. You can still call the helper script directly when you need fine-grained control over targets:
@@ -65,4 +69,4 @@ The workflow in `.github/workflows/releases.yml` executes the following pipeline
 2. macOS and Windows runners build desktop packages and upload them as workflow artefacts.
 3. An optional Raspberry Pi job can be enabled for teams with a self-hosted ARM runner; it generates the server tarball described above.
 
-Electron Builder automatically publishes the desktop bundles to the GitHub Release associated with the tag using the workflow token; the uploaded artefacts remain available in the workflow run as well. Tags must be pushed with the `v` prefix for the workflow to execute.
+Electron Builder automatically publishes the desktop bundles to the GitHub Release associated with the tag using the workflow token when the CI-only scripts (`release:mac:ci`, `release:win:ci`) run. Local invocations (`release:mac`, `release:win`) build installers without publishing so you never need to expose a personal token during development. Tags must be pushed with the `v` prefix for the workflow to execute.
