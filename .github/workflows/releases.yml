@@ -71,14 +71,86 @@ jobs:
       - name: Install Python dependencies (handled by npm postinstall)
         shell: bash
         run: |
-          # PyInstaller installation in the virtual environment
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            ./.venv/Scripts/python.exe -m pip install pyinstaller
+          echo "=== Python environment diagnostics ==="
+          echo "OS: $RUNNER_OS"
+          echo "Architecture: $RUNNER_ARCH"
+          echo "Working directory: $(pwd)"
+          
+          # List virtual environment contents for debugging
+          if [ -d ".venv" ]; then
+            echo "Virtual environment exists"
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              echo "Contents of .venv/Scripts:"
+              ls -la .venv/Scripts/ || echo "Could not list .venv/Scripts/"
+              PYTHON_EXE="./.venv/Scripts/python.exe"
+            else
+              echo "Contents of .venv/bin:"
+              ls -la .venv/bin/ || echo "Could not list .venv/bin/"
+              PYTHON_EXE="./.venv/bin/python"
+            fi
+            
+            echo "Python executable path: $PYTHON_EXE"
+            if [ -f "$PYTHON_EXE" ]; then
+              echo "Python version: $($PYTHON_EXE --version)"
+              echo "Python location: $($PYTHON_EXE -c 'import sys; print(sys.executable)')"
+            else
+              echo "ERROR: Python executable not found at $PYTHON_EXE"
+              echo "Attempting to find Python in virtual environment:"
+              find .venv -name "python*" -type f 2>/dev/null || echo "No Python executables found"
+            fi
           else
-            ./.venv/bin/python -m pip install pyinstaller
+            echo "ERROR: Virtual environment not found"
+            ls -la . || echo "Could not list current directory"
+          fi
+          
+          echo "=== Installing PyInstaller ==="
+          # PyInstaller installation in the virtual environment with verification
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if [ -f "./.venv/Scripts/python.exe" ]; then
+              ./.venv/Scripts/python.exe -m pip install --upgrade pip
+              ./.venv/Scripts/python.exe -m pip install pyinstaller
+              ./.venv/Scripts/python.exe -m pip show pyinstaller
+              ./.venv/Scripts/python.exe -m PyInstaller --version
+            else
+              echo "ERROR: Cannot install PyInstaller - Python executable not found"
+              exit 1
+            fi
+          else
+            if [ -f "./.venv/bin/python" ]; then
+              ./.venv/bin/python -m pip install --upgrade pip
+              ./.venv/bin/python -m pip install pyinstaller
+              ./.venv/bin/python -m pip show pyinstaller
+              ./.venv/bin/python -m PyInstaller --version
+            else
+              echo "ERROR: Cannot install PyInstaller - Python executable not found"
+              exit 1
+            fi
           fi
       - name: Build desktop release
-        run: ${{ matrix.release_script }}
+        shell: bash
+        run: |
+          echo "=== Building desktop release for ${{ matrix.runner }} ==="
+          echo "Release script: ${{ matrix.release_script }}"
+          echo "Expected output: ${{ matrix.artifact_folder }}"
+          
+          # Run the release script
+          ${{ matrix.release_script }}
+          
+          echo "=== Verifying build output ==="
+          if [ -d "${{ matrix.artifact_folder }}" ]; then
+            echo "✓ Output directory exists: ${{ matrix.artifact_folder }}"
+            echo "Contents:"
+            find "${{ matrix.artifact_folder }}" -type f | head -10
+            echo "Total files: $(find "${{ matrix.artifact_folder }}" -type f | wc -l)"
+            echo "Directory size: $(du -sh "${{ matrix.artifact_folder }}" | cut -f1)"
+          else
+            echo "✗ Output directory missing: ${{ matrix.artifact_folder }}"
+            echo "Available directories:"
+            find . -maxdepth 3 -type d -name "*release*" -o -name "*wirelessboard*" 2>/dev/null || echo "No release directories found"
+            echo "Current directory contents:"
+            ls -la .
+            exit 1
+          fi
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
