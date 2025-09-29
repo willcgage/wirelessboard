@@ -13,6 +13,7 @@ const pythonCandidates = process.platform === 'win32'
   : ['python3', 'python'];
 
 function run(cmd, args, options = {}) {
+  console.log(`Running: ${cmd} ${args.join(' ')}`);
   const result = spawnSync(cmd, args, {
     stdio: 'inherit',
     cwd: projectRoot,
@@ -20,6 +21,10 @@ function run(cmd, args, options = {}) {
   });
 
   if (result.status !== 0) {
+    console.error(`Command failed with exit code ${result.status}: ${cmd} ${args.join(' ')}`);
+    if (result.error) {
+      console.error(`Error details: ${result.error.message}`);
+    }
     throw new Error(`Command failed: ${cmd} ${args.join(' ')}`);
   }
 }
@@ -46,16 +51,47 @@ function resolveVenvPython() {
 }
 
 (async () => {
-  const python = resolvePython();
-  console.log(`Using Python interpreter: ${python}`);
+  try {
+    const python = resolvePython();
+    console.log(`Using Python interpreter: ${python}`);
 
-  run(python, ['-m', 'venv', '.venv']);
+    console.log('Creating virtual environment...');
+    run(python, ['-m', 'venv', '.venv']);
 
-  const venvPython = resolveVenvPython();
-  console.log(`Bootstrapping virtual environment via: ${venvPython}`);
+    const venvPython = resolveVenvPython();
+    console.log(`Bootstrapping virtual environment via: ${venvPython}`);
+    
+    if (!existsSync(venvPython)) {
+      console.error(`Virtual environment Python not found at: ${venvPython}`);
+      console.error('Available files in .venv:');
+      const { readdirSync } = require('fs');
+      try {
+        const venvContents = readdirSync(venvPath);
+        console.error(venvContents.join(', '));
+        if (process.platform === 'win32' && existsSync(path.join(venvPath, 'Scripts'))) {
+          console.error('Contents of Scripts directory:');
+          const scriptsContents = readdirSync(path.join(venvPath, 'Scripts'));
+          console.error(scriptsContents.join(', '));
+        } else if (existsSync(path.join(venvPath, 'bin'))) {
+          console.error('Contents of bin directory:');
+          const binContents = readdirSync(path.join(venvPath, 'bin'));
+          console.error(binContents.join(', '));
+        }
+      } catch (err) {
+        console.error(`Could not read .venv directory: ${err.message}`);
+      }
+      throw new Error(`Virtual environment setup failed: Python executable not found at ${venvPython}`);
+    }
 
-  run(venvPython, ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel']);
-  run(venvPython, ['-m', 'pip', 'install', '-r', requirementsPath]);
+    console.log('Upgrading pip, setuptools, and wheel...');
+    run(venvPython, ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel']);
+    
+    console.log('Installing project dependencies...');
+    run(venvPython, ['-m', 'pip', 'install', '-r', requirementsPath]);
 
-  console.log('Virtual environment ready.');
+    console.log('Virtual environment ready.');
+  } catch (error) {
+    console.error('Virtual environment setup failed:', error.message);
+    process.exit(1);
+  }
 })();

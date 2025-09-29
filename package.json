@@ -14,7 +14,7 @@
     "server:watch": "nodemon --watch static --watch demo.html --watch css --watch js --watch py --ignore 'config/config.json' --ignore 'config/**/*.json' --ext js,json,html,css,py --exec \"./.venv/bin/python py/wirelessboard.py\"",
     "dev": "concurrently \"npm run build:dev\" \"npm run server:watch\"",
     "bundle:server": "./.venv/bin/python -m PyInstaller --noconfirm --clean py/wirelessboard.spec",
-    "bundle:server:win": "./.venv/Scripts/python.exe -m PyInstaller --noconfirm --clean py/wirelessboard.spec",
+    "bundle:server:win": "node scripts/build-universal.js",
     "bundle:server:universal": "node scripts/build-universal.js",
     "release:mac": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --publish never",
     "release:mac:ci": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --publish always",
