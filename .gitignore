@@ -8,5 +8,10 @@ node_modules/
 *.log
 config/*.log
 
+# Build artifacts (tracked separately via LFS)
+dist/
+build/
+release/
+
 # macOS metadata
 .DS_Store
