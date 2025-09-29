@@ -1,0 +1,29 @@
+# Git LFS configuration for Wirelessboard repository
+
+# Large documentation images (>1MB)
+docs/img/*.png filter=lfs diff=lfs merge=lfs -text
+docs/img/*.jpg filter=lfs diff=lfs merge=lfs -text
+docs/img/*.jpeg filter=lfs diff=lfs merge=lfs -text
+
+# Build artifacts and binaries
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+*.exe filter=lfs diff=lfs merge=lfs -text
+*.dmg filter=lfs diff=lfs merge=lfs -text
+*.app filter=lfs diff=lfs merge=lfs -text
+
+# Python compiled artifacts
+dist/ filter=lfs diff=lfs merge=lfs -text
+build/ filter=lfs diff=lfs merge=lfs -text
+
+# Media files that might be used as backgrounds
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.mov filter=lfs diff=lfs merge=lfs -text
+*.avi filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text
+
+# Large icon/splash images
+static/splash/*.png filter=lfs diff=lfs merge=lfs -text
+
+# Node modules binaries (if any large ones exist)
+node_modules/**/*.node filter=lfs diff=lfs merge=lfs -text

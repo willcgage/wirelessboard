@@ -49,6 +49,7 @@ Wirelessboard uses IP addresses to connect to RF devices.  RF devices can be add
 * [Wirelessboard MultiVenue](docs/multivenue.md)
 
 #### Developer Info
+* [Git LFS Setup](docs/git-lfs.md)
 * [Building the Electron wrapper for macOS](docs/electron.md)
 * [Extending Wirelessboard using the API](docs/api.md)
 * [Versioning and release process](docs/versioning.md)

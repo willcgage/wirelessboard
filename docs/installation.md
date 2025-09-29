@@ -14,6 +14,31 @@ $ curl -O https://raw.githubusercontent.com/willcgage/wirelessboard/main/docker-
 $ docker compose up
 ```
 
+## Git LFS Setup
+This repository uses Git Large File Storage (LFS) to efficiently handle large documentation images and build artifacts. If you're cloning the repository for development or contributing, you'll need Git LFS installed.
+
+### Install Git LFS
+**Ubuntu/Debian:**
+```bash
+$ sudo apt-get install git-lfs
+```
+
+**macOS:**
+```bash
+$ brew install git-lfs
+```
+
+**Windows:**
+Download and install from [git-lfs.com](https://git-lfs.com/)
+
+### Initialize LFS for your clone
+```bash
+$ git lfs install
+$ git lfs pull
+```
+
+> **Note:** If you're using Docker or downloading pre-built releases, Git LFS is not required. LFS is only needed for development workflows that involve cloning the repository.
+
 
 ## Debian (Ubuntu & Raspberry Pi)
 Install git, python3-pip, and Node.js
