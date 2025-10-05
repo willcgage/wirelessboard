@@ -83,7 +83,7 @@ Wirelessboard follows [Semantic Versioning](https://semver.org/) for Git tags, d
 
 The GitHub Actions workflow builds platform installers named with the new version, and Raspberry Pi bundles now include the semantic version in their filename.
 
-> ℹ️ The desktop packaging scripts auto-detect a Python interpreter. If your system does not expose `python` or `python3` in `PATH`, create the project virtualenv via `npm install` or set `WIRELESSBOARD_PYTHON` to the interpreter you want PyInstaller to use.
+> ℹ️ The desktop packaging scripts auto-detect a Python interpreter. If your system does not expose `python` or `python3` in `PATH`, create the project virtualenv via `npm install` or set `WIRELESSBOARD_PYTHON` to the interpreter you want PyInstaller to use. GitHub Actions removes the temporary `.venv` after bundling to avoid packaging symlinks; set `WIRELESSBOARD_KEEP_VENV=1` if you need to retain it in custom CI.
 
 
 ## Known Issues

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require('child_process');
-const { existsSync, mkdirSync } = require('fs');
+const { existsSync, mkdirSync, rmSync } = require('fs');
 const path = require('path');
 const {
   resolvePythonInterpreter,
@@ -111,6 +111,17 @@ function main() {
       console.error(`Could not read dist directory: ${err.message}`);
     }
     throw new Error('PyInstaller build completed but expected output was not found');
+  }
+
+  const venvPath = path.join(projectRoot, '.venv');
+  const shouldRemoveVenv = process.env.CI && !process.env.WIRELESSBOARD_KEEP_VENV;
+  if (shouldRemoveVenv && existsSync(venvPath)) {
+    console.log('CI environment detected; removing .venv before packaging to avoid external Python symlinks.');
+    try {
+      rmSync(venvPath, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(`Failed to remove ${venvPath}: ${err.message}`);
+    }
   }
   
   console.log('Universal binary build preparation complete.');

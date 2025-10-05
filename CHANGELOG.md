@@ -7,6 +7,7 @@
 - Dedicated versioning guide (`docs/versioning.md`) and CI check to ensure `package.json` and `py/version.py` remain aligned.
 ### Fixed
 - Pinned the Electron runtime in development dependencies so `npm run release:mac` can build packages locally and in CI without missing-module failures.
+- CI macOS builds now remove the temporary virtualenv after bundling so Electron Builder no longer encounters symlinks to system Python binaries.
 
 ## [1.0.4] - 2025-10-04
 ### Added
