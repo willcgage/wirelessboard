@@ -8,6 +8,12 @@
 ### Fixed
 - Pinned the Electron runtime in development dependencies so `npm run release:mac` can build packages locally and in CI without missing-module failures.
 
+## [1.0.4] - 2025-10-04
+### Added
+- Bundled-server build now auto-detects Python interpreters, allowing macOS releases to succeed even when `/usr/bin/python` shims are missing.
+### Changed
+- Ignored generated `dist/` and `release/` artefacts so local builds don't pollute git status.
+
 ## [1.0.3] - 2025-09-27
 ### Changed
 - Documented that macOS and Windows release jobs publish directly to the tag's GitHub Release using the workflow token.

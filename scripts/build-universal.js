@@ -3,6 +3,10 @@
 const { spawnSync } = require('child_process');
 const { existsSync, mkdirSync } = require('fs');
 const path = require('path');
+const {
+  resolvePythonInterpreter,
+  runPython,
+} = require('./run-pyinstaller');
 
 const projectRoot = path.resolve(__dirname, '..');
 
@@ -26,61 +30,54 @@ function run(cmd, args, options = {}) {
 
 function buildPythonBinary() {
   console.log('Building Python binary...');
-  
-  // Determine the correct Python executable
-  const pythonExe = process.platform === 'win32' 
-    ? path.join(projectRoot, '.venv', 'Scripts', 'python.exe')
-    : path.join(projectRoot, '.venv', 'bin', 'python');
-  
-  console.log(`Checking for Python executable at: ${pythonExe}`);
-  if (!existsSync(pythonExe)) {
-    console.error(`Python executable not found at ${pythonExe}`);
-    console.error('Available files in .venv directory:');
-    const venvDir = path.join(projectRoot, '.venv');
-    if (existsSync(venvDir)) {
-      const { readdirSync } = require('fs');
-      try {
-        const contents = readdirSync(venvDir);
-        console.error(contents.join(', '));
-        if (process.platform === 'win32' && existsSync(path.join(venvDir, 'Scripts'))) {
-          console.error('Contents of Scripts directory:');
-          const scriptsContents = readdirSync(path.join(venvDir, 'Scripts'));
-          console.error(scriptsContents.join(', '));
-        } else if (existsSync(path.join(venvDir, 'bin'))) {
-          console.error('Contents of bin directory:');
-          const binContents = readdirSync(path.join(venvDir, 'bin'));
-          console.error(binContents.join(', '));
-        }
-      } catch (err) {
-        console.error(`Could not read .venv directory: ${err.message}`);
-      }
-    } else {
-      console.error('.venv directory does not exist');
-    }
-    throw new Error(`Python executable not found at ${pythonExe}. Run 'npm run setup:venv' first.`);
+
+  let interpreter;
+  try {
+    interpreter = resolvePythonInterpreter();
+  } catch (error) {
+    console.error(error.message);
+    console.error('Ensure dependencies are installed via "npm install" or provide WIRELESSBOARD_PYTHON.');
+    throw error;
   }
-  
+
+  const interpreterDisplay = interpreter.label || interpreter.command;
+
   // Verify PyInstaller is available
   console.log('Verifying PyInstaller installation...');
   try {
-    const checkResult = spawnSync(pythonExe, ['-m', 'PyInstaller', '--version'], { 
-      cwd: projectRoot,
-      stdio: 'pipe'
+    const checkResult = runPython(interpreter, ['-m', 'PyInstaller', '--version'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
+
     if (checkResult.status !== 0) {
       console.error('PyInstaller not found. Installing PyInstaller...');
-      run(pythonExe, ['-m', 'pip', 'install', 'pyinstaller']);
+      const installResult = runPython(interpreter, ['-m', 'pip', 'install', 'pyinstaller'], { stdio: 'inherit' });
+      if (installResult.status !== 0 || installResult.error) {
+        throw new Error('Failed to install PyInstaller');
+      }
     } else {
-      console.log(`PyInstaller version: ${checkResult.stdout.toString().trim()}`);
+      const versionOutput = checkResult.stdout.toString().trim() || checkResult.stderr.toString().trim();
+      if (versionOutput) {
+        console.log(`PyInstaller version: ${versionOutput}`);
+      }
     }
   } catch (err) {
-    console.warn(`Could not verify PyInstaller: ${err.message}. Attempting to install...`);
-    run(pythonExe, ['-m', 'pip', 'install', 'pyinstaller']);
+    console.warn(`Could not verify PyInstaller using ${interpreterDisplay}: ${err.message}. Attempting to install...`);
+    const installResult = runPython(interpreter, ['-m', 'pip', 'install', 'pyinstaller'], { stdio: 'inherit' });
+    if (installResult.status !== 0 || installResult.error) {
+      throw new Error('Failed to install PyInstaller');
+    }
   }
-  
-  // Build with PyInstaller using the virtual environment
-  run(pythonExe, ['-m', 'PyInstaller', '--noconfirm', '--clean', 'py/wirelessboard.spec']);
-  
+
+  // Build with PyInstaller
+  const buildResult = runPython(interpreter, ['-m', 'PyInstaller', '--noconfirm', '--clean', 'py/wirelessboard.spec'], {
+    stdio: 'inherit',
+  });
+
+  if (buildResult.status !== 0 || buildResult.error) {
+    throw new Error(`PyInstaller build failed using ${interpreterDisplay}`);
+  }
+
   console.log('Python binary build complete.');
 }
 
