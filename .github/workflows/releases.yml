@@ -47,7 +47,7 @@ jobs:
         include:
           - runner: macos-latest
             release_script: npm run release:mac:ci
-            artifact_folder: release/mac
+            artifact_folder: release/darwin
             artifact_name: wirelessboard-macos
           - runner: windows-latest
             release_script: npm run release:win:ci

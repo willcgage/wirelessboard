@@ -23,7 +23,7 @@ Run `npm install` once per machine; the postinstall hook provisions `.venv/` wit
 The scripts below generate artefacts in the `release/<platform>/` directories. They automatically build the webpack bundles, run PyInstaller, and invoke Electron Builder with the shared `electron-builder.yml` configuration.
 
 ```bash
-# macOS: produces DMG and ZIP bundles in release/mac/ (no auto-publish)
+# macOS: produces DMG and ZIP bundles in release/darwin/ (no auto-publish)
 npm run release:mac
 
 # Windows 11: produces an NSIS installer in release/win/ (no auto-publish)
