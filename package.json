@@ -43,6 +43,7 @@
   "devDependencies": {
     "@babel/core": "^7.28.4",
     "@babel/preset-env": "^7.28.3",
+    "@electron/rebuild": "3.6.1",
     "@ibm/plex": "^6.4.1",
     "@popperjs/core": "^2.11.8",
     "@shopify/draggable": "^1.1.4",
