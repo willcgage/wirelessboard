@@ -1,3 +1,13 @@
+'use strict';
+
+import { Collapse } from 'bootstrap';
+import { Sortable, Plugins } from '@shopify/draggable';
+
+import { micboard, updateHash } from './app.js';
+import { postJSON } from './data.js';
+
+const NET_DEVICE_TYPES = ['axtd', 'ulxd', 'qlxd', 'uhfr', 'p10t'];
+
 // Render the discovered device list in the config editor
 function renderDiscoveredDeviceList() {
   const discoveredList = document.getElementById('discovered_list');
@@ -5,8 +15,11 @@ function renderDiscoveredDeviceList() {
   discoveredList.innerHTML = '';
   const discovered = micboard.discovered || [];
   if (!Array.isArray(discovered) || discovered.length === 0) return;
+  const template = document.getElementById('config-slot-template');
+  if (!template || !template.content) return;
+
   discovered.forEach((slot) => {
-    const t = document.getElementById('config-slot-template').content.cloneNode(true);
+    const t = template.content.cloneNode(true);
     const row = t.querySelector('.cfg-row');
     if (row) {
       row.id = 'slot-' + slot.slot;
@@ -26,15 +39,6 @@ function renderDiscoveredDeviceList() {
     discoveredList.appendChild(t);
   });
 }
-'use strict';
-
-import { Collapse } from 'bootstrap';
-import { Sortable, Plugins } from '@shopify/draggable';
-
-import { micboard, updateHash } from './app.js';
-import { postJSON } from './data.js';
-
-const NET_DEVICE_TYPES = ['axtd', 'ulxd', 'qlxd', 'uhfr', 'p10t'];
 
 function updateSlotID() {
   const rows = document.querySelectorAll('#editor_holder .cfg-row');
@@ -67,12 +71,795 @@ function updateEditEntry(slotSelector, data) {
   }
   slotSelector.querySelector('.cfg-type').value = data.type;
   slotSelector.querySelector('.cfg-channel').value = data.channel;
-  console.log(data);
+}
+
+
+function ensurePcoCredentialStatusElement() {
+  let el = document.getElementById('pco-credential-status');
+  if (el) {
+    return el;
+  }
+  const tokenInput = document.getElementById('pco-token');
+  if (!tokenInput || !tokenInput.parentElement) {
+    return null;
+  }
+  el = document.createElement('small');
+  el.id = 'pco-credential-status';
+  el.className = 'form-text text-muted mt-1';
+  tokenInput.parentElement.appendChild(el);
+  return el;
+}
+
+function renderPcoCredentialStatus(authMeta = {}) {
+  const statusEl = ensurePcoCredentialStatusElement();
+  if (!statusEl) return;
+  const hasCreds = !!authMeta.has_credentials;
+  statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+  if (hasCreds) {
+    statusEl.classList.add('text-success');
+    const suffix = authMeta.credential_id ? ` (${authMeta.credential_id})` : '';
+    statusEl.textContent = `Credentials stored in system keyring${suffix}. Leave token and secret blank to keep them.`;
+  } else {
+    statusEl.classList.add('text-muted');
+    statusEl.textContent = 'Enter your Planning Center token and secret, then save to store them securely.';
+  }
+}
+
+const CONFIG_TAB_DEVICES = 'devices';
+const CONFIG_TAB_LOGS = 'logs';
+const LOG_PAGE_SIZE = 200;
+const LOG_AUTO_REFRESH_INTERVAL = 5000;
+const DEFAULT_LOG_SETTINGS = {
+  level: 'INFO',
+  console_level: 'WARNING',
+  max_bytes: 10485760,
+  backups: 5,
+  levels: {},
+};
+
+const logViewerState = {
+  initialized: false,
+  loading: false,
+  autoRefresh: false,
+  pollTimer: null,
+  entries: [],
+  filters: {
+    level: '',
+    sources: [],
+    search: '',
+  },
+  nextCursor: null,
+  hasMore: false,
+  latestIndex: -1,
+  options: {
+    levels: ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+    sources: [],
+  },
+  settings: null,
+  pending: null,
+};
+
+function logEl(id) {
+  return document.getElementById(id);
+}
+
+function ensureConfigTabsInitialized() {
+  const container = document.getElementById('config-tabs');
+  if (!container || container.dataset.tabsBound === 'true') return;
+  container.dataset.tabsBound = 'true';
+  const buttons = container.querySelectorAll('[data-config-tab]');
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      const target = btn.getAttribute('data-config-tab');
+      setConfigTab(target);
+    });
+  });
+}
+
+function setConfigTab(tabName, options = {}) {
+  const target = tabName === CONFIG_TAB_LOGS ? CONFIG_TAB_LOGS : CONFIG_TAB_DEVICES;
+  micboard.configTab = target;
+  if (micboard && micboard.url) {
+    micboard.url.settings = target === CONFIG_TAB_LOGS ? 'logs' : 'true';
+  }
+
+  const buttons = document.querySelectorAll('[data-config-tab]');
+  buttons.forEach((btn) => {
+    const isActive = btn.getAttribute('data-config-tab') === target;
+    btn.classList.toggle('btn-secondary', isActive);
+    btn.classList.toggle('btn-outline-secondary', !isActive);
+    btn.classList.toggle('active', isActive);
+  });
+
+  const devicesView = logEl('config-devices-view');
+  const logsView = logEl('config-logs-view');
+  if (devicesView) devicesView.classList.toggle('d-none', target !== CONFIG_TAB_DEVICES);
+  if (logsView) logsView.classList.toggle('d-none', target !== CONFIG_TAB_LOGS);
+
+  if (target === CONFIG_TAB_LOGS) {
+    ensureLogViewerInitialized();
+    if (options.forceReload) {
+      loadLogs({ reset: true }).catch(() => {});
+    }
+  } else {
+    stopLogAutoRefresh(true);
+  }
+
+  if (micboard.settingsMode === 'CONFIG') {
+    try {
+      updateHash();
+    } catch (_) {}
+  }
+}
+
+function ensureLogViewerInitialized() {
+  if (logViewerState.initialized) return;
+  const container = logEl('config-logs-view');
+  if (!container) return;
+  bindLogViewerHandlers();
+  logViewerState.initialized = true;
+  refreshLogMetadata({ initial: true }).catch((err) => {
+    setLogsStatus(`Failed to load logs: ${formatError(err)}`, 'error');
+  });
+}
+
+function bindLogViewerHandlers() {
+  const container = logEl('config-logs-view');
+  if (!container || container.dataset.logBound === 'true') return;
+  container.dataset.logBound = 'true';
+
+  const filterForm = logEl('log-filter-form');
+  if (filterForm) {
+    filterForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      updateLogFiltersFromForm();
+      loadLogs({ reset: true }).catch(() => {});
+    });
+  }
+
+  const refreshBtn = logEl('logs-refresh');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      updateLogFiltersFromForm();
+      loadLogs({ reset: true }).catch(() => {});
+    });
+  }
+
+  const loadOlderBtn = logEl('logs-load-older');
+  if (loadOlderBtn) {
+    loadOlderBtn.addEventListener('click', () => {
+      if (!logViewerState.hasMore) return;
+      loadLogs({ reset: false, newer: false }).catch(() => {});
+    });
+  }
+
+  const followBtn = logEl('logs-toggle-follow');
+  if (followBtn) {
+    followBtn.addEventListener('click', () => {
+      if (logViewerState.autoRefresh) {
+        stopLogAutoRefresh();
+      } else {
+        startLogAutoRefresh();
+      }
+    });
+  }
+
+  const downloadBtn = logEl('logs-download');
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      downloadLogsAsJson();
+    });
+  }
+
+  const purgeBtn = logEl('logs-purge');
+  if (purgeBtn) {
+    purgeBtn.addEventListener('click', () => {
+      if (!confirm('Purge all log files? This will clear the current log and any backups.')) return;
+      setLogsStatus('Purging logs…', 'info');
+      fetch('api/logs/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error('Request failed (' + response.status + ')');
+          return response.json();
+        })
+        .then((data) => {
+          if (!data || data.ok !== true) {
+            throw new Error((data && data.error) || 'Unable to purge logs');
+          }
+          stopLogAutoRefresh(true);
+          setLogsStatus('Logs purged.', 'success');
+          logViewerState.entries = [];
+          logViewerState.nextCursor = null;
+          logViewerState.hasMore = false;
+          logViewerState.latestIndex = -1;
+          renderLogEntries();
+          updateLogControls(false);
+        })
+        .catch((err) => {
+          setLogsStatus(`Failed to purge logs: ${formatError(err)}`, 'error');
+        });
+    });
+  }
+
+  const settingsForm = logEl('log-settings-form');
+  if (settingsForm) {
+    settingsForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      saveLogSettings().catch(() => {});
+    });
+  }
+
+  const resetButton = logEl('log-settings-reset');
+  if (resetButton) {
+    resetButton.addEventListener('click', () => {
+      resetLogSettingsForm();
+    });
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopLogAutoRefresh(true);
+    }
+  });
+}
+
+function updateLogFiltersFromForm() {
+  const levelSelect = logEl('log-level');
+  logViewerState.filters.level = levelSelect ? levelSelect.value : '';
+
+  const sourcesSelect = logEl('log-sources');
+  if (sourcesSelect) {
+    const selected = Array.from(sourcesSelect.selectedOptions || [])
+      .map((option) => option.value)
+      .filter((value) => value);
+    logViewerState.filters.sources = selected;
+  } else {
+    logViewerState.filters.sources = [];
+  }
+
+  const searchInput = logEl('log-search');
+  logViewerState.filters.search = searchInput ? searchInput.value.trim() : '';
+}
+
+async function refreshLogMetadata({ initial = false } = {}) {
+  const statusLabel = initial ? 'Loading logs…' : 'Refreshing log metadata…';
+  setLogsStatus(statusLabel, 'info');
+  try {
+    const response = await fetch('api/logs/settings?_=' + Date.now(), { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Request failed (' + response.status + ')');
+    }
+    const data = await response.json();
+    if (data && data.ok === false) {
+      throw new Error(data.error || 'Unable to fetch logging metadata');
+    }
+
+    if (Array.isArray(data.levels) && data.levels.length) {
+      logViewerState.options.levels = data.levels;
+    }
+    if (Array.isArray(data.sources)) {
+      logViewerState.options.sources = data.sources;
+    }
+
+    const filters = logViewerState.filters;
+    if (filters.level && !logViewerState.options.levels.includes(filters.level)) {
+      filters.level = '';
+    }
+    filters.sources = filters.sources.filter((source) => logViewerState.options.sources.includes(source));
+
+    logViewerState.settings = data.logging || logViewerState.settings || DEFAULT_LOG_SETTINGS;
+    renderLogFilters();
+    renderLogSettings();
+
+    if (initial) {
+      await loadLogs({ reset: true });
+    }
+  } catch (err) {
+    setLogsStatus(`Failed to load log metadata: ${formatError(err)}`, 'error');
+    throw err;
+  }
+}
+
+function normalizeEntry(entry) {
+  if (!entry) return;
+  if (!entry.source) {
+    if (entry.logger && typeof entry.logger === 'string') {
+      entry.source = entry.logger.split('.').slice(1).join('.') || entry.logger;
+    } else {
+      entry.source = 'core';
+    }
+  }
+
+  const idx = parseInt(entry.index != null ? entry.index : entry.cursor, 10);
+  if (Number.isFinite(idx) && idx >= 0) {
+    entry.index = idx;
+    entry.cursor = String(idx);
+  } else {
+    entry.index = -1;
+  }
+
+  if (!entry.context || typeof entry.context !== 'object') {
+    entry.context = entry.context ? { value: entry.context } : {};
+  }
+}
+
+function renderLogFilters() {
+  const levelSelect = logEl('log-level');
+  if (levelSelect) {
+    const current = logViewerState.filters.level;
+    levelSelect.innerHTML = '';
+    const anyOption = document.createElement('option');
+    anyOption.value = '';
+    anyOption.textContent = 'All Levels';
+    levelSelect.appendChild(anyOption);
+    logViewerState.options.levels.forEach((level) => {
+      const option = document.createElement('option');
+      option.value = level;
+      option.textContent = level;
+      if (current === level) option.selected = true;
+      levelSelect.appendChild(option);
+    });
+  }
+
+  const sourcesSelect = logEl('log-sources');
+  if (sourcesSelect) {
+    const selectedSet = new Set(logViewerState.filters.sources);
+    sourcesSelect.innerHTML = '';
+    logViewerState.options.sources.forEach((source) => {
+      const option = document.createElement('option');
+      option.value = source;
+      option.textContent = source;
+      option.selected = selectedSet.has(source);
+      sourcesSelect.appendChild(option);
+    });
+  }
+}
+
+function renderLogSettings() {
+  const settings = Object.assign({}, DEFAULT_LOG_SETTINGS, logViewerState.settings || {});
+  if (typeof settings.levels !== 'object' || settings.levels === null) {
+    settings.levels = {};
+  }
+
+  const levelSelect = logEl('log-setting-level');
+  if (levelSelect) {
+    levelSelect.innerHTML = '';
+    logViewerState.options.levels.forEach((level) => {
+      const option = document.createElement('option');
+      option.value = level;
+      option.textContent = level;
+      if (settings.level === level) option.selected = true;
+      levelSelect.appendChild(option);
+    });
+  }
+
+  const consoleSelect = logEl('log-setting-console-level');
+  if (consoleSelect) {
+    consoleSelect.innerHTML = '';
+    logViewerState.options.levels.forEach((level) => {
+      const option = document.createElement('option');
+      option.value = level;
+      option.textContent = level;
+      if (settings.console_level === level) option.selected = true;
+      consoleSelect.appendChild(option);
+    });
+  }
+
+  const maxBytesInput = logEl('log-setting-max-bytes');
+  if (maxBytesInput) {
+    maxBytesInput.value = Number.isFinite(settings.max_bytes) ? settings.max_bytes : DEFAULT_LOG_SETTINGS.max_bytes;
+  }
+
+  const backupsInput = logEl('log-setting-backups');
+  if (backupsInput) {
+    backupsInput.value = Number.isFinite(settings.backups) ? settings.backups : DEFAULT_LOG_SETTINGS.backups;
+  }
+
+  const overridesBody = logEl('log-level-overrides');
+  if (overridesBody) {
+    overridesBody.innerHTML = '';
+    logViewerState.options.sources.forEach((source) => {
+      const row = document.createElement('tr');
+      const sourceCell = document.createElement('td');
+      sourceCell.textContent = source;
+      const selectCell = document.createElement('td');
+      const select = document.createElement('select');
+      select.className = 'form-select form-select-sm log-level-override';
+      select.dataset.overrideTarget = source;
+
+      const inheritOption = document.createElement('option');
+      inheritOption.value = '';
+      inheritOption.textContent = '(inherit)';
+      select.appendChild(inheritOption);
+
+      const overrideValue = getOverrideForSource(source, settings.levels);
+      logViewerState.options.levels.forEach((level) => {
+        const option = document.createElement('option');
+        option.value = level;
+        option.textContent = level;
+        if (overrideValue === level) option.selected = true;
+        select.appendChild(option);
+      });
+
+      selectCell.appendChild(select);
+      row.appendChild(sourceCell);
+      row.appendChild(selectCell);
+      overridesBody.appendChild(row);
+    });
+  }
+}
+
+function getOverrideForSource(source, overrides) {
+  if (!overrides) return '';
+  if (Object.prototype.hasOwnProperty.call(overrides, source)) {
+    return overrides[source];
+  }
+  const fullName = 'micboard.' + source;
+  if (Object.prototype.hasOwnProperty.call(overrides, fullName)) {
+    return overrides[fullName];
+  }
+  return '';
+}
+
+function collectLogSettingsPayload() {
+  const payload = {};
+  const levelSelect = logEl('log-setting-level');
+  if (levelSelect && levelSelect.value) payload.level = levelSelect.value;
+
+  const consoleSelect = logEl('log-setting-console-level');
+  if (consoleSelect && consoleSelect.value) payload.console_level = consoleSelect.value;
+
+  const maxBytesInput = logEl('log-setting-max-bytes');
+  if (maxBytesInput && maxBytesInput.value) {
+    const bytes = parseInt(maxBytesInput.value, 10);
+    if (Number.isFinite(bytes) && bytes > 0) payload.max_bytes = bytes;
+  }
+
+  const backupsInput = logEl('log-setting-backups');
+  if (backupsInput && backupsInput.value) {
+    const backups = parseInt(backupsInput.value, 10);
+    if (Number.isFinite(backups) && backups >= 0) payload.backups = backups;
+  }
+
+  const overrides = {};
+  document.querySelectorAll('.log-level-override').forEach((select) => {
+    const source = select.dataset.overrideTarget;
+    const value = select.value;
+    if (source && value) {
+      overrides[source] = value;
+    }
+  });
+  payload.levels = overrides;
+  return payload;
+}
+
+async function saveLogSettings() {
+  const payload = collectLogSettingsPayload();
+  setLogSettingsStatus('Saving logging preferences…', 'info');
+  try {
+    const response = await fetch('api/logs/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error('Request failed (' + response.status + ')');
+    }
+    const data = await response.json();
+    if (!data || data.ok !== true) {
+      throw new Error((data && data.error) || 'Unable to update logging settings');
+    }
+    logViewerState.settings = data.logging || payload;
+    renderLogSettings();
+    setLogSettingsStatus('Logging settings updated.', 'success');
+  } catch (err) {
+    setLogSettingsStatus(`Failed to update logging settings: ${formatError(err)}`, 'error');
+    throw err;
+  }
+}
+
+function resetLogSettingsForm() {
+  renderLogSettings();
+  setLogSettingsStatus('Reverted to last saved settings.', 'info');
+}
+
+async function loadLogs({ reset = false, newer = false } = {}) {
+  if (logViewerState.loading) {
+    logViewerState.pending = {
+      reset: reset || (logViewerState.pending && logViewerState.pending.reset),
+      newer: newer || (logViewerState.pending && logViewerState.pending.newer),
+    };
+    return;
+  }
+
+  if (reset) {
+    logViewerState.entries = [];
+    logViewerState.nextCursor = null;
+    logViewerState.hasMore = false;
+    logViewerState.latestIndex = -1;
+    renderLogEntries();
+  }
+
+  logViewerState.loading = true;
+  updateLogControls(true);
+
+  try {
+    const params = new URLSearchParams();
+    params.set('limit', String(LOG_PAGE_SIZE));
+    if (logViewerState.filters.level) params.set('level', logViewerState.filters.level);
+    logViewerState.filters.sources.forEach((source) => {
+      params.append('source', source);
+    });
+    if (logViewerState.filters.search) params.set('search', logViewerState.filters.search);
+
+    if (newer) {
+      if (logViewerState.latestIndex >= 0) params.set('cursor', String(logViewerState.latestIndex));
+      params.set('direction', 'asc');
+      params.set('newer', 'true');
+    } else {
+      params.set('direction', 'desc');
+      if (!reset && logViewerState.nextCursor !== null && logViewerState.nextCursor !== undefined) {
+        params.set('cursor', String(logViewerState.nextCursor));
+      }
+    }
+
+    const response = await fetch('api/logs?' + params.toString(), { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Request failed (' + response.status + ')');
+    }
+    const data = await response.json();
+    if (data && data.ok === false) {
+      throw new Error(data.error || 'Unable to read logs');
+    }
+
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+    entries.forEach(normalizeEntry);
+
+    if (newer) {
+      if (entries.length) {
+        entries.sort((a, b) => (b.index || 0) - (a.index || 0));
+        const fresh = entries.filter((entry) => (entry.index ?? -1) > logViewerState.latestIndex);
+        if (fresh.length) {
+          logViewerState.entries = fresh.concat(logViewerState.entries);
+        }
+      }
+    } else if (reset) {
+      logViewerState.entries = entries;
+    } else {
+      logViewerState.entries = logViewerState.entries.concat(entries);
+    }
+
+    logViewerState.entries.sort((a, b) => (b.index || 0) - (a.index || 0));
+    logViewerState.latestIndex = logViewerState.entries.reduce((max, entry) => {
+      if (entry.index != null && entry.index > max) return entry.index;
+      return max;
+    }, logViewerState.latestIndex);
+
+    logViewerState.nextCursor = data && data.cursor != null ? data.cursor : null;
+    logViewerState.hasMore = !!(data && data.has_more);
+
+    renderLogEntries();
+
+    if (entries.length) {
+      setLogsStatus(`Loaded ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'}.`, 'success');
+    } else if (reset) {
+      setLogsStatus('No log entries matched your filters yet.', 'info');
+    } else if (newer) {
+      setLogsStatus('No new log entries.', 'info');
+    } else {
+      setLogsStatus('No more matching log entries.', 'info');
+    }
+  } catch (err) {
+    setLogsStatus(`Failed to load logs: ${formatError(err)}`, 'error');
+    throw err;
+  } finally {
+    logViewerState.loading = false;
+    updateLogControls(false);
+    if (logViewerState.pending) {
+      const pending = logViewerState.pending;
+      logViewerState.pending = null;
+      loadLogs(pending).catch(() => {});
+    }
+  }
+}
+
+function renderLogEntries() {
+  const tbody = logEl('log-entries');
+  const emptyState = logEl('logs-empty-state');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  if (!logViewerState.entries.length) {
+    if (emptyState) emptyState.classList.remove('d-none');
+    updateLogControls(false);
+    return;
+  }
+  if (emptyState) emptyState.classList.add('d-none');
+
+  logViewerState.entries.forEach((entry) => {
+    const row = document.createElement('tr');
+    row.className = 'log-entry';
+    row.dataset.level = entry.level || '';
+    row.dataset.source = entry.source || '';
+
+    const tsCell = document.createElement('td');
+    if (entry.ts) {
+      try {
+        const dt = new Date(entry.ts);
+        tsCell.textContent = dt.toLocaleString();
+      } catch (_) {
+        tsCell.textContent = entry.ts;
+      }
+    } else {
+      tsCell.textContent = '—';
+    }
+    row.appendChild(tsCell);
+
+    const levelCell = document.createElement('td');
+    const badge = document.createElement('span');
+    const levelName = (entry.level || 'INFO').toString().toUpperCase();
+    badge.className = 'log-level-badge level-' + levelName.toLowerCase();
+    badge.textContent = levelName;
+    levelCell.appendChild(badge);
+    row.appendChild(levelCell);
+
+    const sourceCell = document.createElement('td');
+    const sourcePill = document.createElement('span');
+    sourcePill.className = 'log-source-pill';
+    sourcePill.textContent = entry.source || entry.logger || 'core';
+    sourceCell.appendChild(sourcePill);
+    row.appendChild(sourceCell);
+
+    const messageCell = document.createElement('td');
+    const mainMessage = document.createElement('div');
+    mainMessage.className = 'log-message';
+    mainMessage.textContent = entry.message || '';
+    messageCell.appendChild(mainMessage);
+
+    if (entry.context && Object.keys(entry.context).length) {
+      const details = document.createElement('details');
+      details.className = 'log-context';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Context';
+      details.appendChild(summary);
+      const pre = document.createElement('pre');
+      try {
+        pre.textContent = JSON.stringify(entry.context, null, 2);
+      } catch (_) {
+        pre.textContent = String(entry.context);
+      }
+      details.appendChild(pre);
+      messageCell.appendChild(details);
+    }
+
+    if (entry.exc_info) {
+      const details = document.createElement('details');
+      details.className = 'log-context';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Exception';
+      details.appendChild(summary);
+      const pre = document.createElement('pre');
+      pre.textContent = entry.exc_info;
+      details.appendChild(pre);
+      messageCell.appendChild(details);
+    }
+
+    row.appendChild(messageCell);
+    tbody.appendChild(row);
+  });
+
+  updateLogControls(false);
+}
+
+function setLogsStatus(message, level = 'info') {
+  const statusEl = logEl('logs-status');
+  if (!statusEl) return;
+  statusEl.classList.remove('text-muted', 'text-success', 'text-warning', 'text-danger');
+  let cls = 'text-muted';
+  if (level === 'success') cls = 'text-success';
+  else if (level === 'warn' || level === 'warning') cls = 'text-warning';
+  else if (level === 'error') cls = 'text-danger';
+  statusEl.classList.add(cls);
+  statusEl.textContent = message || '';
+}
+
+function setLogSettingsStatus(message, level = 'info') {
+  const statusEl = logEl('log-settings-status');
+  if (!statusEl) return;
+  statusEl.classList.remove('text-muted', 'text-success', 'text-warning', 'text-danger');
+  let cls = 'text-muted';
+  if (level === 'success') cls = 'text-success';
+  else if (level === 'warn' || level === 'warning') cls = 'text-warning';
+  else if (level === 'error') cls = 'text-danger';
+  statusEl.classList.add(cls);
+  statusEl.textContent = message || '';
+}
+
+function updateLogControls(disable) {
+  const loading = disable || logViewerState.loading;
+  const refreshBtn = logEl('logs-refresh');
+  if (refreshBtn) refreshBtn.disabled = loading;
+
+  const loadOlderBtn = logEl('logs-load-older');
+  if (loadOlderBtn) loadOlderBtn.disabled = loading || !logViewerState.hasMore;
+
+  const purgeBtn = logEl('logs-purge');
+  if (purgeBtn) purgeBtn.disabled = loading;
+
+  const downloadBtn = logEl('logs-download');
+  if (downloadBtn) downloadBtn.disabled = !logViewerState.entries.length;
+
+  const followBtn = logEl('logs-toggle-follow');
+  if (followBtn) {
+    followBtn.disabled = loading && !logViewerState.autoRefresh;
+    followBtn.classList.toggle('active', logViewerState.autoRefresh);
+    followBtn.textContent = logViewerState.autoRefresh ? 'Stop Live Tail' : 'Start Live Tail';
+  }
+}
+
+function startLogAutoRefresh() {
+  if (logViewerState.autoRefresh) return;
+  logViewerState.autoRefresh = true;
+  updateLogControls(false);
+  loadLogs({ newer: true }).catch(() => {});
+  logViewerState.pollTimer = window.setInterval(() => {
+    loadLogs({ newer: true }).catch(() => {});
+  }, LOG_AUTO_REFRESH_INTERVAL);
+  setLogsStatus('Live tail started.', 'info');
+}
+
+function stopLogAutoRefresh(silent = false) {
+  if (!logViewerState.autoRefresh) return;
+  logViewerState.autoRefresh = false;
+  if (logViewerState.pollTimer) {
+    clearInterval(logViewerState.pollTimer);
+    logViewerState.pollTimer = null;
+  }
+  updateLogControls(false);
+  if (!silent) {
+    setLogsStatus('Live tail stopped.', 'info');
+  }
+}
+
+function downloadLogsAsJson() {
+  if (!logViewerState.entries.length) {
+    setLogsStatus('No log entries to download yet.', 'warn');
+    return;
+  }
+  try {
+    const payload = logViewerState.entries.map((entry) => {
+      const copy = Object.assign({}, entry);
+      return copy;
+    });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'wirelessboard-logs-' + new Date().toISOString().replace(/[:]/g, '-') + '.json';
+    document.body.appendChild(anchor);
+    anchor.click();
+    setTimeout(() => {
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    }, 0);
+    setLogsStatus('Downloaded current log view.', 'success');
+  } catch (err) {
+    setLogsStatus(`Failed to prepare download: ${formatError(err)}`, 'error');
+  }
+}
+
+if (micboard && typeof micboard === 'object') {
+  micboard.stopLogAutoRefresh = stopLogAutoRefresh;
 }
 
 
 function showPCOView() {
   hideHUDOverlay();
+  stopLogAutoRefresh(true);
   micboard.settingsMode = 'PCO';
   updateHash();
   const mb = document.getElementById('micboard');
@@ -92,11 +879,11 @@ function showPCOView() {
   const p = micboard.config.pco || {};
   const eEnabled = document.getElementById('pco-enabled');
   if (eEnabled) eEnabled.checked = !!p.enabled;
-  const a = p.auth || {};
   const eToken = document.getElementById('pco-token');
   const eSecret = document.getElementById('pco-secret');
-  if (eToken) eToken.value = a.token || '';
-  if (eSecret) eSecret.value = a.secret || '';
+  if (eToken) eToken.value = '';
+  if (eSecret) eSecret.value = '';
+  renderPcoCredentialStatus(p.auth || {});
   const s = p.services || {};
   const eStid = document.getElementById('pco-service-type-id');
   if (eStid) eStid.value = s.service_type_id || '';
@@ -125,11 +912,11 @@ function generateJSONConfig() {
       const output = {};
 
       output.slot = slot;
-      const typeVal = (configBoard[i].querySelector('.cfg-type')?.value || '').trim();
-      const ipVal = (configBoard[i].querySelector('.cfg-ip')?.value || '').trim();
-      const chanVal = parseInt(configBoard[i].querySelector('.cfg-channel')?.value, 10);
-  const nameField = configBoard[i].querySelector('.cfg-name');
-  const nameVal = nameField ? String(nameField.value || '').trim() : '';
+    const typeVal = (configBoard[i].querySelector('.cfg-type')?.value || '').trim();
+    const ipVal = (configBoard[i].querySelector('.cfg-ip')?.value || '').trim();
+    const chanVal = parseInt(configBoard[i].querySelector('.cfg-channel')?.value, 10);
+    const nameField = configBoard[i].querySelector('.cfg-name');
+    const nameVal = nameField ? String(nameField.value || '').trim() : '';
 
       // Decide type: if a known network device type, require IP+Channel; otherwise default to offline when any meaningful data exists
       let finalType = typeVal;
@@ -175,28 +962,50 @@ function generateJSONConfig() {
 
 function addAllDiscoveredDevices() {
   const devices = document.querySelectorAll('#discovered_list .cfg-row');
-  const cfg_list = document.getElementById('editor_holder');
-  if (!cfg_list || devices.length === 0) return;
-  const top = cfg_list.querySelector('.cfg-row');
+  const cfgList = document.getElementById('editor_holder');
+  if (!cfgList || devices.length === 0) return;
 
-  devices.forEach((e) => {
-    cfg_list.insertBefore(e, top);
+  const template = document.getElementById('config-slot-template');
+  if (!template || !template.content) return;
+
+  devices.forEach((sourceRow) => {
+    const fragment = template.content.cloneNode(true);
+    const targetRow = fragment.querySelector('.cfg-row');
+    if (!targetRow) return;
+
+    const copyValue = (selector) => {
+      const src = sourceRow.querySelector(selector);
+      const dest = targetRow.querySelector(selector);
+      if (src && dest) {
+        dest.value = src.value;
+      }
+    };
+
+    copyValue('.cfg-type');
+    copyValue('.cfg-ip');
+    copyValue('.cfg-channel');
+    copyValue('.cfg-device-name');
+    copyValue('.cfg-name');
+
+    cfgList.appendChild(fragment);
   });
+
   updateSlotID();
+  updateHiddenSlots();
 }
 
 function updateHiddenSlots() {
-  const cfgRows = document.querySelectorAll('#editor_holder .cfg-row')
-  Array.from(cfgRows).forEach((e) => {
-    const type = e.querySelector('.cfg-type').value
-    if ( type === 'offline' || type === '') {
-      e.querySelector('.cfg-ip').style.display = "none"
-      e.querySelector('.cfg-channel').style.display = "none"
+  const cfgRows = document.querySelectorAll('#editor_holder .cfg-row');
+  Array.from(cfgRows).forEach((row) => {
+    const type = row.querySelector('.cfg-type').value;
+    if (type === 'offline' || type === '') {
+      row.querySelector('.cfg-ip').style.display = 'none';
+      row.querySelector('.cfg-channel').style.display = 'none';
     } else {
-      e.querySelector('.cfg-ip').style.display = "block"
-      e.querySelector('.cfg-channel').style.display = "block"
+      row.querySelector('.cfg-ip').style.display = 'block';
+      row.querySelector('.cfg-channel').style.display = 'block';
     }
-  })
+  });
 }
 
 function setDeviceNameStatus(message, level = 'info') {
@@ -392,6 +1201,10 @@ export function initConfigEditor(force = false) {
   const settings = document.querySelector('.settings');
   if (settings) settings.style.display = 'block';
 
+  ensureConfigTabsInitialized();
+  if (!micboard.configTab) micboard.configTab = CONFIG_TAB_DEVICES;
+  setConfigTab(micboard.configTab, { forceReload: force });
+
   // Render slot list (replacement for missing renderSlotList)
   const holder = document.getElementById('editor_holder');
   if (holder) {
@@ -540,11 +1353,11 @@ export function initConfigEditor(force = false) {
   const pco = micboard.config.pco || {};
   const elEnabled = document.getElementById('pco-enabled');
   if (elEnabled) elEnabled.checked = !!pco.enabled;
-  const auth = pco.auth || {};
   const elToken = document.getElementById('pco-token');
   const elSecret = document.getElementById('pco-secret');
-  if (elToken && auth.token) elToken.value = auth.token;
-  if (elSecret && auth.secret) elSecret.value = auth.secret;
+  if (elToken) elToken.value = '';
+  if (elSecret) elSecret.value = '';
+  renderPcoCredentialStatus(pco.auth || {});
   const services = pco.services || {};
   const elSt = document.getElementById('pco-service-type');
   if (elSt) elSt.value = (services.service_type || services.service_type_id || '');
@@ -618,6 +1431,7 @@ function populatePCOFormFromServer() {
       .then(r => r.json())
       .then(cfg => {
         const p = (cfg && cfg.pco) || {};
+        micboard.config.pco = p;
         const elEnabled = document.getElementById('pco-enabled');
         const elToken = document.getElementById('pco-token');
         const elSecret = document.getElementById('pco-secret');
@@ -625,16 +1439,22 @@ function populatePCOFormFromServer() {
         const elCat = document.getElementById('pco-note-category');
         const elTeam = document.getElementById('pco-team-filter');
         if (elEnabled) elEnabled.checked = !!p.enabled;
-        const a = p.auth || {};
-        if (elToken) elToken.value = a.token || '';
-        if (elSecret) elSecret.value = a.secret || '';
+        if (elToken) elToken.value = '';
+        if (elSecret) elSecret.value = '';
         const s = p.services || {};
+        if (elStid) elStid.value = s.service_type_id || '';
         const elSt2 = document.getElementById('pco-service-type');
         if (elSt2) elSt2.value = (s.service_type || s.service_type_id || '');
         const m = p.mapping || {};
         if (elCat) elCat.value = m.note_category || 'Mic / IEM Assignments';
         if (elTeam) elTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
-        appendPcoLog('Loaded saved PCO configuration');
+        renderPcoCredentialStatus(p.auth || {});
+        appendPcoLog('Loaded saved PCO configuration.');
+        if (p.auth && p.auth.has_credentials) {
+          appendPcoLog('Existing credentials detected in system keyring.');
+        } else {
+          appendPcoLog('No stored credentials found yet.');
+        }
       })
       .catch((err) => {
         appendPcoLog(`Failed to load saved PCO configuration: ${formatError(err)}`, 'warn');
@@ -659,39 +1479,77 @@ export function bindPcoNav() {
 }
 
 function buildPcoPayload() {
-  return {
-    enabled: document.getElementById('pco-enabled')?.checked || false,
-    auth: {
-      token: document.getElementById('pco-token')?.value || '',
-      secret: document.getElementById('pco-secret')?.value || '',
-    },
+  const enabled = document.getElementById('pco-enabled')?.checked || false;
+  const token = (document.getElementById('pco-token')?.value || '').trim();
+  const secret = (document.getElementById('pco-secret')?.value || '').trim();
+  const serviceType = (document.getElementById('pco-service-type')?.value || '').trim();
+  const serviceTypeId = (document.getElementById('pco-service-type-id')?.value || '').trim();
+  const noteCategory = (document.getElementById('pco-note-category')?.value || 'Mic / IEM Assignments').trim();
+  const teamFilterRaw = (document.getElementById('pco-team-filter')?.value || '');
+  const payload = {
+    enabled,
     services: {
-      plan: { select: 'next' }
+      plan: { select: 'next' },
     },
     mapping: {
       strategy: 'note_or_brackets',
-      note_category: (document.getElementById('pco-note-category')?.value || 'Mic / IEM Assignments'),
-      team_name_filter: (document.getElementById('pco-team-filter')?.value || '')
-        .split(',')
-        .map(s => s.trim())
-        .filter(s => s)
-    }
+      note_category: noteCategory,
+      team_name_filter: teamFilterRaw.split(',').map(s => s.trim()).filter(s => s),
+    },
   };
+  if (serviceType) {
+    payload.services.service_type = serviceType;
+  }
+  if (serviceTypeId) {
+    payload.services.service_type_id = serviceTypeId;
+  }
+  if (token || secret) {
+    payload.auth = { token, secret };
+  }
+  return payload;
 }
 
 function handlePcoSave() {
   const payload = buildPcoPayload();
   appendPcoLog('Saving PCO configuration...');
-  postJSON('api/pco/config', payload, () => {
-    const el = document.getElementById('pco-save-status');
-    if (el) {
-      el.classList.remove('d-none');
+  postJSON('api/pco/config', payload, (resp) => {
+    const statusEl = document.getElementById('pco-save-status');
+    const ok = resp && resp.ok !== false;
+    if (!ok) {
+      const msg = (resp && resp.error) ? resp.error : 'Save failed';
+      if (statusEl) {
+        statusEl.classList.remove('d-none');
+        statusEl.classList.remove('text-success');
+        statusEl.classList.add('text-danger');
+        statusEl.textContent = msg;
+      }
+      appendPcoLog(`PCO configuration save failed: ${msg}`, 'error');
+      return;
+    }
+
+    const savedConfig = (resp && resp.pco) || {};
+    micboard.config.pco = savedConfig;
+    renderPcoCredentialStatus(savedConfig.auth || {});
+    const tokenEl = document.getElementById('pco-token');
+    const secretEl = document.getElementById('pco-secret');
+    if (tokenEl) tokenEl.value = '';
+    if (secretEl) secretEl.value = '';
+
+    if (statusEl) {
+      statusEl.classList.remove('text-danger');
+      statusEl.classList.remove('d-none');
+      statusEl.classList.add('text-success');
+      statusEl.textContent = 'Saved!';
       setTimeout(() => {
-        el.classList.add('d-none');
-        micboard.config.pco = payload;
-      }, 750);
+        statusEl.classList.add('d-none');
+      }, 1000);
     }
     appendPcoLog('PCO configuration saved.');
+    if (savedConfig.auth && savedConfig.auth.has_credentials) {
+      appendPcoLog('Credentials stored securely in system keyring.');
+    } else {
+      appendPcoLog('No credentials stored yet.');
+    }
   }, (err) => {
     appendPcoLog(`PCO configuration save failed: ${formatError(err)}`, 'error');
   });
@@ -702,11 +1560,22 @@ function handlePcoSync() {
   const jsonEl = document.getElementById('pco-sync-json');
   const tbl = document.getElementById('pco-assignments-table');
   const enabled = document.getElementById('pco-enabled')?.checked;
-  const token = document.getElementById('pco-token')?.value || '';
-  const secret = document.getElementById('pco-secret')?.value || '';
-  if (!enabled || !token || !secret) {
-    appendPcoLog('Cannot sync with PCO: enable integration and provide token/secret.', 'warn');
-    if (summaryEl) summaryEl.innerHTML = '<span class="text-warning">Set Enabled, Token, and Secret, then Save before Sync.</span>';
+  const pendingToken = (document.getElementById('pco-token')?.value || '').trim();
+  const pendingSecret = (document.getElementById('pco-secret')?.value || '').trim();
+  const authMeta = (micboard.config.pco && micboard.config.pco.auth) || {};
+  const hasStoredCredentials = !!authMeta.has_credentials;
+  if (!enabled) {
+    appendPcoLog('Cannot sync with PCO: enable the integration first.', 'warn');
+    if (summaryEl) summaryEl.innerHTML = '<span class="text-warning">Enable the integration, save, then sync.</span>';
+    return;
+  }
+  if (!hasStoredCredentials) {
+    const needsSave = pendingToken && pendingSecret;
+    appendPcoLog('Cannot sync with PCO: store credentials and save before syncing.', 'warn');
+    if (summaryEl) {
+      const hint = needsSave ? 'Save your new token and secret, then try again.' : 'Enter your token and secret, save, then try again.';
+      summaryEl.innerHTML = `<span class="text-warning">${hint}</span>`;
+    }
     return;
   }
   if (summaryEl) summaryEl.innerHTML = '';

@@ -1,13 +1,23 @@
 # Changelog
 
 ## [Unreleased]
+_No changes yet._
+
+## [1.1.0] - 2025-10-06
 ### Added
 - Project-wide Python lockfile (`py/requirements.lock`) and `npm run pip:lock` helper to regenerate pinned dependencies alongside `py/requirements.txt`.
 - Semantic versioning workflow powered by `npm version` and `scripts/sync-version.js`, keeping Python artefacts and release tags in sync.
 - Dedicated versioning guide (`docs/versioning.md`) and CI check to ensure `package.json` and `py/version.py` remain aligned.
+- Secure Planning Center credential store backed by the host keyring (`py/pco_credentials.py`) with automatic migration from plaintext tokens.
+- PCO configuration API now returns a sanitized credential summary and the UI surfaces keyring status indicators without echoing secrets in the browser.
+### Changed
+- Saving the PCO configuration only persists metadata in `config.json`; credentials are migrated into the keyring on demand and verified via stored digests.
+- Frontend PCO workflows hide token/secret inputs after save and require stored credentials before syncing assignments to prevent accidental plaintext reuse.
+- `api/pco/config` responses reuse sanitized metadata for both initial loads and POST responses, keeping `micboard.config` free of sensitive values.
 ### Fixed
 - Pinned the Electron runtime in development dependencies so `npm run release:mac` can build packages locally and in CI without missing-module failures.
 - CI macOS builds now remove the temporary virtualenv after bundling so Electron Builder no longer encounters symlinks to system Python binaries.
+- Eliminated npm install warnings by forcing published `@electron/rebuild` releases and vendoring a maintained `boolean` shim, removing git-based `node-gyp` and deprecated transitive packages.
 
 ## [1.0.4] - 2025-10-04
 ### Added

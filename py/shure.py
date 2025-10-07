@@ -13,6 +13,8 @@ from channel import chart_update_list, data_update_list
 NetworkDevices = []
 DeviceMessageQueue = queue.Queue()
 
+logger = logging.getLogger('micboard.discovery')
+
 
 def get_network_device_by_ip(ip):
     return next((x for x in NetworkDevices if x.ip == ip), None)
@@ -35,7 +37,7 @@ def check_add_network_device(ip, type):
 def watchdog_monitor():
     for rx in (rx for rx in NetworkDevices if rx.rx_com_status == 'CONNECTED'):
         if (int(time.perf_counter()) - rx.socket_watchdog) > 5:
-            logging.debug('disconnected from: %s', rx.ip)
+            logger.debug('Disconnected from receiver', extra={'context': {'ip': rx.ip}})
             rx.socket_disconnect()
 
     for rx in (rx for rx in NetworkDevices if rx.rx_com_status == 'CONNECTING'):
@@ -95,14 +97,14 @@ def SocketService():
 
         for rx in write_socks:
             string = rx.writeQueue.get()
-            logging.debug("write: %s data: %s", rx.ip, string)
+            logger.debug('TX write', extra={'context': {'ip': rx.ip, 'payload': string}})
             try:
                 if rx.type in ['qlxd', 'ulxd', 'axtd', 'p10t']:
                     rx.f.sendall(bytearray(string, 'UTF-8'))
                 elif rx.type == 'uhfr':
                     rx.f.sendto(bytearray(string, 'UTF-8'), (rx.ip, 2202))
             except:
-                logging.warning("TX ERROR IP: %s String: %s", rx.ip, string)
+                logger.warning('TX error', extra={'context': {'ip': rx.ip, 'payload': string}})
 
 
         for rx in error_socks:

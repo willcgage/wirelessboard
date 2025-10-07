@@ -1,16 +1,32 @@
-import os
-import sys
+import argparse
+import copy
 import json
 import logging
-import logging.handlers
-import argparse
-import uuid
+import logging.config
+import os
+import sys
 import time
+import uuid
 from shutil import copyfile
+from typing import Any, Dict, Tuple
 
 import shure
 import offline
 import tornado_server
+
+from logging_utils import (
+    LOG_FILENAME,
+    build_logging_config,
+    default_settings,
+    normalize_settings,
+)
+
+from pco_credentials import (
+    CredentialError,
+    CredentialMeta,
+    apply_auth_update,
+    public_auth_view,
+)
 
 APPNAME = 'wirelessboard'
 LEGACY_APPNAME = 'micboard'
@@ -18,7 +34,7 @@ LEGACY_APPNAME = 'micboard'
 CONFIG_FILE_NAME = 'config.json'
 DEFAULT_PORT = 8058
 
-FORMAT = '%(asctime)s %(levelname)s:%(message)s'
+logger = logging.getLogger('micboard.core')
 
 config_tree = {}
 
@@ -31,26 +47,13 @@ args = {}
 def uuid_init():
     if 'uuid' not in config_tree:
         micboard_uuid = str(uuid.uuid4())
-        logging.info('Adding UUID: {} to config.conf'.format(micboard_uuid))
+        logger.info('Adding UUID: %s to config.conf', micboard_uuid)
         config_tree['uuid'] = micboard_uuid
         save_current_config()
 
 
 def logging_init():
-    formatter = logging.Formatter(FORMAT)
-    log = logging.getLogger()
-    log.setLevel(logging.DEBUG)
-
-    sthandler = logging.StreamHandler(sys.stdout)
-    fhandler = logging.handlers.RotatingFileHandler(log_file(),
-                                                    maxBytes=10*1024*1024,
-                                                    backupCount=5)
-
-    sthandler.setFormatter(formatter)
-    fhandler.setFormatter(formatter)
-
-    log.addHandler(sthandler)
-    log.addHandler(fhandler)
+    configure_logging(default_settings())
 
 
 def web_port():
@@ -61,14 +64,14 @@ def web_port():
     elif 'WIRELESSBOARD_PORT' in os.environ:
         return int(os.environ['WIRELESSBOARD_PORT'])
     elif 'MICBOARD_PORT' in os.environ:
-        logging.info('Using legacy MICBOARD_PORT environment variable')
+        logger.info('Using legacy MICBOARD_PORT environment variable')
         return int(os.environ['MICBOARD_PORT'])
 
     port = config_tree.get('port', DEFAULT_PORT)
     try:
         return int(port)
     except (TypeError, ValueError):
-        logging.warning("Invalid port value '%s' in configuration, falling back to %s", port, DEFAULT_PORT)
+        logger.warning("Invalid port value '%s' in configuration, falling back to %s", port, DEFAULT_PORT)
         return DEFAULT_PORT
 
 
@@ -90,7 +93,7 @@ def config_path(folder=None):
         if os.path.exists(expanded):
             path = expanded
         else:
-            logging.warning("Invalid config path")
+            logger.warning("Invalid config path")
             sys.exit()
 
     else:
@@ -101,7 +104,7 @@ def config_path(folder=None):
         if os.path.exists(preferred_path):
             path = preferred_path
         elif os.path.exists(legacy_path):
-            logging.info('Reusing legacy configuration directory at %s', legacy_path)
+            logger.info('Reusing legacy configuration directory at %s', legacy_path)
             path = legacy_path
         else:
             os.makedirs(preferred_path)
@@ -111,8 +114,62 @@ def config_path(folder=None):
         return os.path.join(path, folder)
     return path
 
+def logs_dir():
+    path = config_path('logs')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 def log_file():
-    return config_path(f'{APPNAME}.log')
+    return os.path.join(logs_dir(), LOG_FILENAME)
+
+
+def configure_logging(settings=None):
+    normalized = normalize_settings(settings or {})
+    logfile = log_file()
+    os.makedirs(os.path.dirname(logfile), exist_ok=True)
+    config_dict = build_logging_config(normalized, logfile)
+    logging.config.dictConfig(config_dict)
+    return normalized
+
+
+def ensure_logging_defaults():
+    normalized = normalize_settings(config_tree.get('logging') or {})
+    config_tree['logging'] = normalized
+    return normalized
+
+
+def get_logging_settings() -> Dict[str, Any]:
+    ensure_logging_defaults()
+    return copy.deepcopy(config_tree.get('logging', {}))
+
+
+def update_logging_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError('Invalid logging configuration payload')
+
+    current = ensure_logging_defaults()
+    merged = copy.deepcopy(current)
+
+    for key in ('level', 'console_level', 'max_bytes', 'backups'):
+        if key in payload:
+            merged[key] = payload[key]
+
+    if 'levels' in payload:
+        levels_value = payload['levels']
+        if levels_value is None:
+            merged['levels'] = {}
+        elif isinstance(levels_value, dict):
+            merged['levels'] = {str(k): v for k, v in levels_value.items()}
+        else:
+            raise ValueError('logging.levels must be an object')
+
+    normalized = normalize_settings(merged)
+    config_tree['logging'] = normalized
+    configure_logging(normalized)
+    save_current_config()
+    logger.info('Logging configuration updated', extra={'context': {'level': normalized['level'], 'console_level': normalized['console_level']}})
+    return copy.deepcopy(normalized)
 
 # https://stackoverflow.com/questions/404744/determining-application-path-in-a-python-exe-generated-by-pyinstaller
 def app_dir(folder=None):
@@ -151,7 +208,7 @@ def get_gif_dir():
         if os.path.exists(expanded):
             return expanded
         else:
-            logging.warning("invalid config path")
+            logger.warning("invalid config path")
             sys.exit()
 
     background_folder = config_tree.get('background-folder')
@@ -186,10 +243,12 @@ def config():
     args = parse_args()
     logging_init()
     read_json_config(config_file())
+    settings = ensure_logging_defaults()
+    configure_logging(settings)
     uuid_init()
 
 
-    logging.info('Starting Wirelessboard {}'.format(config_tree['wirelessboard_version']))
+    logger.info('Starting Wirelessboard %s', config_tree['wirelessboard_version'])
 
 
 def config_mix(slots):
@@ -238,7 +297,7 @@ def reconfig(slots):
 def get_version_number():
     package_json_path = app_dir('package.json')
     if package_json_path is None or not os.path.exists(package_json_path):
-        logging.warning("package.json not found.")
+        logger.warning("package.json not found.")
         return "unknown"
     with open(package_json_path) as package:
         pkginfo = json.load(package)
@@ -265,6 +324,7 @@ def read_json_config(file):
     config_tree.setdefault('port', DEFAULT_PORT)
     config_tree['wirelessboard_version'] = version
     config_tree['micboard_version'] = version
+    ensure_logging_defaults()
 
 
 def init_config():
@@ -307,7 +367,7 @@ def update_slot(data):
     slot_cfg = get_slot_by_number(data['slot'])
 
     if slot_cfg is None:
-        logging.warning(f"Slot config for slot {data['slot']} not found.")
+        logger.warning("Slot config for slot %s not found.", data['slot'])
         return
 
     has_extended_id = 'extended_id' in data
@@ -382,13 +442,64 @@ def clear_device_names(slots=None):
 
     return cleared
 
-def update_pco_config(pco_data):
+def update_pco_config(pco_data: Any) -> Tuple[Dict[str, Any], CredentialMeta]:
     if not isinstance(pco_data, dict):
-        logging.warning('Invalid PCO config payload')
-        return
-    config_tree['pco'] = pco_data
+        logger.warning('Invalid PCO config payload')
+        raise CredentialError('Invalid PCO configuration payload')
+
+    existing = config_tree.get('pco') if isinstance(config_tree.get('pco'), dict) else {}
+    merged: Dict[str, Any] = copy.deepcopy(existing) if existing else {}
+
+    # Apply non-auth fields first to preserve ancillary configuration updates.
+    for key, value in pco_data.items():
+        if key == 'auth':
+            continue
+        merged[key] = value
+
+    auth_provided = 'auth' in pco_data
+    auth_payload_raw = pco_data.get('auth') if auth_provided else None
+    meta: CredentialMeta
+
+    if auth_provided:
+        payload = auth_payload_raw if isinstance(auth_payload_raw, dict) else {}
+        token = str(payload.get('token') or '').strip()
+        secret = str(payload.get('secret') or '').strip()
+        if token or secret:
+            try:
+                meta = apply_auth_update(
+                    merged,
+                    {
+                        'token': token,
+                        'secret': secret,
+                    },
+                )
+            except CredentialError as exc:
+                logger.warning('Failed to update PCO credentials: %s', exc)
+                raise
+        else:
+            meta = CredentialMeta.from_config(merged.get('auth'))
+            merged['auth'] = meta.to_config()
+    else:
+        meta = CredentialMeta.from_config(merged.get('auth'))
+        merged['auth'] = meta.to_config()
+
+    config_tree['pco'] = merged
     save_current_config()
     try:
-        logging.info('PCO config updated and saved to %s', config_file())
+        logger.info('PCO config updated and saved to %s', config_file())
     except Exception:
-        logging.info('PCO config updated and saved')
+        logger.info('PCO config updated and saved')
+
+    return merged, meta
+
+
+def get_public_pco_config() -> Dict[str, Any]:
+    """Return a sanitized snapshot of the PCO configuration for API consumers."""
+
+    pco_cfg = config_tree.get('pco')
+    if not isinstance(pco_cfg, dict):
+        return {'auth': public_auth_view({})}
+
+    payload = copy.deepcopy(pco_cfg)
+    payload['auth'] = public_auth_view(pco_cfg)
+    return payload

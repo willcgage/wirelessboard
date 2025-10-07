@@ -1,11 +1,14 @@
 import base64
 import logging
 import re
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
 import config
+from pco_credentials import CredentialError, ensure_credentials
+
+logger = logging.getLogger('micboard.pco')
 
 class PcoConfigError(Exception):
     pass
@@ -29,11 +32,10 @@ def get_pco_config() -> Dict[str, Any]:
     if not pco_cfg.get('enabled'):
         raise PcoConfigError('PCO integration is disabled (pco.enabled=false)')
 
-    auth = pco_cfg.get('auth', {})
-    token = auth.get('token')
-    secret = auth.get('secret')
-    if not token or not secret:
-        raise PcoConfigError('Missing PCO auth token/secret')
+    try:
+        token, secret, _meta = ensure_credentials(pco_cfg, save_callback=config.save_current_config)
+    except CredentialError as exc:
+        raise PcoConfigError(str(exc)) from exc
 
     services = pco_cfg.get('services', {})
     # Service selection is optional; when omitted, we aggregate across all services
@@ -46,7 +48,14 @@ def get_pco_config() -> Dict[str, Any]:
     if strategy not in ['note_or_brackets']:
         raise PcoConfigError('Unsupported mapping.strategy')
 
-    return pco_cfg
+    effective_cfg = dict(pco_cfg)
+    effective_cfg['auth'] = {
+        'token': token,
+        'secret': secret,
+        'credential_id': _meta.credential_id,
+    }
+
+    return effective_cfg
 
 
 def _basic_auth_header(token: str, secret: str) -> str:
@@ -83,8 +92,8 @@ def _apply_assignments(assignments: List[Tuple[str, str]]) -> int:
     if updated:
         try:
             config.save_current_config()
-        except Exception as e:
-            logging.warning(f"Failed to save config: {e}")
+        except Exception as exc:
+            logger.warning('Failed to save config: %s', exc)
     return updated
 
 
@@ -99,11 +108,11 @@ def _http_get(url: str, headers: Dict[str, str], params: Optional[Dict[str, Any]
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=10)
         if resp.status_code != 200:
-            logging.warning(f"PCO GET {url} failed: {resp.status_code} {resp.text[:200]}")
+            logger.warning('PCO GET %s failed: %s %s', url, resp.status_code, resp.text[:200])
             return None
         return resp.json()
-    except Exception as e:
-        logging.warning(f"PCO request error: {e}")
+    except Exception as exc:
+        logger.warning('PCO request error: %s', exc)
         return None
 
 
@@ -166,9 +175,9 @@ def _get_next_plan_global(headers: Dict[str, str]) -> Optional[Tuple[int, str]]:
 def list_service_types() -> Dict[str, Any]:
     try:
         pco_cfg = get_pco_config()
-    except PcoConfigError as e:
-        logging.warning(f"PCO services list aborted: {e}")
-        return {"ok": False, "error": str(e)}
+    except PcoConfigError as exc:
+        logger.warning('PCO services list aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
 
     auth = pco_cfg['auth']
     headers = { 'Authorization': _basic_auth_header(auth['token'], auth['secret']) }
@@ -189,9 +198,9 @@ def list_plans_for_service(service_type_value) -> Dict[str, Any]:
     """Return upcoming plans (basic info) for a given service type (name or ID)."""
     try:
         pco_cfg = get_pco_config()
-    except PcoConfigError as e:
-        logging.warning(f"PCO plans list aborted: {e}")
-        return {"ok": False, "error": str(e)}
+    except PcoConfigError as exc:
+        logger.warning('PCO plans list aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
 
     auth = pco_cfg['auth']
     headers = { 'Authorization': _basic_auth_header(auth['token'], auth['secret']) }
@@ -222,9 +231,9 @@ def list_plans() -> Dict[str, Any]:
     """Return upcoming plans across all service types (aggregated)."""
     try:
         pco_cfg = get_pco_config()
-    except PcoConfigError as e:
-        logging.warning(f"PCO plans list aborted: {e}")
-        return {"ok": False, "error": str(e)}
+    except PcoConfigError as exc:
+        logger.warning('PCO plans list aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
 
     auth = pco_cfg['auth']
     headers = { 'Authorization': _basic_auth_header(auth['token'], auth['secret']) }
@@ -263,9 +272,9 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
     """Return people for a specific plan. If service_type is provided, uses scoped URL to avoid redirects."""
     try:
         pco_cfg = get_pco_config()
-    except PcoConfigError as e:
-        logging.warning(f"PCO people list aborted: {e}")
-        return {"ok": False, "error": str(e)}
+    except PcoConfigError as exc:
+        logger.warning('PCO people list aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
 
     auth = pco_cfg['auth']
     headers = { 'Authorization': _basic_auth_header(auth['token'], auth['secret']) }
@@ -682,9 +691,9 @@ def sync_from_pco(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
     """
     try:
         pco_cfg = get_pco_config()
-    except PcoConfigError as e:
-        logging.warning(f"PCO sync aborted: {e}")
-        return {"ok": False, "error": str(e)}
+    except PcoConfigError as exc:
+        logger.warning('PCO sync aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
 
     auth = pco_cfg['auth']
     headers = {

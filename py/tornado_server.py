@@ -3,7 +3,7 @@ import os
 import asyncio
 import socket
 import logging
-from typing import Any, cast
+from typing import Any, cast, Iterable
 
 from tornado import websocket, web, ioloop, escape
 
@@ -12,8 +12,12 @@ import config as config_module
 import discover
 import offline
 import pco
+from pco_credentials import CredentialError
+from logging_utils import available_levels, available_sources, purge_logs, read_log_entries
 
 config = cast(Any, config_module)
+
+logger = logging.getLogger('micboard.web')
 
 
 # https://stackoverflow.com/questions/5899497/checking-file-extension
@@ -120,8 +124,8 @@ class SocketHandler(websocket.WebSocketHandler):
         for c in cls.clients:
             try:
                 c.write_message(data)
-            except:
-                logging.warning("WS Error")
+            except Exception as exc:
+                logger.warning('WebSocket broadcast failed: %s', exc)
 
     @classmethod
     def ws_dump(cls):
@@ -221,6 +225,136 @@ class SlotDeviceNamesClearHandler(web.RequestHandler):
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         self.write(json.dumps({'ok': True, 'cleared': cleared}))
 
+
+def _parse_bool(value: str) -> bool:
+    return value.lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _parse_sources(params: Iterable[str]) -> Iterable[str]:
+    return [s for s in (p.strip() for p in params) if s]
+
+
+class LogsHandler(web.RequestHandler):
+    def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+        limit_arg = self.get_query_argument('limit', default='200')
+        try:
+            limit = max(1, min(1000, int(limit_arg)))
+        except (TypeError, ValueError):
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid limit parameter'}))
+            return
+
+        cursor = self.get_query_argument('cursor', default=None)
+        level = self.get_query_argument('level', default=None)
+        level = level.upper() if level else None
+
+        sources: Iterable[str] = self.get_arguments('source')
+        if not sources:
+            sources_param = self.get_query_argument('sources', default=None)
+            if sources_param:
+                sources = _parse_sources(sources_param.split(','))
+        else:
+            sources = _parse_sources(sources)
+
+        search = self.get_query_argument('search', default=None)
+        direction = self.get_query_argument('direction', default='desc').lower()
+        newer_flag = self.get_query_argument('newer', default=None)
+        newer = False
+        if newer_flag is not None:
+            newer = _parse_bool(newer_flag)
+        elif direction in {'asc', 'newer', 'forward'}:
+            newer = True
+
+        try:
+            payload = read_log_entries(
+                config.log_file(),
+                limit=limit,
+                cursor=cursor,
+                level=level,
+                sources=sources if sources else None,
+                search=search,
+                newer=newer,
+            )
+        except Exception as exc:
+            logger.warning('Unable to read log entries: %s', exc)
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': 'Unable to read logs'}))
+            return
+
+        response = {
+            'ok': True,
+            'entries': payload['entries'],
+            'cursor': payload['next_cursor'],
+            'has_more': payload['has_more'],
+            'sources': available_sources(),
+            'levels': available_levels(),
+            'logging': config.get_logging_settings(),
+            'direction': 'asc' if newer else 'desc',
+        }
+        self.write(json.dumps(response))
+
+
+class LogsPurgeHandler(web.RequestHandler):
+    def post(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        settings = config.get_logging_settings()
+        backups = settings.get('backups', 5)
+        try:
+            backups_int = int(backups)
+        except (TypeError, ValueError):
+            backups_int = 5
+
+        try:
+            purge_logs(config.log_file(), backups=backups_int)
+        except Exception as exc:
+            logger.warning('Failed to purge logs: %s', exc)
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': 'Unable to purge logs'}))
+            return
+
+        self.write(json.dumps({'ok': True}))
+
+
+class LogSettingsHandler(web.RequestHandler):
+    def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        response = {
+            'ok': True,
+            'logging': config.get_logging_settings(),
+            'sources': available_sources(),
+            'levels': available_levels(),
+        }
+        self.write(json.dumps(response))
+
+    def post(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        try:
+            payload = json.loads(self.request.body or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid JSON'}))
+            return
+
+        try:
+            updated = config.update_logging_settings(payload)
+        except ValueError as exc:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except Exception as exc:
+            logger.warning('Failed to update logging settings: %s', exc)
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': 'Unable to update logging settings'}))
+            return
+
+        self.write(json.dumps({'ok': True, 'logging': updated}))
+
 class ConfigHandler(web.RequestHandler):
     def get(self):
         self.write("hi - slot")
@@ -265,8 +399,8 @@ class PcoConfigHandler(web.RequestHandler):
     def get(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        pco_cfg = config.config_tree.get('pco') or {}
-        self.write(json.dumps({"ok": True, "pco": pco_cfg}))
+        payload = config.get_public_pco_config()
+        self.write(json.dumps({"ok": True, "pco": payload}))
 
     def post(self):
         try:
@@ -275,10 +409,18 @@ class PcoConfigHandler(web.RequestHandler):
             self.set_status(400)
             self.write('{"ok": false, "error": "Invalid JSON"}')
             return
-        config.update_pco_config(data)
+        try:
+            config.update_pco_config(data)
+        except CredentialError as exc:
+            self.set_status(400)
+            self.set_header('Content-Type', 'application/json')
+            self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            self.write(json.dumps({"ok": False, "error": str(exc)}))
+            return
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        self.write('{"ok": true}')
+        payload = config.get_public_pco_config()
+        self.write(json.dumps({"ok": True, "pco": payload}))
 
 
 class PcoServicesHandler(web.RequestHandler):
@@ -332,6 +474,9 @@ def twisted():
         (r'/api/slot', SlotHandler),
         (r'/api/slot/device-names/clear', SlotDeviceNamesClearHandler),
         (r'/api/slot/device-names', SlotDeviceNamesHandler),
+    (r'/api/logs/settings', LogSettingsHandler),
+    (r'/api/logs/purge', LogsPurgeHandler),
+    (r'/api/logs', LogsHandler),
         (r'/api/config', ConfigHandler),
         (r'/api/pco/sync', PcoSyncHandler),
         (r'/api/pco/config', PcoConfigHandler),

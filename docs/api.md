@@ -8,6 +8,84 @@ This capability lets you do a few extra things with the data
 * Log metrics into a database like [InfluxDB](https://www.influxdata.com/products/influxdb-overview/)
 
 ### Example Axient Digital Data
+
+## Logging API
+
+Wirelessboard&nbsp;1.1 introduces a structured logging pipeline that writes JSON records to `logs/application.log`. The same information is available over HTTP so you can stream logs into external tooling, tail them in the browser, or automate retention.
+
+### `GET /api/logs`
+
+Returns the most recent log entries. Supported query parameters:
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `limit` | integer | `200` | Number of matching entries to return (1–1000). |
+| `cursor` | string | newest | Zero-based index to continue paging from. Pass the `cursor` from the previous response to fetch older entries. |
+| `level` | string | — | Minimum log level to include (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`). |
+| `source` / `sources` | repeated string | — | Filter to one or more logger namespaces (for example `core`, `web`, `pco`). Provide multiple `source` parameters or a comma separated `sources` value. |
+| `search` | string | — | Case-insensitive substring match against the message, logger name, or serialized context. |
+| `newer` | boolean | `false` | When `true`, treat `cursor` as the last seen index and return newer entries in chronological order. Useful for live tails. |
+
+Example response:
+
+```json
+{
+  "ok": true,
+  "entries": [
+    {
+      "ts": "2025-10-06T02:45:33.811Z",
+      "level": "INFO",
+      "logger": "micboard.web",
+      "source": "web",
+      "message": "Client connected",
+      "context": {"addr": "192.168.0.25"},
+      "cursor": "324",
+      "index": 324
+    }
+  ],
+  "cursor": "298",
+  "has_more": true,
+  "sources": ["core", "web", "device", "pco", "discovery"],
+  "levels": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+  "logging": {
+    "level": "INFO",
+    "console_level": "WARNING",
+    "max_bytes": 10485760,
+    "backups": 5,
+    "levels": {}
+  },
+  "direction": "desc"
+}
+```
+
+`entries` are emitted in descending order by default. Supply the returned `cursor` on the next request to fetch older batches until `has_more` becomes `false`. For streaming use cases, pass the last `cursor` along with `newer=true` to receive chronological updates as they are written to disk.
+
+### `POST /api/logs/purge`
+
+Clears the active log file and deletes rotated backups. The handler reads the current retention settings (for example the number of backups to keep) before truncating the file. The response body is a simple `{"ok": true}` on success. Because truncation cannot be undone, the API requires an explicit POST—even from the web UI the button prompts for confirmation.
+
+### `GET /api/logs/settings`
+
+Returns the active logging configuration along with the list of recognised logger sources and level names. The payload mirrors the `logging` block inside `config.json`.
+
+### `POST /api/logs/settings`
+
+Updates the logging configuration at runtime, persists it to `config/config.json`, and immediately reapplies the logging `dictConfig`. Valid keys include `level`, `console_level`, `max_bytes`, `backups`, and an optional `levels` map for per-logger overrides (use short names such as `pco` or full names like `micboard.pco`). Example:
+
+```json
+{
+  "level": "INFO",
+  "console_level": "ERROR",
+  "max_bytes": 16777216,
+  "backups": 10,
+  "levels": {
+    "web": "DEBUG",
+    "micboard.discovery": "WARNING"
+  }
+}
+```
+
+Requests that fail validation return HTTP&nbsp;400 with an `error` message. On success the handler responds with the normalised configuration so clients can update their UI in place.
 ```javascript
 {
   "ip": "10.9.49.54",

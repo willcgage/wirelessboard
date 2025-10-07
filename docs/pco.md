@@ -20,15 +20,16 @@ PCO uses HTTP Basic Auth with `token:secret` for PATs. See PCO documentation for
 ## Configuration
 Add a `pco` section to your Wirelessboard `config.json` (same file that holds groups/slots). Wirelessboard won’t use PCO unless `enabled` is true. The Service Type is optional; Wirelessboard can aggregate plans across all Service Types. The schema is identical to the legacy Micboard integration, so older configs continue to load.
 
-Example:
+Example (`auth` block is generated automatically once credentials are saved):
 ```
 {
   "port": 8058,
   "pco": {
     "enabled": true,
     "auth": {
-      "token": "YOUR_PCO_PAT_TOKEN",
-      "secret": "YOUR_PCO_PAT_SECRET"
+      "credential_id": "default",
+      "token_digest": "<sha256 digest>",
+      "version": 1
     },
     "services": {
       "service_type_id": 123456,
@@ -48,9 +49,11 @@ Example:
 }
 ```
 
+> Tip: When upgrading from earlier releases you can still place `token` / `secret` in the `auth` block. Wirelessboard will migrate them into the system keyring on first use and rewrite `config.json` with the metadata structure above.
+
 Field notes:
 - `enabled`: Turn integration on/off without removing config.
-- `auth.token`/`auth.secret`: PCO PAT credentials used for Basic Auth.
+- `auth`: Metadata describing keyring-backed credentials. Wirelessboard reads your PAT token/secret from the keyring; `token_digest` proves which token was stored without exposing it.
 - `services.service_type_id`: Optional. If omitted, Wirelessboard will find the next upcoming plan across all Service Types.
 - `services.plan.select`:
   - `next`: fetches the next upcoming plan for this service type.
@@ -109,4 +112,4 @@ POST http://<wirelessboard-host>:<port>/api/pco/sync?plan=<PLAN_ID>
 
 ---
 
-Implementation status: An initial scaffolding (`py/pco.py`) and a sync endpoint (`/api/pco/sync`) are included. They validate config and return a deterministic response. Hooking up real PCO API calls and mappers can be added incrementally.
+Implementation status: The integration ships with a credential helper (`py/pco_credentials.py`), runtime validation in `py/pco.py`, and a sync endpoint (`/api/pco/sync`). Configure credentials through the UI (or drop them in `config.json` once for migration) and Wirelessboard stores them securely in your operating system keyring.

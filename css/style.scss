@@ -762,6 +762,122 @@ canvas.slotgraph {
   border-radius: 0 0 12px 12px;
 }
 
+.settings .config-view {
+  transition: opacity .2s ease-in-out;
+}
+
+.settings .config-view.d-none {
+  display: none;
+  opacity: 0;
+}
+
+.settings .config-tab {
+  min-width: 7.5rem;
+}
+
+.log-viewer .log-table-wrapper {
+  max-height: 28rem;
+  overflow: auto;
+  border: 1px solid var(--color-gray);
+  border-radius: 12px;
+  background-color: rgba(0, 0, 0, 0.35);
+}
+
+.log-viewer table.table {
+  margin-bottom: 0;
+}
+
+.log-viewer td,
+.log-viewer th {
+  font-family: 'IBM Plex Sans', sans-serif;
+  vertical-align: top;
+}
+
+.log-viewer .log-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-viewer .log-context {
+  margin-top: .35rem;
+}
+
+.log-viewer .log-context details {
+  background-color: rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
+  padding: .6rem .75rem;
+}
+
+.log-viewer .log-context summary {
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+.log-viewer pre {
+  background-color: transparent;
+  color: var(--color-white);
+  font-size: .75rem;
+  margin: .5rem 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-level-badge {
+  font-size: .75rem;
+  letter-spacing: .05em;
+  border-radius: 999px;
+  padding: .25rem .65rem;
+  text-transform: uppercase;
+  color: var(--color-white);
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+.log-level-badge.level-debug {
+  background-color: #6c757d;
+}
+
+.log-level-badge.level-info {
+  background-color: var(--color-blue);
+}
+
+.log-level-badge.level-warning {
+  background-color: var(--color-yellow);
+  color: var(--color-black);
+}
+
+.log-level-badge.level-error {
+  background-color: var(--color-red);
+}
+
+.log-level-badge.level-critical {
+  background-color: #6f42c1;
+}
+
+.log-source-pill {
+  font-size: .65rem;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: .1rem .45rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+#logs-status,
+#log-settings-status {
+  min-height: 1.25rem;
+}
+
+.log-settings table.table {
+  margin-bottom: 0;
+}
+
+.log-settings .form-text {
+  color: rgba(255, 255, 255, 0.65);
+}
+
 
 #discovered_list input, #discovered_list select{
   pointer-events: none;

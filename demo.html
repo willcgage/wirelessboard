@@ -281,74 +281,186 @@
   <p>Could not connect to the wirelessboard server. Please refresh the page.</p>
       </div>
       <div class="settings">
+        <div class="row mb-3" id="config-tabs">
+          <div class="col d-flex flex-wrap gap-2 align-items-center">
+            <div class="btn-group" role="group" aria-label="Settings sections">
+              <button type="button" class="btn btn-secondary config-tab" id="config-tab-devices" data-config-tab="devices">Devices</button>
+              <button type="button" class="btn btn-outline-secondary config-tab" id="config-tab-logs" data-config-tab="logs">Logs</button>
+            </div>
+          </div>
+        </div>
 
-        <div class="row">
+        <div id="config-devices-view" class="config-view">
+          <div class="row">
 
-          <div class="col-xl-6" id="cfg-discovered-col">
-            <div class="config-header">
-              <h3 class="text-center">Discovered Devices</h3>
+            <div class="col-xl-6" id="cfg-discovered-col">
+              <div class="config-header">
+                <h3 class="text-center">Discovered Devices</h3>
+              </div>
+
+              <div id="discovered_list"></div>
+              <div class="config-footer">
+                <div class="row">
+
+                  <div class="col d-grid gap-2">
+                    <button id="add-discovered" class="btn btn-danger">Add All Discovered Devices</button>
+                  </div>
+
+                </div>
+              </div>
             </div>
 
-            <div id="discovered_list"></div>
-            <div class="config-footer">
-              <div class="row">
+            <div class="col-xl-6" id="cfg-slot-col">
+              <div class="config-header">
+                <h3 class="text-center">Slot Configuration</h3>
+              </div>
+              <div id="editor_holder"></div>
+              <div class="config-footer">
+                <div class="row">
 
-                <div class="col d-grid gap-2">
-                  <button id="add-discovered" class="btn btn-danger">Add All Discovered Devices</button>
                 </div>
 
+                <div class="row">
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="btn btn-secondary btn-warning" id="clear-id">Clear IDs</button>
+                  </div>
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="btn btn-secondary btn-warning" id="clear-name">Clear Extended Names</button>
+                  </div>
+                </div>
+                <div class="row mt-2">
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="btn btn-secondary" id="clear-device-names">Clear Device Names</button>
+                  </div>
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="btn btn-outline-info" id="read-device-names">Read Device Names</button>
+                  </div>
+                </div>
+                <div class="row mt-2">
+                  <div class="col">
+                    <div id="device-name-status" class="small text-muted d-none"></div>
+                  </div>
+                </div>
+                <div class="row mt-2">
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary" id="add-config-row">Add Row</button>
+                  </div>
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="btn btn-outline-secondary" id="clear-config">Clear All</button>
+                  </div>
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="btn btn-success" id="save">Save Config</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div id="config-logs-view" class="config-view d-none">
+          <div class="row">
+            <div class="col-xl-12">
+              <div class="config-header">
+                <h3 class="text-center">Application Logs</h3>
+              </div>
+              <div class="p-3 border rounded log-viewer">
+                <form id="log-filter-form" class="row g-2 align-items-end">
+                  <div class="col-md-3 col-12">
+                    <label for="log-level" class="form-label text-muted">Level</label>
+                    <select id="log-level" class="form-select">
+                      <option value="">All Levels</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4 col-12">
+                    <label for="log-sources" class="form-label text-muted">Sources</label>
+                    <select id="log-sources" class="form-select" multiple size="4"></select>
+                    <small class="form-text text-muted">Hold ⌘/Ctrl to select multiple.</small>
+                  </div>
+                  <div class="col-md-3 col-12">
+                    <label for="log-search" class="form-label text-muted">Search</label>
+                    <input type="text" id="log-search" class="form-control" placeholder="Message or context">
+                  </div>
+                  <div class="col-md-2 col-12 d-grid">
+                    <button type="submit" id="logs-apply-filters" class="btn btn-primary">Apply</button>
+                  </div>
+                </form>
+                <div class="d-flex flex-wrap gap-2 mt-3 log-toolbar">
+                  <button type="button" id="logs-refresh" class="btn btn-outline-secondary">Refresh</button>
+                  <button type="button" id="logs-load-older" class="btn btn-outline-secondary">Load Older</button>
+                  <button type="button" id="logs-toggle-follow" class="btn btn-outline-info">Start Live Tail</button>
+                  <div class="ms-auto d-flex flex-wrap gap-2">
+                    <button type="button" id="logs-download" class="btn btn-outline-secondary">Download JSON</button>
+                    <button type="button" id="logs-purge" class="btn btn-danger">Purge Logs</button>
+                  </div>
+                </div>
+                <div id="logs-status" class="small text-muted mt-2"></div>
+                <div id="logs-empty-state" class="alert alert-info mt-3 d-none">No log entries matched your filters yet.</div>
+                <div class="table-responsive mt-3 log-table-wrapper">
+                  <table class="table table-sm table-dark table-striped align-middle" id="logs-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Time</th>
+                        <th scope="col">Level</th>
+                        <th scope="col">Source</th>
+                        <th scope="col">Message</th>
+                      </tr>
+                    </thead>
+                    <tbody id="log-entries"></tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
-
-          <div class="col-xl-6" id="cfg-slot-col">
-            <div class="config-header">
-              <h3 class="text-center">Slot Configuration</h3>
-            </div>
-            <div id="editor_holder"></div>
-            <div class="config-footer">
-              <div class="row">
-
-                      </div>
-
-                      <div class="row">
-                        <div class="col d-grid gap-2">
-                          <button type="button" class="btn btn-secondary btn-warning" id="clear-id">Clear IDs</button>
-                        </div>
-                        <div class="col d-grid gap-2">
-                          <button type="button" class="btn btn-secondary btn-warning" id="clear-name">Clear Extended Names</button>
-                        </div>
-                      </div>
-                      <div class="row mt-2">
-                        <div class="col d-grid gap-2">
-                          <button type="button" class="btn btn-secondary" id="clear-device-names">Clear Device Names</button>
-                        </div>
-                        <div class="col d-grid gap-2">
-                          <button type="button" class="btn btn-outline-info" id="read-device-names">Read Device Names</button>
-                        </div>
-                      </div>
-                      <div class="row mt-2">
-                        <div class="col">
-                          <div id="device-name-status" class="small text-muted d-none"></div>
-                        </div>
-                      </div>
-                      <div class="row mt-2">
-                        <div class="col d-grid gap-2">
-                          <button type="button" class="btn btn-outline-primary" id="add-config-row">Add Row</button>
-                        </div>
-                        <div class="col d-grid gap-2">
-                          <button type="button" class="btn btn-outline-secondary" id="clear-config">Clear All</button>
-                        </div>
-                        <div class="col d-grid gap-2">
-                          <button type="button" class="btn btn-success" id="save">Save Config</button>
-                        </div>
-                      </div>
+          <div class="row mt-4">
+            <div class="col-xl-12">
+              <div class="config-header">
+                <h3 class="text-center">Logging Settings</h3>
+              </div>
+              <div class="p-3 border rounded log-settings">
+                <form id="log-settings-form" class="row g-3">
+                  <div class="col-md-3 col-12">
+                    <label for="log-setting-level" class="form-label text-muted">File Level</label>
+                    <select id="log-setting-level" class="form-select"></select>
+                  </div>
+                  <div class="col-md-3 col-12">
+                    <label for="log-setting-console-level" class="form-label text-muted">Console Level</label>
+                    <select id="log-setting-console-level" class="form-select"></select>
+                  </div>
+                  <div class="col-md-3 col-12">
+                    <label for="log-setting-max-bytes" class="form-label text-muted">Max File Size (bytes)</label>
+                    <input type="number" id="log-setting-max-bytes" class="form-control" min="1024" step="1024" placeholder="10485760">
+                  </div>
+                  <div class="col-md-3 col-12">
+                    <label for="log-setting-backups" class="form-label text-muted">Backup Files</label>
+                    <input type="number" id="log-setting-backups" class="form-control" min="0" max="50" step="1" placeholder="5">
+                  </div>
+                  <div class="col-12">
+                    <div class="table-responsive">
+                      <table class="table table-sm table-dark table-striped mb-0">
+                        <thead>
+                          <tr>
+                            <th scope="col">Logger Source</th>
+                            <th scope="col">Level Override</th>
+                          </tr>
+                        </thead>
+                        <tbody id="log-level-overrides"></tbody>
+                      </table>
                     </div>
-
+                    <small class="form-text text-muted">Leave set to “(inherit)” to use the global level.</small>
+                  </div>
+                  <div class="col-12 d-flex gap-2">
+                    <button type="submit" id="log-settings-save" class="btn btn-success">Save Logging Settings</button>
+                    <button type="button" id="log-settings-reset" class="btn btn-outline-secondary">Reset</button>
+                  </div>
+                </form>
+                <div id="log-settings-status" class="small text-muted mt-2"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <!-- <div class="text-muted text-center">Micboard</div> -->
-      
-    </div>
+
+      </div>
   <template id="column-template">
       <div class="col-sm">
         <div class="mic_name">

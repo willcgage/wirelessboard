@@ -33,6 +33,7 @@ micboard.displayMode = 'deskmode';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.settingsMode = 'NONE';
+micboard.configTab = 'devices';
 micboard.chartTimeSrc = 'SERVER';
 
 micboard.group = 0;
@@ -148,7 +149,8 @@ function mapGroups() {
     const settings = document.querySelector('.settings');
     const pcoView = document.getElementById('pco-settings');
     const wantPCO = (micboard.settingsMode === 'PCO' || micboard.url.pco === 'true');
-    const wantCFG = (micboard.settingsMode === 'CONFIG' || micboard.url.settings === 'true');
+  const wantCFG = (micboard.settingsMode === 'CONFIG' || micboard.url.settings === 'true' || micboard.url.settings === 'logs');
+    const wasConfig = micboard.settingsMode === 'CONFIG';
     if (wantPCO) {
       if (mb) mb.style.display = 'none';
       if (settings) settings.style.display = 'none';
@@ -161,6 +163,9 @@ function mapGroups() {
       if (pcoView) pcoView.style.display = 'none';
       if (settings) settings.style.display = 'none';
       if (mb) mb.style.display = 'grid';
+      if (wasConfig && typeof micboard.stopLogAutoRefresh === 'function') {
+        try { micboard.stopLogAutoRefresh(true); } catch (e) {}
+      }
     }
   }
   if (goHud && hudCollapse) {
@@ -258,6 +263,10 @@ function readURLParameters() {
   micboard.url.tvmode = getUrlParameter('tvmode');
   micboard.url.bgmode = getUrlParameter('bgmode');
 
+  if (micboard.url.settings === 'logs') {
+    micboard.configTab = 'logs';
+  }
+
   if (window.location.pathname.includes('demo')) {
     micboard.url.demo = 'true';
   }
@@ -278,7 +287,11 @@ export function updateHash() {
     hash += '&bgmode=' + micboard.backgroundMode;
   }
   if (micboard.settingsMode === 'CONFIG') {
-    hash = '#settings=true'
+    if (micboard.configTab === 'logs') {
+      hash = '#settings=logs'
+    } else {
+      hash = '#settings=true'
+    }
   } else if (micboard.settingsMode === 'PCO') {
     hash = '#pco=true'
   }
@@ -405,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Bind PCO navbar and handlers
   try { bindPcoNav(); bindPcoHandlers(); } catch (e) {}
 
-  if (micboard.url.demo === 'true' && micboard.url.settings !== 'true' && micboard.url.pco !== 'true') {
+  if (micboard.url.demo === 'true' && micboard.url.settings !== 'true' && micboard.url.settings !== 'logs' && micboard.url.pco !== 'true') {
     // Show HUD only once on initial load
     setTimeout(() => {
       const hudEl = document.getElementById('hud');
@@ -416,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initialMap(initLiveData);
   }
 
-  if (micboard.url.settings === 'true') {
+  if (micboard.url.settings === 'true' || micboard.url.settings === 'logs') {
     setTimeout(() => {
       initConfigEditor();
       updateHash();

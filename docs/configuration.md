@@ -17,6 +17,29 @@ Production environments often include multiple networks.  For now, Wirelessboard
 Press Save to apply the configuration.
 
 
+## Logs & Diagnostics
+
+Wirelessboard&nbsp;1.1 adds a **Logs** tab next to the device configuration editor. The Logs view provides a searchable, filterable list of recent application events alongside live-tail controls and retention settings.
+
+* **Filter:** Narrow the table by level, logger source (core, web, discovery, device, pco, telemetry), or free-text search. Filters apply both to the browser table and to API calls made from external tools.
+* **Pagination:** Use **Load Older** to walk backwards through the on-disk log. The API exposes a cursor so you can script archival jobs with the same mechanics.
+* **Live tail:** Start **Live Tail** to stream new entries as Wirelessboard writes them; the UI automatically pauses when you navigate away from the configuration screen.
+* **Download:** Export the current view as prettified JSON for offline analysis or to attach to support tickets.
+* **Purge:** Truncate the active log file and delete rotated backups with a single click (a confirmation prompt protects against accidents).
+
+Beneath the table, the **Logging Settings** form mirrors the `logging` block stored in `config/config.json`:
+
+| Field | Description |
+| --- | --- |
+| **File Level** | Base level applied to all persistent handlers (`INFO` by default). |
+| **Console Level** | Threshold for stdout/stderr output, useful when running in Docker or systemd. |
+| **Max File Size (bytes)** | Maximum size before rotation. Wirelessboard uses a `RotatingFileHandler` so the file is never truncated mid-entry. |
+| **Backup Files** | Number of historical `.log.N` archives to keep alongside the active log. |
+| **Level Overrides** | Optional per-source levels—set a subset of loggers (for example `web` or `micboard.pco`) to `DEBUG` without increasing global verbosity. |
+
+Changes are written to disk immediately, reconfigure the Python logging tree in-place, and are reflected in subsequent API responses. The raw log file lives under the configuration directory in `logs/application.log`; UI actions and API calls operate on the same file, so you can mix browser-based troubleshooting with automated collection.
+
+
 ## Keyboard Shortcuts
 Wirelessboard is primarily controlled with keyboard shortcuts
 

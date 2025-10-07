@@ -8,6 +8,8 @@ from device_config import BASE_CONST
 from iem import IEM
 from mic import WirelessMic
 
+logger = logging.getLogger('micboard.device')
+
 
 PORT = 2202
 
@@ -84,8 +86,8 @@ class ShureNetworkDevice:
 
                 elif split[0] in ['REP', 'REPORT']:
                     self.raw[split[1]] = ' '.join(split[2:])
-            except:
-                logging.warning("Index Error(RX): %s", data)
+            except Exception:
+                logger.warning('Index error while parsing RX payload', extra={'context': {'data': data, 'ip': self.ip}})
 
 
     def get_channels(self):

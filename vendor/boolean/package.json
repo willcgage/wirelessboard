@@ -1,0 +1,17 @@
+{
+  "name": "boolean",
+  "version": "3.2.0-wb1",
+  "description": "boolean converts lots of things to boolean.",
+  "main": "build/lib/index.js",
+  "types": "build/lib/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/willcgage/wirelessboard.git"
+  },
+  "homepage": "https://github.com/thenativeweb/boolean#readme",
+  "keywords": [
+    "boolean",
+    "parser"
+  ]
+}
