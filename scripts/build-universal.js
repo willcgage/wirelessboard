@@ -114,16 +114,15 @@ function main() {
   }
 
   const venvPath = path.join(projectRoot, '.venv');
-  const shouldRemoveVenv = process.env.CI && !process.env.WIRELESSBOARD_KEEP_VENV;
-  if (shouldRemoveVenv && existsSync(venvPath)) {
-    console.log('CI environment detected; removing .venv before packaging to avoid external Python symlinks.');
+  if (process.env.WIRELESSBOARD_REMOVE_VENV === 'true' && existsSync(venvPath)) {
+    console.log('WIRELESSBOARD_REMOVE_VENV=true; removing .venv after PyInstaller build.');
     try {
       rmSync(venvPath, { recursive: true, force: true });
     } catch (err) {
       console.warn(`Failed to remove ${venvPath}: ${err.message}`);
     }
   }
-  
+
   console.log('Universal binary build preparation complete.');
 }
 
