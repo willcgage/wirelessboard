@@ -49,12 +49,16 @@ class ShureNetworkDevice:
 
 
     def socket_disconnect(self):
-        self.f.close()
+        if self.f is not None:
+            self.f.close()
+            self.f = None
         self.set_rx_com_status('DISCONNECTED')
         self.socket_watchdog = int(time.perf_counter())
 
 
     def fileno(self):
+        if self.f is None:
+            raise RuntimeError('Socket is not connected')
         return self.f.fileno()
 
     def set_rx_com_status(self, status):
@@ -82,10 +86,13 @@ class ShureNetworkDevice:
             try:
                 if split[0] in ['REP', 'REPORT', 'SAMPLE'] and split[1] in ['1', '2', '3', '4']:
                     ch = self.get_device_by_channel(int(split[1]))
-                    ch.parse_raw_ch(data)
+                    if ch is None:
+                        logger.warning('Received data for unknown channel %s', split[1], extra={'context': {'data': data, 'ip': self.ip}})
+                    else:
+                        ch.parse_raw_ch(data)
 
                 elif split[0] in ['REP', 'REPORT']:
-                    self.raw[split[1]] = ' '.join(split[2:])
+                    self.raw[split[1]]['value'] = ' '.join(split[2:])
             except Exception:
                 logger.warning('Index error while parsing RX payload', extra={'context': {'data': data, 'ip': self.ip}})
 

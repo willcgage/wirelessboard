@@ -24,10 +24,10 @@ mac:
     LSUIElement: true
   target:
     - target: dmg
-      arch: [universal]
+      arch: [x64, arm64]
     - target: zip
-      arch: [universal]
-  artifactName: wirelessboard-server-${version}-mac-universal.${ext}
+      arch: [x64, arm64]
+  artifactName: wirelessboard-server-${version}-mac-${arch}.${ext}
 win:
   target:
     - nsis
