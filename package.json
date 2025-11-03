@@ -12,12 +12,12 @@
     "build": "node node_modules/webpack/bin/webpack.js --mode production --progress --config=webpack.config.js",
     "build:dev": "node node_modules/webpack/bin/webpack.js --mode development --watch --config=webpack.config.js",
     "server:watch": "nodemon --watch static --watch demo.html --watch css --watch js --watch py --ignore 'config/config.json' --ignore 'config/**/*.json' --ext js,json,html,css,py --exec \"./.venv/bin/python py/wirelessboard.py\"",
-  "dev": "concurrently \"npm run build:dev\" \"npm run server:watch\"",
-  "bundle:server": "node scripts/run-pyinstaller.js",
-  "bundle:server:win": "node scripts/build-universal.js",
-  "bundle:server:universal": "node scripts/build-universal.js",
-  "release:mac": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --publish never",
-  "release:mac:ci": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --publish always",
+    "dev": "concurrently \"npm run build:dev\" \"npm run server:watch\"",
+    "bundle:server": "node scripts/run-pyinstaller.js",
+    "bundle:server:win": "node scripts/build-universal.js",
+    "bundle:server:universal": "node scripts/build-universal.js",
+    "release:mac": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --publish never",
+    "release:mac:ci": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --publish always",
     "release:mac:builder": "electron-builder --mac --config electron-builder.yml",
     "release:win": "npm run build && npm run bundle:server:win && npm run release:win:builder -- --publish never",
     "release:win:ci": "npm run build && npm run bundle:server:win && npm run release:win:builder -- --publish always",
@@ -68,10 +68,13 @@
     "whatwg-fetch": "^3.6.20"
   },
   "overrides": {
-    "glob": "^10.4.5",
+    "glob": "^7.2.3",
     "rimraf": "^5.0.0",
     "@electron/get": "^3.1.0",
     "@electron/rebuild": "3.6.1",
     "boolean": "file:vendor/boolean"
+  },
+  "dependencies": {
+    "app-builder-lib": "^26.0.12"
   }
 }

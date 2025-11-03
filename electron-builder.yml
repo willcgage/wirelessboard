@@ -1,13 +1,5 @@
 appId: com.wirelessboard.app
 productName: Wirelessboard Server
-files:
-  - '!docs'
-  - '!css'
-  - '!py'
-  - '!static'
-  - '!build/*.sketch'
-  - '!node_modules/.cache'
-  - '!.venv'
 extraResources:
   - from: dist/wirelessboard-service
     to: dist/wirelessboard-service
@@ -17,6 +9,16 @@ asarUnpack:
 directories:
   buildResources: build
   output: release/${platform}
+files:
+  - from: .
+    filter:
+      - "**/*"
+      - "!**/.venv{,/**}"
+      - "!release{,/**}"
+      - "!dist/wirelessboard-service{,/**}"
+  - "!builder*.log"
+  - "!build.log"
+  - "!builder-output.log"
 mac:
   category: public.app-category.utilities
   extendInfo:
