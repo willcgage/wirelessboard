@@ -83,7 +83,15 @@ Use a dedicated group for each mic storage display.  Multiple **BLANK** boxes ca
   <img width="60%" src="img/tv_imagebg.png"><img width="40%" src="img/smb_folder.png">
 </p>
 
-Image and video<sup>[1](#mp4)</sup> backgrounds can be used with Wirelessboard. Files in the `backgrounds` folder of the Wirelessboard configuration directory are matched against the visible channel name: the name is lowercased and `.jpg` or `.mp4` is appended, so a slot labelled `Fatai` looks for `fatai.jpg`, while `HH01 Delwin` expects `hh01 delwin.mp4` when video mode is enabled. Wirelessboard now renders those assets with dedicated `<img>` / `<video>` tags, so modern browsers (Chrome, Edge, Safari, Firefox) all display motion backgrounds provided the media is encoded in an HTML5-compatible format. The path is exposed over `/bg/<filename>`, so updates take effect as soon as the file is saved—no restart required.
+Image and video<sup>[1](#mp4)</sup> backgrounds can be used with Wirelessboard. Files in the backgrounds folder are matched against the visible channel name: the name is lowercased and `.jpg` or `.mp4` is appended, so a slot labelled `Fatai` looks for `fatai.jpg`, while `HH01 Delwin` expects `hh01 delwin.mp4` when video mode is enabled. Wirelessboard renders those assets with dedicated `<img>` / `<video>` tags, so modern browsers (Chrome, Edge, Safari, Firefox) all display motion backgrounds provided the media is encoded in an HTML5-compatible format. The path is exposed over `/bg/<filename>`, so updates take effect as soon as the file is saved—no restart required.
+
+### Choosing the background folder
+
+Open **Settings → Background Library** inside the Wirelessboard UI to review or change the active folder. Enter a path to use a custom directory and click **Save Folder**, or press **Use Default** to revert to the per-user configuration directory (see below). Wirelessboard creates the folder automatically if it does not yet exist.
+
+- **Command-line overrides**: launching the service with `-b /path/to/backgrounds` (or `--background-directory`) still works. When this flag is supplied it takes precedence and the in-app controls are disabled to prevent conflicts.
+- **Per-install defaults**: without an override, Wirelessboard stores media in the configuration directory’s `backgrounds/` subfolder (macOS: `~/Library/Application Support/wirelessboard/backgrounds`; Linux: `~/.local/share/wirelessboard/backgrounds`; Windows: `%LOCALAPPDATA%\wirelessboard\backgrounds`). The settings panel shows this location when no custom folder is configured.
+- **Persisted configuration**: choosing a custom folder from the UI writes the resolved path to `config.json` under `"background-folder"`. Removing that key—or using **Use Default**—returns to the default location.
 
 TV mode now keeps each slot at a fixed width so artwork never stretches or shrinks when the number of on-screen channels changes. Backgrounds are rendered at their native resolution, centred at the top of the slot without scaling; if the asset is larger than the slot it will crop, and if it is smaller it will leave the status colour visible around it. The default width is `420px`, controlled by the CSS custom property `--tvmode-slot-width` inside `css/style.scss`, and can be adjusted to suit house templates before rebuilding the frontend.
 

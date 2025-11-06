@@ -457,11 +457,54 @@ class PcoPeopleHandler(web.RequestHandler):
         result = pco.list_people_for_plan(plan_id, service)
         self.write(json.dumps(result))
 
+
+class BackgroundDirectoryHandler(web.RequestHandler):
+    def _set_headers(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+    def get(self):
+        self._set_headers()
+        state = config.get_background_directory_state()
+        self.write(json.dumps({'ok': True, 'backgrounds': state}))
+
+    def post(self):
+        self._set_headers()
+        try:
+            payload = json.loads(self.request.body or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid JSON'}))
+            return
+
+        use_default = bool(payload.get('use_default'))
+        directory = payload.get('directory')
+
+        try:
+            state = config.set_background_directory(None if use_default else directory)
+        except RuntimeError as exc:
+            self.set_status(409)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except ValueError as exc:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+
+        self.write(json.dumps({'ok': True, 'backgrounds': state}))
+
 # https://stackoverflow.com/questions/12031007/disable-static-file-caching-in-tornado
 class NoCacheHandler(web.StaticFileHandler):
     def set_extra_headers(self, path):
         # Disable cache
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+
+class BackgroundAssetHandler(NoCacheHandler):
+    @classmethod
+    def get_absolute_path(cls, root, path):
+        dynamic_root = config.get_gif_dir()
+        return super(BackgroundAssetHandler, cls).get_absolute_path(dynamic_root, path)
 
 
 def twisted():
@@ -483,9 +526,10 @@ def twisted():
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
         (r'/api/pco/people', PcoPeopleHandler),
+        (r'/api/backgrounds', BackgroundDirectoryHandler),
     # (r'/restart/', WirelessboardReloadConfigHandler),
         (r'/static/(.*)', web.StaticFileHandler, {'path': config.app_dir('static')}),
-        (r'/bg/(.*)', NoCacheHandler, {'path': config.get_gif_dir()})
+        (r'/bg/(.*)', BackgroundAssetHandler, {'path': ''}),
     ])
     # https://github.com/tornadoweb/tornado/issues/2308
     asyncio.set_event_loop(asyncio.new_event_loop())

@@ -1,7 +1,17 @@
 # Changelog
 
 ## [Unreleased]
-_No changes yet._
+### Added
+- Background Library picker inside the Config view so operators can choose or reset the background media folder without editing files.
+- REST endpoint (`GET/POST /api/backgrounds`) powering the picker, returning the active path and persisting updates when no CLI override is present.
+- PCO assignment table now surfaces inline warnings when slots are missing device or extended names, guiding operators to update Config before syncing people.
+
+### Changed
+- Background asset handler now resolves the folder dynamically, so updates made via the picker take effect immediately for `/bg/...` requests.
+- Documentation refreshed to cover the in-app folder selector, command-line overrides, default per-platform paths, and the PCO credential workflow.
+
+### Fixed
+- Extended names on the channel faceplate now resize and align without overlapping the primary label.
 
 ## [1.1.0] - 2025-10-06
 ### Added

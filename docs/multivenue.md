@@ -77,7 +77,7 @@ $ sudo systemctl restart nginx
 ## Setup Background Fileshare
 Setup [Samba](fileshare.md) to map to the Wirelessboard `backgrounds` folder. Multiple venues can share or have separate background image repositories. Each venue instance picks up JPEGs or muted MP4 loops automatically because the frontend mounts those files with `<img>` / `<video>` elements, keeping Safari, Chrome, Firefox, and Edge in sync without additional configuration.
 
-Wirelessboard defaults to a separate backgrounds folder for each instance. A shared directory can be set via `-b`. For multivenue deployments, set this in the systemd `/etc/systemd/system/wirelessboard-venue.service` file.
+Wirelessboard defaults to a separate backgrounds folder for each instance. You can point the UI at a shared directory from **Settings → Background Library**, or continue to set it via `-b`. For multivenue deployments, set the CLI flag in the systemd `/etc/systemd/system/wirelessboard-venue.service` file so the override applies on boot.
 
 ```bash
 ExecStart=/usr/bin/python3 -u py/wirelessboard.py -f ~/.local/share/wirelessboard/venue-a -b ~/.local/share/wirelessboard/backgrounds

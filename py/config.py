@@ -8,7 +8,7 @@ import sys
 import time
 import uuid
 from shutil import copyfile
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import shure
 import offline
@@ -203,7 +203,7 @@ def default_gif_dir():
 
 def get_gif_dir():
     background_directory = args.get('background_directory') if isinstance(args, dict) else None
-    if background_directory is not None:
+    if background_directory not in (None, ''):
         expanded = os.path.expanduser(background_directory)
         if os.path.exists(expanded):
             return expanded
@@ -215,6 +215,83 @@ def get_gif_dir():
     if isinstance(background_folder, str) and background_folder:
         return os.path.expanduser(background_folder)
     return default_gif_dir()
+
+
+def default_background_path() -> str:
+    return os.path.abspath(os.path.join(config_path(), 'backgrounds'))
+
+
+def get_background_directory_state() -> Dict[str, Any]:
+    default_path = default_background_path()
+    background_directory = args.get('background_directory') if isinstance(args, dict) else None
+    if background_directory in (None, ''):
+        background_directory = None
+
+    if background_directory is not None:
+        resolved = os.path.abspath(os.path.expanduser(background_directory))
+        return {
+            'source': 'cli',
+            'resolved_path': resolved,
+            'configured_path': resolved,
+            'default_path': default_path,
+            'cli_override': True,
+            'exists': os.path.isdir(resolved),
+        }
+
+    background_folder = config_tree.get('background-folder')
+    if isinstance(background_folder, str) and background_folder.strip():
+        resolved = os.path.abspath(os.path.expanduser(background_folder))
+        return {
+            'source': 'config',
+            'resolved_path': resolved,
+            'configured_path': background_folder,
+            'default_path': default_path,
+            'cli_override': False,
+            'exists': os.path.isdir(resolved),
+        }
+
+    resolved_default = os.path.abspath(default_gif_dir())
+    return {
+        'source': 'default',
+        'resolved_path': resolved_default,
+        'configured_path': None,
+        'default_path': default_path,
+        'cli_override': False,
+        'exists': os.path.isdir(resolved_default),
+    }
+
+
+def set_background_directory(path: Optional[str]) -> Dict[str, Any]:
+    background_directory = args.get('background_directory') if isinstance(args, dict) else None
+    if background_directory not in (None, ''):
+        raise RuntimeError('Background directory is controlled by a command-line override.')
+
+    target: Optional[str]
+    if path is None:
+        target = None
+    elif isinstance(path, str):
+        target = path.strip()
+    else:
+        raise ValueError('Background directory must be a string path.')
+
+    global gif_dir
+
+    if not target:
+        config_tree.pop('background-folder', None)
+        gif_dir = default_gif_dir()
+        save_current_config()
+        return get_background_directory_state()
+
+    normalized = os.path.abspath(os.path.expanduser(target))
+    try:
+        os.makedirs(normalized, exist_ok=True)
+    except OSError as exc:
+        raise ValueError(f'Unable to create background directory: {exc}') from exc
+
+    config_tree['background-folder'] = normalized
+    gif_dir = normalized
+    save_current_config()
+    return get_background_directory_state()
 
 def config_file():
     app_config_path = app_dir(CONFIG_FILE_NAME)

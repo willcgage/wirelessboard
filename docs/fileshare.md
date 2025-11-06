@@ -5,7 +5,7 @@
 
 Wirelessboard's configuration directory can be shared via [Samba](https://www.samba.org). This makes it easy to remotely add backgrounds, edit Wirelessboard configurations, and view logs. Legacy Micboard installs can use the same approach—simply substitute the older directory names shown in parentheses below.
 
-Slots now render their artwork with dedicated HTML5 `<img>` and `<video>` elements, so any JPEG background or muted, looping MP4 that modern browsers can decode will play automatically once it lands in the shared `backgrounds/` folder. See the [configuration guide](configuration.md#background-images) for details on how filenames are matched to channel names and the recommended codecs.
+Slots now render their artwork with dedicated HTML5 `<img>` and `<video>` elements, so any JPEG background or muted, looping MP4 that modern browsers can decode will play automatically once it lands in the shared `backgrounds/` folder. See the [configuration guide](configuration.md#background-images) for details on how filenames are matched to channel names, how to pick the background directory from the UI, and the recommended codecs.
 
 ### MacOS
 ![mac fileshare](img/smb_server_mac.png)

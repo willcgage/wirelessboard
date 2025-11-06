@@ -73,6 +73,8 @@ Field notes:
 
 This keeps the mapping deterministic and easy to reason about.
 
+> The assignment table in the UI expects each slot to expose either a device name (the Shure channel label) or an extended name. If both are blank Wirelessboard highlights those slots with a warning so you can add identifiers in the Config view before mapping people.
+
 ## Using the sync endpoint
 Once configured, trigger a manual sync:
 
@@ -113,3 +115,7 @@ POST http://<wirelessboard-host>:<port>/api/pco/sync?plan=<PLAN_ID>
 ---
 
 Implementation status: The integration ships with a credential helper (`py/pco_credentials.py`), runtime validation in `py/pco.py`, and a sync endpoint (`/api/pco/sync`). Configure credentials through the UI (or drop them in `config.json` once for migration) and Wirelessboard stores them securely in your operating system keyring.
+
+### Saving credentials in the UI
+
+When you enter your PCO token and secret for the first time, click **Save** to push the credentials into the system keyring. The UI needs to reload the PCO panel so it can fetch the stored metadata and clear the sensitive fields—after saving, close the PCO view (return to the main settings screen) and then reopen it. On the second load you should see a green status message indicating that credentials are stored, and the token/secret inputs will be empty so they are not echoed back in the browser.

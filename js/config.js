@@ -228,6 +228,12 @@ const logViewerState = {
   pending: null,
 };
 
+const backgroundDirectoryState = {
+  info: null,
+  loading: false,
+  saving: false,
+};
+
 function logEl(id) {
   return document.getElementById(id);
 }
@@ -1254,6 +1260,180 @@ function formatError(err) {
   }
 }
 
+function setBackgroundDirectoryStatus(message, level = 'info') {
+  const statusEl = document.getElementById('background-directory-status');
+  if (!statusEl) return;
+
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('text-success', 'text-danger', 'text-warning', 'text-muted');
+
+  if (!message) {
+    statusEl.classList.add('text-muted');
+    return;
+  }
+
+  const className = level === 'success'
+    ? 'text-success'
+    : level === 'error'
+      ? 'text-danger'
+      : level === 'warn'
+        ? 'text-warning'
+        : 'text-muted';
+  statusEl.classList.add(className);
+}
+
+function renderBackgroundDirectory(info) {
+  const input = document.getElementById('background-directory');
+  const help = document.getElementById('background-directory-help');
+  const saveBtn = document.getElementById('background-directory-save');
+  const resetBtn = document.getElementById('background-directory-reset');
+  const busy = backgroundDirectoryState.loading || backgroundDirectoryState.saving;
+
+  if (input) {
+    if (info && info.source === 'config') {
+      input.value = info.configured_path || info.resolved_path || '';
+    } else if (info && info.source === 'cli') {
+      input.value = info.resolved_path || '';
+    } else if (info && info.resolved_path) {
+      input.value = '';
+      input.placeholder = info.default_path || info.resolved_path || '';
+    } else {
+      input.value = '';
+    }
+
+    const disableInput = busy || (info && info.source === 'cli');
+    input.disabled = disableInput;
+  }
+
+  if (saveBtn) {
+    const disableSave = busy || !info || info.source === 'cli';
+    saveBtn.disabled = disableSave;
+  }
+
+  if (resetBtn) {
+    const disableReset = busy || !info || info.source === 'cli' || (info && info.source === 'default');
+    resetBtn.disabled = disableReset;
+  }
+
+  if (help) {
+    let text = 'Background folder information unavailable.';
+    if (info) {
+      if (info.source === 'cli') {
+        text = `Command-line override in use: ${info.resolved_path || 'unknown path'}. Update the launch parameters to change this folder.`;
+      } else if (info.source === 'config') {
+        text = `Using custom folder: ${info.resolved_path || 'unknown path'}.`;
+      } else {
+        text = `Using default folder: ${info.resolved_path || info.default_path || 'unresolved path'}.`;
+      }
+      if (info.exists === false) {
+        text += ' The folder does not currently exist.';
+      }
+    }
+    help.textContent = text;
+  }
+}
+
+function ensureBackgroundDirectoryBindings() {
+  const form = document.getElementById('background-directory-form');
+  if (form && form.dataset.bound !== 'true') {
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const input = document.getElementById('background-directory');
+      const value = input ? input.value.trim() : '';
+      const useDefault = !value;
+      saveBackgroundDirectory(value, { useDefault }).catch(() => {});
+    });
+  }
+
+  const resetBtn = document.getElementById('background-directory-reset');
+  if (resetBtn && resetBtn.dataset.bound !== 'true') {
+    resetBtn.dataset.bound = 'true';
+    resetBtn.addEventListener('click', () => {
+      saveBackgroundDirectory('', { useDefault: true }).catch(() => {});
+    });
+  }
+}
+
+async function loadBackgroundDirectoryState({ silent = false } = {}) {
+  if (backgroundDirectoryState.loading) {
+    return;
+  }
+
+  backgroundDirectoryState.loading = true;
+  renderBackgroundDirectory(backgroundDirectoryState.info);
+  if (!silent) {
+    setBackgroundDirectoryStatus('Loading background folder…', 'info');
+  }
+
+  try {
+    const response = await fetch('api/backgrounds?_=' + Date.now(), { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Request failed (' + response.status + ')');
+    }
+    const data = await response.json();
+    if (!data || data.ok !== true) {
+      throw new Error((data && data.error) || 'Unable to load background folder details');
+    }
+    backgroundDirectoryState.info = data.backgrounds || null;
+    renderBackgroundDirectory(backgroundDirectoryState.info);
+    if (!silent) {
+      setBackgroundDirectoryStatus('Background folder loaded.', 'success');
+    } else {
+      setBackgroundDirectoryStatus('', 'info');
+    }
+  } catch (err) {
+    renderBackgroundDirectory(backgroundDirectoryState.info);
+    if (!silent) {
+      setBackgroundDirectoryStatus(`Failed to load background folder: ${formatError(err)}`, 'error');
+    } else {
+      setBackgroundDirectoryStatus(`Failed to load background folder: ${formatError(err)}`, 'error');
+    }
+    throw err;
+  } finally {
+    backgroundDirectoryState.loading = false;
+    renderBackgroundDirectory(backgroundDirectoryState.info);
+  }
+}
+
+async function saveBackgroundDirectory(path, { useDefault = false } = {}) {
+  if (backgroundDirectoryState.saving) {
+    return;
+  }
+
+  backgroundDirectoryState.saving = true;
+  renderBackgroundDirectory(backgroundDirectoryState.info);
+  const savingMessage = useDefault ? 'Reverting to the default background folder…' : 'Saving background folder…';
+  setBackgroundDirectoryStatus(savingMessage, 'info');
+
+  try {
+    const effectivePath = useDefault ? '' : path;
+    const payload = effectivePath ? { directory: effectivePath } : { use_default: true };
+    const response = await fetch('api/backgrounds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error('Request failed (' + response.status + ')');
+    }
+    const data = await response.json();
+    if (!data || data.ok !== true) {
+      throw new Error((data && data.error) || 'Unable to update background folder');
+    }
+    backgroundDirectoryState.info = data.backgrounds || null;
+    renderBackgroundDirectory(backgroundDirectoryState.info);
+    setBackgroundDirectoryStatus('Background folder updated. Refresh the board if new media does not appear automatically.', 'success');
+  } catch (err) {
+    setBackgroundDirectoryStatus(`Failed to update background folder: ${formatError(err)}`, 'error');
+    renderBackgroundDirectory(backgroundDirectoryState.info);
+    throw err;
+  } finally {
+    backgroundDirectoryState.saving = false;
+    renderBackgroundDirectory(backgroundDirectoryState.info);
+  }
+}
+
 function closePCOView() {
   const pcoView = document.getElementById('pco-settings');
   if (pcoView) pcoView.style.display = 'none';
@@ -1288,6 +1468,13 @@ export function initConfigEditor(force = false) {
   ensureConfigTabsInitialized();
   if (!micboard.configTab) micboard.configTab = CONFIG_TAB_DEVICES;
   setConfigTab(micboard.configTab, { forceReload: force });
+
+  ensureBackgroundDirectoryBindings();
+  if (force || !backgroundDirectoryState.info) {
+    loadBackgroundDirectoryState({ silent: true });
+  } else {
+    renderBackgroundDirectory(backgroundDirectoryState.info);
+  }
 
   // Render slot list (replacement for missing renderSlotList)
   const holder = document.getElementById('editor_holder');
@@ -1869,6 +2056,7 @@ function buildAssignmentTable(ppl) {
       return `<option value="${encodeURIComponent(p.name)}">${label}</option>`;
     }))
     .join('');
+  let slotsMissingLabels = 0;
   sorted.forEach(s => {
     const tr = document.createElement('tr');
     const tdSlot = document.createElement('td');
@@ -1890,9 +2078,13 @@ function buildAssignmentTable(ppl) {
         }
       }
     } catch (_) {}
-  tdDevName.textContent = devName;
-  tdExtName.classList.add('pco-ext-name');
-  tdExtName.textContent = s.extended_name || '';
+    tdDevName.textContent = devName;
+    tdExtName.classList.add('pco-ext-name');
+    tdExtName.textContent = s.extended_name || '';
+    const hasLabel = Boolean((devName && devName.trim()) || (s.extended_name && String(s.extended_name).trim()));
+    if (!hasLabel) {
+      slotsMissingLabels += 1;
+    }
     const sel = document.createElement('select');
     sel.className = 'form-select form-select-sm pco-person-select';
     sel.setAttribute('data-slot', String(s.slot || ''));
@@ -1902,6 +2094,16 @@ function buildAssignmentTable(ppl) {
     assignBody && assignBody.appendChild(tr);
   });
   if (assignTbl) assignTbl.style.display = 'block';
+  if (assignSummary) {
+    if (slotsMissingLabels === sorted.length) {
+      assignSummary.innerHTML = '<span class="text-warning">All configured slots are missing device names or extended names. Add names in the Config view so you can map people to slots.</span>';
+    } else if (slotsMissingLabels > 0) {
+      const plural = slotsMissingLabels === 1 ? '' : 's';
+      assignSummary.innerHTML = `<span class="text-warning">${slotsMissingLabels} slot${plural} currently lack device names or extended names. Add them in Config for smoother assignments.</span>`;
+    } else {
+      assignSummary.textContent = 'Select people to assign or use Auto-fill to match by notes.';
+    }
+  }
   appendPcoLog(`Assignment table prepared for ${sorted.length} slot(s).`);
 }
 
