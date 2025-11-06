@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [1.2.0] - 2025-11-05
 ### Added
 - Background Library picker inside the Config view so operators can choose or reset the background media folder without editing files.
 - REST endpoint (`GET/POST /api/backgrounds`) powering the picker, returning the active path and persisting updates when no CLI override is present.
