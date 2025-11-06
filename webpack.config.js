@@ -12,6 +12,7 @@ module.exports = {
     app: ['whatwg-fetch', './js/app.js'],
     venue: ['./js/venues.js'],
     web: ['./js/web.js'],
+    about: ['./js/about.js'],
   },
   output: {
     path: path.resolve(__dirname, 'static'),
