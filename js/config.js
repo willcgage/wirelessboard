@@ -3,8 +3,97 @@
 import { Collapse } from 'bootstrap';
 import { Sortable, Plugins } from '@shopify/draggable';
 
-import { micboard, updateHash } from './app.js';
 import { postJSON } from './data.js';
+
+const noop = () => {};
+
+let resolveMicboard = () => (typeof window !== 'undefined' ? window.micboard : null);
+let pendingMicboard = {};
+let updateHashRef = noop;
+
+export function configureConfigModule({ micboard, getMicboard, updateHash } = {}) {
+  if (typeof getMicboard === 'function') {
+    resolveMicboard = getMicboard;
+  } else if (micboard) {
+    resolveMicboard = () => micboard;
+  }
+  if (typeof updateHash === 'function') {
+    updateHashRef = updateHash;
+  }
+}
+
+function currentMicboard() {
+  const board = resolveMicboard() || null;
+  if (board && pendingMicboard) {
+    Object.assign(board, pendingMicboard);
+    pendingMicboard = null;
+  }
+  return board;
+}
+
+const micboard = new Proxy({}, {
+  get(_target, prop) {
+    const board = currentMicboard();
+    if (board && prop in board) {
+      return board[prop];
+    }
+    if (pendingMicboard && prop in pendingMicboard) {
+      return pendingMicboard[prop];
+    }
+    return undefined;
+  },
+  set(_target, prop, value) {
+    const board = currentMicboard();
+    if (board) {
+      board[prop] = value;
+    } else {
+      if (!pendingMicboard) pendingMicboard = {};
+      pendingMicboard[prop] = value;
+    }
+    return true;
+  },
+  has(_target, prop) {
+    const board = currentMicboard();
+    if (board && prop in board) return true;
+    return pendingMicboard ? prop in pendingMicboard : false;
+  },
+  ownKeys() {
+    const board = currentMicboard();
+    const keys = board ? Reflect.ownKeys(board) : [];
+    if (pendingMicboard) {
+      for (const key of Reflect.ownKeys(pendingMicboard)) {
+        if (!keys.includes(key)) keys.push(key);
+      }
+    }
+    return keys;
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    const board = currentMicboard();
+    if (board) {
+      const descriptor = Object.getOwnPropertyDescriptor(board, prop);
+      if (descriptor) {
+        descriptor.configurable = true;
+        return descriptor;
+      }
+    }
+    if (pendingMicboard) {
+      const descriptor = Object.getOwnPropertyDescriptor(pendingMicboard, prop);
+      if (descriptor) {
+        descriptor.configurable = true;
+        return descriptor;
+      }
+    }
+    return undefined;
+  },
+});
+
+function invokeUpdateHash() {
+  try {
+    updateHashRef();
+  } catch (err) {
+    console.warn('updateHash invocation failed', err);
+  }
+}
 
 const NET_DEVICE_TYPES = ['axtd', 'ulxd', 'qlxd', 'uhfr', 'p10t'];
 
@@ -187,9 +276,7 @@ function setConfigTab(tabName, options = {}) {
   }
 
   if (micboard.settingsMode === 'CONFIG') {
-    try {
-      updateHash();
-    } catch (_) {}
+    invokeUpdateHash();
   }
 }
 
@@ -852,16 +939,11 @@ function downloadLogsAsJson() {
   }
 }
 
-if (micboard && typeof micboard === 'object') {
-  micboard.stopLogAutoRefresh = stopLogAutoRefresh;
-}
-
-
 function showPCOView() {
   hideHUDOverlay();
   stopLogAutoRefresh(true);
   micboard.settingsMode = 'PCO';
-  updateHash();
+  invokeUpdateHash();
   const mb = document.getElementById('micboard');
   if (mb) mb.style.display = 'none';
   const settings = document.querySelector('.settings');
@@ -893,7 +975,6 @@ function showPCOView() {
   if (eCat) eCat.value = m.note_category || 'Mic / IEM Assignments';
   if (eTeam) eTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
   populatePCOFormFromServer();
-  try { refreshPlansList(); } catch (e) {}
   const planSel = document.getElementById('pco-plan-select');
   if (planSel) planSel.innerHTML = '<option value="">Select a plan…</option>';
   const loadBtn = document.getElementById('pco-load-people');
@@ -1181,11 +1262,14 @@ function closePCOView() {
   const mb = document.getElementById('micboard');
   if (mb) mb.style.display = '';
   micboard.settingsMode = 'CONFIG';
-  updateHash();
+  invokeUpdateHash();
   try { initConfigEditor(true); } catch (_) {}
 }
 
 export function initConfigEditor(force = false) {
+  if (micboard && typeof micboard === 'object') {
+    micboard.stopLogAutoRefresh = stopLogAutoRefresh;
+  }
   if (!force && micboard.settingsMode === 'CONFIG') {
     console.log('oh that explains it!')
     return;
@@ -1193,7 +1277,7 @@ export function initConfigEditor(force = false) {
 
   hideHUDOverlay();
   micboard.settingsMode = 'CONFIG';
-  updateHash();
+  invokeUpdateHash();
   const mb = document.getElementById('micboard');
   if (mb) mb.style.display = '';
   const pcoView = document.getElementById('pco-settings');
@@ -1381,7 +1465,7 @@ export function initConfigEditor(force = false) {
     console.log(data);
     postJSON(url, data, () => {
       micboard.settingsMode = 'NONE';
-      updateHash();
+      invokeUpdateHash();
       window.location.reload();
     });
   });
@@ -1455,6 +1539,7 @@ function populatePCOFormFromServer() {
         } else {
           appendPcoLog('No stored credentials found yet.');
         }
+        refreshPlansList({ auto: true });
       })
       .catch((err) => {
         appendPcoLog(`Failed to load saved PCO configuration: ${formatError(err)}`, 'warn');
@@ -1653,11 +1738,38 @@ export function bindPcoHandlers() {
   }, { passive: false });
 }
 
-function refreshPlansList() {
+function refreshPlansList(options = {}) {
+  const autoTrigger = !!(options && options.auto);
   const sel = document.getElementById('pco-plan-select');
   const btn = document.getElementById('pco-load-people');
-  if (sel) sel.innerHTML = '<option value="">Loading…</option>';
   if (btn) btn.disabled = true;
+  const cfg = (micboard.config && micboard.config.pco) || {};
+  const enabled = !!cfg.enabled;
+  const authMeta = cfg.auth || {};
+  const hasStoredCreds = !!authMeta.has_credentials;
+  const tokenInput = document.getElementById('pco-token');
+  const secretInput = document.getElementById('pco-secret');
+  const pendingToken = (tokenInput && tokenInput.value ? tokenInput.value : '').trim();
+  const pendingSecret = (secretInput && secretInput.value ? secretInput.value : '').trim();
+
+  if (!enabled) {
+    if (sel) sel.innerHTML = '<option value="">Enable PCO and save settings to load plans.</option>';
+    if (!autoTrigger) appendPcoLog('Enable the PCO integration and save before fetching plans.', 'warn');
+    else appendPcoLog('Skipping plan fetch: integration is disabled.', 'info');
+    return;
+  }
+
+  if (!hasStoredCreds) {
+    const needsSave = pendingToken && pendingSecret;
+    const msg = needsSave
+      ? 'Save your new PCO token and secret, then refresh plans.'
+      : 'Store your PCO token and secret, then refresh plans.';
+    if (sel) sel.innerHTML = `<option value="">${msg}</option>`;
+    appendPcoLog(`Skipping plan fetch: ${msg}`, autoTrigger ? 'info' : 'warn');
+    return;
+  }
+
+  if (sel) sel.innerHTML = '<option value="">Loading…</option>';
   appendPcoLog('Fetching plan list from PCO...');
   fetch('api/pco/plans?_=' + Date.now(), { cache: 'no-store' })
     .then(r => r.json())

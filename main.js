@@ -4,6 +4,7 @@ const {
   shell,
   Menu,
   Tray,
+  nativeImage,
 } = require('electron');
 const path = require('path');
 const child = require('child_process');
@@ -18,17 +19,25 @@ const SERVICE_CANDIDATES = [
   ['micboard-service', 'micboard-service'],
 ];
 
-function toUnpacked(p) {
-  return p.replace('app.asar', 'app.asar.unpacked');
-}
-
 function resolveServiceBinary() {
-  for (const [folder, filename] of SERVICE_CANDIDATES) {
-    const candidate = toUnpacked(path.join(__dirname, 'dist', folder, filename));
-    if (fs.existsSync(candidate)) {
-      return candidate;
+  const resourcesRoot = process.resourcesPath ? path.join(process.resourcesPath, 'dist') : null;
+  const unpackedRoot = path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), 'dist');
+  const localRoot = path.join(__dirname, 'dist');
+  const devRoot = path.join(__dirname, '..', 'dist');
+
+  const searchRoots = [resourcesRoot, unpackedRoot, localRoot, devRoot]
+    .filter(Boolean)
+    .map(root => path.normalize(root));
+
+  for (const root of searchRoots) {
+    for (const [folder, filename] of SERVICE_CANDIDATES) {
+      const candidate = path.join(root, folder, filename);
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
     }
   }
+
   return null;
 }
 
@@ -91,13 +100,14 @@ const createPyProc = () => {
 };
 
 const exitPyProc = () => {
-  pyProc.kill();
-  pyProc = null;
+  if (pyProc) {
+    pyProc.kill();
+    pyProc = null;
+  }
 };
 
 function restartWirelessboardServer() {
-  pyProc.kill();
-  pyProc = null;
+  exitPyProc();
   setTimeout(createPyProc, 250);
 }
 
@@ -106,8 +116,12 @@ app.on('ready', () => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.wirelessboard.app');
   }
-  const icon = path.join(__dirname, 'build', 'trayTemplate.png').replace('app.asar', 'app.asar.unpacked');
-  tray = new Tray(icon);
+  const iconPath = path.join(__dirname, 'static', 'favicon.png');
+  let trayIcon = nativeImage.createFromPath(iconPath);
+  if (!trayIcon.isEmpty()) {
+    trayIcon = trayIcon.resize({ width: 18, height: 18, quality: 'best' });
+  }
+  tray = new Tray(trayIcon);
   const contextMenu = Menu.buildFromTemplate([
     { label: 'About', click() { createWindow('http://localhost:8058/about'); } },
     { type: 'separator' },

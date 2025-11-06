@@ -20,6 +20,7 @@ files:
   - "!build.log"
   - "!builder-output.log"
 mac:
+  icon: resources/wirelessboard.icns
   category: public.app-category.utilities
   extendInfo:
     LSBackgroundOnly: true

@@ -13,8 +13,7 @@ import { slotEditToggle } from './extended.js';
 import { keybindings } from './kbd.js';
 import { setBackground, setInfoDrawer } from './display.js';
 import { setTimeMode } from './chart-smoothie.js';
-import { initConfigEditor } from './config.js';
-import { bindPcoNav, bindPcoHandlers } from './config.js';
+import { initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule } from './config.js';
 
 import '../css/colors.scss';
 import '../css/style.scss';
@@ -299,6 +298,12 @@ export function updateHash() {
   history.replaceState(undefined, undefined, hash);
 
 }
+
+configureConfigModule({
+  micboard,
+  getMicboard: () => micboard,
+  updateHash,
+});
 
 function dataFilterFromList(data) {
   data.receivers.forEach((rx) => {
