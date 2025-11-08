@@ -75,6 +75,7 @@
     "boolean": "file:vendor/boolean"
   },
   "dependencies": {
-    "app-builder-lib": "^26.0.12"
+    "app-builder-lib": "^26.0.12",
+    "boolean": "file:vendor/boolean"
   }
 }
