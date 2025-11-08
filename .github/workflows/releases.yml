@@ -43,6 +43,7 @@ jobs:
     name: Package desktop apps
     needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: macos-latest
