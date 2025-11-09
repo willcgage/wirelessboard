@@ -40,6 +40,16 @@ function JsonUpdate() {
       });
       micboard.connectionStatus = 'CONNECTED';
       micboard.config = data.config;
+      micboard.discovery_status = data.discovery_status || micboard.discovery_status || null;
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        try {
+          const eventName = 'wirelessboard:discovery-status';
+          const evt = (typeof window.CustomEvent === 'function')
+            ? new CustomEvent(eventName, { detail: { status: micboard.discovery_status } })
+            : new Event(eventName);
+          window.dispatchEvent(evt);
+        } catch (_) {}
+      }
     }).catch((error) => {
       console.log(error);
       micboard.connectionStatus = 'DISCONNECTED';

@@ -127,40 +127,128 @@ export function updateNavLinks() {
   }
 }
 
+export function syncHudPane(target) {
+  const hud = document.getElementById('hud');
+  if (!hud) return 'help';
+  const desired = target || hud.dataset.activePane || 'help';
+  const panes = hud.querySelectorAll('[data-hud-pane]');
+  panes.forEach((pane) => {
+    const isActive = pane.dataset.hudPane === desired;
+    pane.classList.toggle('active', isActive);
+    pane.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+    pane.tabIndex = isActive ? 0 : -1;
+  });
+  const menuButtons = hud.querySelectorAll('[data-hud-target]');
+  menuButtons.forEach((button) => {
+    const isActive = button.dataset.hudTarget === desired;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  hud.dataset.activePane = desired;
+  const goHudBtn = document.getElementById('go-hud');
+  const goBackgroundBtn = document.getElementById('go-background');
+  const visible = hud.classList.contains('show');
+  if (goHudBtn) goHudBtn.setAttribute('aria-expanded', visible && desired === 'help' ? 'true' : 'false');
+  if (goBackgroundBtn) goBackgroundBtn.setAttribute('aria-expanded', visible && desired === 'background' ? 'true' : 'false');
+  return desired;
+}
+
+export function showHudPane(target = 'help', options = {}) {
+  const hud = document.getElementById('hud');
+  if (!hud) return;
+  const hudCollapse = Collapse.getOrCreateInstance(hud, { toggle: false });
+  const wasVisible = hud.classList.contains('show');
+  const current = hud.dataset.activePane || 'help';
+  const desired = syncHudPane(target);
+  if (options.toggleIfVisible && wasVisible && current === desired) {
+    try { hudCollapse.hide(); } catch (e) {}
+    return;
+  }
+  try { hudCollapse.show(); } catch (e) {}
+}
+
+export function hideHud() {
+  const hud = document.getElementById('hud');
+  if (!hud) return;
+  const hudCollapse = Collapse.getOrCreateInstance(hud, { toggle: false });
+  try { hudCollapse.hide(); } catch (e) {}
+  syncHudPane('help');
+}
+
 function mapGroups() {
   const navbar = document.getElementById('navbarToggleExternalContent');
   const help = document.getElementById('hud');
   const goHud = document.getElementById('go-hud');
+  const goBackground = document.getElementById('go-background');
   const hudCollapse = help ? Collapse.getOrCreateInstance(help, { toggle: false }) : null;
+  const inlineCloseBtn = document.getElementById('close-settings-inline');
 
   if (help && !help.dataset.hudBound) {
     help.addEventListener('shown.bs.collapse', () => {
-      if (goHud) goHud.setAttribute('aria-expanded', 'true');
+      syncHudPane(help.dataset.activePane);
     });
     help.addEventListener('hidden.bs.collapse', () => {
-      if (goHud) goHud.setAttribute('aria-expanded', 'false');
+      syncHudPane(help.dataset.activePane);
+      help.dataset.activePane = help.dataset.activePane || 'help';
     });
     help.dataset.hudBound = 'true';
+  }
+  if (help && !help.dataset.hudMenuBound) {
+    const hudButtons = help.querySelectorAll('[data-hud-target]');
+    hudButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        syncHudPane(button.dataset.hudTarget);
+      });
+    });
+    help.dataset.hudMenuBound = 'true';
+  }
+  syncHudPane(help ? help.dataset.activePane : 'help');
+
+  function openBackground() {
+    micboard.settingsMode = 'BACKGROUND';
+    micboard.url.settings = undefined;
+    micboard.url.pco = undefined;
+    micboard.url.background = 'true';
+    updateHash();
+    hideHud();
+    if (goBackground) goBackground.setAttribute('aria-expanded', 'true');
+    if (goHud) goHud.setAttribute('aria-expanded', 'false');
+    resetViews();
+    try {
+      window.dispatchEvent(new Event('wirelessboard:background-view-opened'));
+    } catch (e) {}
   }
   // Ensure single-view visibility helper
   function resetViews() {
     const mb = document.getElementById('micboard');
     const settings = document.querySelector('.settings');
     const pcoView = document.getElementById('pco-settings');
+    const backgroundView = document.getElementById('background-settings');
     const wantPCO = (micboard.settingsMode === 'PCO' || micboard.url.pco === 'true');
-  const wantCFG = (micboard.settingsMode === 'CONFIG' || micboard.url.settings === 'true' || micboard.url.settings === 'logs');
+    const wantBackground = (micboard.settingsMode === 'BACKGROUND' || micboard.url.background === 'true');
+    const wantCFG = (micboard.settingsMode === 'CONFIG' || micboard.url.settings === 'true' || micboard.url.settings === 'logs');
     const wasConfig = micboard.settingsMode === 'CONFIG';
     if (wantPCO) {
       if (mb) mb.style.display = 'none';
       if (settings) settings.style.display = 'none';
+      if (backgroundView) backgroundView.style.display = 'none';
       if (pcoView) pcoView.style.display = 'block';
+    } else if (wantBackground) {
+      if (mb) mb.style.display = 'none';
+      if (settings) settings.style.display = 'none';
+      if (pcoView) pcoView.style.display = 'none';
+      if (backgroundView) backgroundView.style.display = 'block';
     } else if (wantCFG) {
       if (mb) mb.style.display = 'none';
       if (pcoView) pcoView.style.display = 'none';
+      if (backgroundView) backgroundView.style.display = 'none';
       if (settings) settings.style.display = 'block';
     } else {
       if (pcoView) pcoView.style.display = 'none';
       if (settings) settings.style.display = 'none';
+      if (backgroundView) backgroundView.style.display = 'none';
       if (mb) mb.style.display = 'grid';
       if (wasConfig && typeof micboard.stopLogAutoRefresh === 'function') {
         try { micboard.stopLogAutoRefresh(true); } catch (e) {}
@@ -170,19 +258,45 @@ function mapGroups() {
   if (goHud && hudCollapse) {
     goHud.addEventListener('click', (event) => {
       event.preventDefault();
-      try { hudCollapse.toggle(); } catch (e) {}
+      showHudPane('help', { toggleIfVisible: true });
       if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
       resetViews();
     });
   }
 
-  // Helper to hide HUD if visible
-  function hideHud() {
-    if (!hudCollapse) return;
-    try { hudCollapse.hide(); } catch (e) {}
+  if (goBackground) {
+    goBackground.addEventListener('click', (event) => {
+      event.preventDefault();
+      openBackground();
+      if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
+    });
   }
 
-    // Removed explicit HUD close handler; handled centrally via hideHud()
+  if (inlineCloseBtn) {
+    inlineCloseBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (typeof micboard.stopLogAutoRefresh === 'function') {
+        try { micboard.stopLogAutoRefresh(true); } catch (_) {}
+      }
+      micboard.settingsMode = 'NONE';
+      micboard.url.settings = undefined;
+      micboard.url.pco = undefined;
+      micboard.url.background = undefined;
+      updateHash();
+      const mb = document.getElementById('micboard');
+      const settings = document.querySelector('.settings');
+      const pcoView = document.getElementById('pco-settings');
+      const backgroundView = document.getElementById('background-settings');
+      if (mb) mb.style.display = 'grid';
+      if (settings) settings.style.display = 'none';
+      if (pcoView) pcoView.style.display = 'none';
+      if (backgroundView) backgroundView.style.display = 'none';
+      hideHud();
+      if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
+      resetViews();
+    });
+  }
+  // Removed explicit HUD close handler; handled centrally via hideHud()
 
   const goExtended = document.getElementById('go-extended');
   if (goExtended) {
@@ -198,7 +312,9 @@ function mapGroups() {
   if (goConfig) {
     goConfig.addEventListener('click', () => {
       initConfigEditor();
+      micboard.url.background = undefined;
       hideHud();
+      if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
       resetViews();
       if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
     });
@@ -214,6 +330,23 @@ function mapGroups() {
         if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
       }
     });
+  }
+
+  const backgroundClose = document.getElementById('background-close');
+  if (backgroundClose) {
+    backgroundClose.addEventListener('click', (event) => {
+      event.preventDefault();
+      micboard.settingsMode = 'NONE';
+      micboard.url.background = undefined;
+      updateHash();
+      if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
+      resetViews();
+    });
+  }
+
+  if (typeof window !== 'undefined' && !window.__wirelessboardBackgroundBound) {
+    window.addEventListener('wirelessboard:open-background', openBackground);
+    window.__wirelessboardBackgroundBound = true;
   }
 
   const preset_links = document.getElementsByClassName('preset-link');
@@ -259,6 +392,7 @@ function readURLParameters() {
   micboard.url.demo = getUrlParameter('demo');
   micboard.url.settings = getUrlParameter('settings');
   micboard.url.pco = getUrlParameter('pco');
+  micboard.url.background = getUrlParameter('background');
   micboard.url.tvmode = getUrlParameter('tvmode');
   micboard.url.bgmode = getUrlParameter('bgmode');
 
@@ -293,6 +427,8 @@ export function updateHash() {
     }
   } else if (micboard.settingsMode === 'PCO') {
     hash = '#pco=true'
+  } else if (micboard.settingsMode === 'BACKGROUND') {
+    hash = '#background=true'
   }
   hash = hash.replace('&', '');
   history.replaceState(undefined, undefined, hash);
@@ -378,6 +514,16 @@ function initialMap(callback) {
         micboard.localURL = data.url;
         try { micboard.groups = groupTableBuilder(data); } catch (e) { micboard.groups = {}; }
         micboard.config = data.config;
+  micboard.discovery_status = data.discovery_status || null;
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          try {
+            const eventName = 'wirelessboard:discovery-status';
+            const evt = (typeof window.CustomEvent === 'function')
+              ? new CustomEvent(eventName, { detail: { status: micboard.discovery_status } })
+              : new Event(eventName);
+            window.dispatchEvent(evt);
+          } catch (_) {}
+        }
         mapGroups();
 
         if (micboard.config.slots.length < 1 && micboard.url.pco !== 'true') {
@@ -413,9 +559,11 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     const s = document.querySelector('.settings');
     const p = document.getElementById('pco-settings');
+    const b = document.getElementById('background-settings');
     const h = document.getElementById('hud');
     if (s) s.style.display = 'none';
     if (p) p.style.display = 'none';
+    if (b) b.style.display = 'none';
     if (h) h.classList.remove('show');
   } catch (_) {}
   try { ensureHudVersion(); } catch (_) {}
@@ -458,6 +606,17 @@ document.addEventListener('DOMContentLoaded', () => {
         window.dispatchEvent(ev);
   const newEv = new Event('wirelessboard:open-pco');
   window.dispatchEvent(newEv);
+      }
+    }, 100);
+  }
+  if (micboard.url.background === 'true') {
+    setTimeout(() => {
+      const bgNav = document.getElementById('go-background');
+      if (bgNav) {
+        try { bgNav.click(); } catch (e) {}
+      } else {
+        const bgEv = new Event('wirelessboard:open-background');
+        window.dispatchEvent(bgEv);
       }
     }, 100);
   }

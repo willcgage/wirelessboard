@@ -33,16 +33,28 @@
       /* Hide secondary views immediately to avoid startup flash */
       .settings { display: none; }
       #pco-settings { display: none; }
+      #background-settings { display: none; }
     </style>
   </head>
   <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-3">
       <div class="container-fluid">
-  <a class="navbar-brand" href="#">Wirelessboard</a>
-        <div class="d-flex gap-2">
-          <a href="#" id="go-pco" class="btn btn-outline-primary btn-sm">PCO</a>
-          <a href="#" id="go-config" class="btn btn-outline-secondary btn-sm">Config</a>
-          <a href="#" id="go-hud" class="btn btn-outline-info btn-sm">Help</a>
+	<a class="navbar-brand" href="#">Wirelessboard</a>
+        <div class="ms-auto">
+          <div class="btn-group">
+            <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" id="nav-menu-button" data-bs-toggle="dropdown" aria-expanded="false">
+              Menu
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-menu-button">
+              <li><h6 class="dropdown-header">Views</h6></li>
+              <li><a class="dropdown-item" href="#" id="go-hud" aria-controls="hud" aria-expanded="false">Help &amp; Shortcuts</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><h6 class="dropdown-header">Configuration</h6></li>
+              <li><a class="dropdown-item" href="#" id="go-config">Config</a></li>
+              <li><a class="dropdown-item" href="#" id="go-background" aria-controls="background-settings" aria-expanded="false">Background Library</a></li>
+              <li><a class="dropdown-item" href="#" id="go-pco" aria-controls="pco-settings" aria-expanded="false">Planning Center (PCO)</a></li>
+            </ul>
+          </div>
         </div>
       </div>
     </nav>
@@ -52,189 +64,244 @@
             <p id="hud-version-text" class="text-muted small mb-3">Wirelessboard version loading…</p>
           </div>
         </div>
-        <div class="row">
-          <div class="col-4 keyboard-guide">
-            <h2 class="text-center">Keyboard Shortcuts</h2>
-            <ul>
-              <li><kbd>?</kbd> - Show keyboard shortcuts</li>
-              <li><kbd>0</kbd> - Show all slots</li>
-              <li><kbd>1</kbd>...<kbd>9</kbd> - Load group</li>
-              <li><kbd>d</kbd> - Start demo mode</li>
-              <li><kbd>e</kbd> - Open group editor</li>
-              <li><kbd>t</kbd> - Toggle TV view</li>
-              <li><kbd>i</kbd> - Change tv display mode</li>
-              <li><kbd>f</kbd> - Toggle fullscreen</li>
-              <li><kbd>g</kbd> - Toggle image backgrounds</li>
-              <li><kbd>v</kbd> - Toggle video backgrounds</li>
-              <li><kbd>n</kbd> - Extended Name editor</li>
-              <li><kbd>s</kbd> - Device configuration editor</li>
-              <li><kbd>q</kbd> - Show QR code</li>
-              <li><kbd>esc</kbd> - reload wirelessboard</li>
-            </ul>
+        <div class="hud-pane active" data-hud-pane="help" id="hud-pane-help" role="region" aria-hidden="false" tabindex="0">
+          <div class="row g-4">
+            <div class="col-md-6">
+              <div class="hud-card p-3 border rounded h-100">
+                <h5 class="h6 text-muted text-uppercase">Quick Start</h5>
+                <ul class="hud-list small mb-0">
+                  <li><span class="hud-key">Menu -> Config</span> Edit slots, discovery, and logging settings.</li>
+                  <li><span class="hud-key">Menu -> Planning Center</span> Authorize PCO and sync assignments.</li>
+                  <li><span class="hud-key">Menu -> Help</span> Return to this guide any time.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="hud-card p-3 border rounded h-100">
+                <h5 class="h6 text-muted text-uppercase">Keyboard Shortcuts</h5>
+                <ul class="hud-shortcuts small mb-0">
+                  <li><span class="hud-key">?</span> Toggle this menu.</li>
+                  <li><span class="hud-key">1-9</span> Jump to saved groups (0 returns to the combined view).</li>
+                  <li><span class="hud-key">F</span> Enter or exit fullscreen.</li>
+                  <li><span class="hud-key">G</span> / <span class="hud-key">V</span> Cycle image or video backgrounds.</li>
+                  <li><span class="hud-key">I</span> Toggle the info drawer.</li>
+                  <li><span class="hud-key">N</span> Toggle slot editing (press <span class="hud-key">Shift+N</span> to show the paste box).</li>
+                  <li><span class="hud-key">E</span> Edit the current group (when viewing groups 1-9).</li>
+                  <li><span class="hud-key">S</span> Open the Config view.</li>
+                  <li><span class="hud-key">Q</span> Show the scannable URL.</li>
+                  <li><span class="hud-key">Esc</span> Return to the main board.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="hud-card p-3 border rounded">
+                <h5 class="h6 text-muted text-uppercase">Need More Help?</h5>
+                <p class="small mb-2">Check the in-repo <strong>docs/</strong> directory for deployment, discovery, and automation guides, or open an issue from the <a href="https://github.com/willcgage/wirelessboard" target="_blank" rel="noopener">project home</a>.</p>
+                <p class="small mb-0">Keep another tab on the Config view during events so adjustments never interrupt the board.</p>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="row">
-          <div class="col color-guide-color CRITICAL">
-            <h3>Critical</h3>
-            <p>Mic ON.  1 - 2 Battery Bars.</p>
-          </div>
-          <div class="col color-guide-color PREV_CRITICAL">
-            <h3>Previously Critical</h3>
-            <p>Mic OFF.  1 - 2 Battery Bars.</p>
-          </div>
+  </div>
+  <div class="container" id="background-settings">
+    <div class="row">
+      <div class="col-xl-12">
+        <div class="config-header d-flex justify-content-between align-items-center">
+          <button type="button" id="background-close" class="btn btn-outline-secondary">Close</button>
+          <h3 class="text-center flex-grow-1">Background Library</h3>
+          <span class="invisible">placeholder</span>
         </div>
-        <div class="row">
-          <div class="col color-guide-color UNASSIGNED">
-            <h3>Unknown</h3>
-            <p>Wirelessboard doesn’t make battery assumptions once a mic is off for over 30 minutes.</p>
-          </div>
-        </div>
-        <div class="row">
-          <div class="col color-guide-color RX_COM_ERROR">
-            <h3>RX COM Error</h3>
-            <p>Wirelessboard can't connect to the device.</p>
-          </div>
-          <div class="col color-guide-color AUDIO_PEAK">
-            <h3>Audio Peak</h3>
-            <p>Input peak.</p>
-          </div>
-        </div>
-        <div class="d-grid gap-2">
-          <button id="hud-button" type="button" class="btn btn-success btn-lg" data-bs-toggle="collapse" data-bs-target="#hud">Close</button>
-        </div>
-      </div>
-    <!-- Dedicated PCO settings view (separate page) -->
-  <div class="container" id="pco-settings">
-      <div class="row">
-        <div class="col-xl-12">
-          <div class="config-header d-flex justify-content-between align-items-center">
-            <button type="button" id="pco-close" class="btn btn-outline-secondary">Close</button>
-            <h3 class="text-center flex-grow-1">Planning Center Online</h3>
-            <span class="invisible">placeholder</span>
-          </div>
-          <div class="p-3 border rounded">
-            <form id="pco-form" autocomplete="off" novalidate>
-              <div class="form-row">
-                <div class="col-md-2 col-6">
-                  <div class="input-group-text">
-                    <input type="checkbox" id="pco-enabled">&nbsp;Enable PCO
+        <div class="p-3 border rounded" id="background-library-settings">
+          <div class="row g-4">
+            <div class="col-12 col-lg-6">
+              <section class="library-section h-100">
+                <h5 class="h6 text-muted text-uppercase">Local Folder</h5>
+                <form id="background-directory-form" class="row g-3 align-items-end">
+                  <div class="col-md-8 col-12">
+                    <label for="background-directory" class="form-label text-muted">Folder</label>
+                    <input type="text" id="background-directory" class="form-control" placeholder="~/Library/Application Support/wirelessboard/backgrounds">
+                    <small id="background-directory-help" class="form-text text-muted"></small>
                   </div>
-                </div>
-                <div class="col-md-5 col-12">
-                  <input type="text" class="form-control" id="pco-token" name="pco-token" placeholder="PCO Personal Access Token" autocomplete="off">
-                </div>
-                <div class="col-md-5 col-12">
-                  <input type="password" class="form-control" id="pco-secret" name="pco-secret" placeholder="PCO Personal Access Secret" autocomplete="off">
-                </div>
-              </div>
-              <div class="form-row mt-2">
-                <div class="col-md-6 col-12">
-                  <input type="text" class="form-control" id="pco-note-category" name="pco-note-category" placeholder="Note Category (default: Mic / IEM Assignments)" autocomplete="off">
-                </div>
-                <div class="col-md-6 col-12 mt-2 mt-md-0">
-                  <input type="text" class="form-control" id="pco-team-filter" name="pco-team-filter" placeholder="Team Name Filter (comma-separated)" autocomplete="off">
-                </div>
-              </div>
-              <div class="form-row mt-3">
-                <div class="col">
-                  <button type="submit" id="pco-save" class="btn btn-primary mr-2">Save PCO Settings</button>
-                  <button type="button" id="pco-sync" class="btn btn-secondary">Sync Now</button>
-                </div>
-              </div>
-              <div class="form-row mt-2">
-                <div class="col">
-                  <div id="pco-save-status" class="alert alert-success d-none" role="alert">
-                    PCO settings saved.
+                  <div class="col-md-4 col-12">
+                    <div class="d-grid gap-2">
+                      <button type="submit" id="background-directory-save" class="btn btn-primary">Save Folder</button>
+                      <button type="button" id="background-directory-reset" class="btn btn-outline-secondary">Use Default</button>
+                    </div>
                   </div>
+                </form>
+                <div id="background-directory-status" class="small text-muted mt-2"></div>
+              </section>
+            </div>
+            <div class="col-12 col-lg-6">
+              <section class="library-section h-100">
+                <h5 class="h6 text-muted text-uppercase">Cloud Providers</h5>
+                <div class="provider-card p-3 border rounded h-100" id="cloud-google-drive">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="google-drive-enabled">
+                    <label class="form-check-label" for="google-drive-enabled">Enable Google Drive backgrounds</label>
+                  </div>
+                  <small class="form-text text-muted">Allow slots to use Google Drive media in addition to local backgrounds.</small>
+                  <hr class="my-3">
+                  <h6 class="fw-semibold">OAuth Client</h6>
+                  <div class="row g-2 align-items-center">
+                    <div class="col-md-6 col-12">
+                      <input type="file" class="form-control" id="google-drive-client-file" accept="application/json">
+                    </div>
+                    <div class="col-md-6 col-12 d-flex flex-wrap gap-2">
+                      <button type="button" class="btn btn-outline-secondary" id="google-drive-client-clear">Remove Client</button>
+                      <button type="button" class="btn btn-outline-secondary" id="google-drive-refresh">Refresh</button>
+                    </div>
+                  </div>
+                  <small class="form-text text-muted mt-1">Upload the credentials JSON downloaded from Google Cloud Console.</small>
+                  <pre id="google-drive-client-summary" class="mt-3 p-2 bg-dark text-light small rounded" style="min-height:3rem;"></pre>
+                  <hr class="my-3">
+                  <h6 class="fw-semibold">Authorization</h6>
+                  <div id="google-drive-auth-status" class="small text-muted mb-2"></div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-success" id="google-drive-auth-start">Authorize Account</button>
+                    <button type="button" class="btn btn-outline-danger" id="google-drive-auth-clear">Remove Credentials</button>
+                    <button type="button" class="btn btn-outline-secondary" id="google-drive-auth-refresh">Check Status</button>
+                  </div>
+                  <div id="google-drive-status" class="small text-muted mt-3"></div>
                 </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    <!-- ...existing code for single PCO settings view... -->
-      <div class="row mt-3">
-        <div class="col-xl-12">
-          <div class="p-3 border rounded">
-            <div class="row g-2 align-items-end">
-              <div class="col-md-10 col-12">
-                <label for="pco-plan-select" class="form-label">Plan</label>
-                <div class="d-flex gap-2">
-                  <select class="form-select" id="pco-plan-select">
-                    <option value="">Select a plan…</option>
-                  </select>
-                  <button type="button" id="pco-refresh-plans" class="btn btn-outline-secondary">Refresh Plans</button>
-                </div>
-              </div>
-              <div class="col-md-2 col-12 d-grid gap-2">
-                <button type="button" id="pco-load-people" class="btn btn-outline-primary" disabled>Load People</button>
-              </div>
+              </section>
             </div>
-          </div>
-        </div>
-      </div>
-      <div class="row mt-4">
-        <div class="col-xl-12">
-          <div class="config-header">
-            <h4 class="text-center">PCO People (Selected Plan)</h4>
-          </div>
-          <div class="p-3 border rounded">
-            <div id="pco-people-summary" class="mb-2"></div>
-            <div class="table-responsive" id="pco-people-table" style="display:none;">
-              <table class="table table-sm table-striped">
-                <thead>
-                  <tr><th>Name</th><th>Team</th><th>Note</th></tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="row mt-4">
-        <div class="col-xl-12">
-          <div class="config-header">
-            <h4 class="text-center">Assign People to Slots</h4>
-          </div>
-          <div class="p-3 border rounded">
-            <div id="pco-assign-summary" class="mb-2"></div>
-            <div class="table-responsive" id="pco-assign-table" style="display:none;">
-              <table class="table table-sm table-striped">
-                <thead>
-                  <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Extended Name</th><th>Select Person</th></tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <div class="d-flex gap-2 mt-2">
-              <button type="button" id="pco-autofill-assignments" class="btn btn-success">Auto-Fill From Notes</button>
-              <button type="button" id="pco-apply-assignments" class="btn btn-primary">Apply Assignments</button>
-              <button type="button" id="pco-clear-assignment-selects" class="btn btn-outline-secondary">Clear Selections</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="row mt-4">
-        <div class="col-xl-12">
-          <div class="config-header">
-            <h4 class="text-center">PCO API Log</h4>
-          </div>
-          <div class="p-3 border rounded">
-            <div id="pco-log-entries" class="bg-dark text-light small rounded p-2 mb-3"></div>
-            <div id="pco-sync-summary" class="mb-2"></div>
-            <div class="table-responsive" id="pco-assignments-table" style="display:none;">
-              <table class="table table-sm table-striped">
-                <thead>
-                  <tr><th>ID</th><th>Name</th></tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <pre id="pco-sync-json" class="bg-light p-2" style="max-height: 300px; overflow: auto;"></pre>
           </div>
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="container" id="pco-settings">
+    <div class="row">
+      <div class="col-xl-12">
+        <div class="config-header d-flex justify-content-between align-items-center">
+          <button type="button" id="pco-close" class="btn btn-outline-secondary">Close</button>
+          <h3 class="text-center flex-grow-1">Planning Center Online</h3>
+          <span class="invisible">placeholder</span>
+        </div>
+        <div class="p-3 border rounded">
+          <form id="pco-form" autocomplete="off" novalidate>
+            <div class="form-row">
+              <div class="col-md-2 col-6">
+                <div class="input-group-text">
+                  <input type="checkbox" id="pco-enabled">&nbsp;Enable PCO
+                </div>
+              </div>
+              <div class="col-md-5 col-12">
+                <input type="text" class="form-control" id="pco-token" name="pco-token" placeholder="PCO Personal Access Token" autocomplete="off">
+              </div>
+              <div class="col-md-5 col-12">
+                <input type="password" class="form-control" id="pco-secret" name="pco-secret" placeholder="PCO Personal Access Secret" autocomplete="off">
+              </div>
+            </div>
+            <div class="form-row mt-2">
+              <div class="col-md-6 col-12">
+                <input type="text" class="form-control" id="pco-note-category" name="pco-note-category" placeholder="Note Category (default: Mic / IEM Assignments)" autocomplete="off">
+              </div>
+              <div class="col-md-6 col-12 mt-2 mt-md-0">
+                <input type="text" class="form-control" id="pco-team-filter" name="pco-team-filter" placeholder="Team Name Filter (comma-separated)" autocomplete="off">
+              </div>
+            </div>
+            <div class="form-row mt-3">
+              <div class="col">
+                <button type="submit" id="pco-save" class="btn btn-primary mr-2">Save PCO Settings</button>
+                <button type="button" id="pco-sync" class="btn btn-secondary">Sync Now</button>
+              </div>
+            </div>
+            <div class="form-row mt-2">
+              <div class="col">
+                <div id="pco-save-status" class="alert alert-success d-none" role="alert">
+                  PCO settings saved.
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-3">
+      <div class="col-xl-12">
+        <div class="p-3 border rounded">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-10 col-12">
+              <label for="pco-plan-select" class="form-label">Plan</label>
+              <div class="d-flex gap-2">
+                <select class="form-select" id="pco-plan-select">
+                  <option value="">Select a plan...</option>
+                </select>
+                <button type="button" id="pco-refresh-plans" class="btn btn-outline-secondary">Refresh Plans</button>
+              </div>
+            </div>
+            <div class="col-md-2 col-12 d-grid gap-2">
+              <button type="button" id="pco-load-people" class="btn btn-outline-primary" disabled>Load People</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-4">
+      <div class="col-xl-12">
+        <div class="config-header">
+          <h4 class="text-center">PCO People (Selected Plan)</h4>
+        </div>
+        <div class="p-3 border rounded">
+          <div id="pco-people-summary" class="mb-2"></div>
+          <div class="table-responsive" id="pco-people-table" style="display:none;">
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr><th>Name</th><th>Team</th><th>Note</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-4">
+      <div class="col-xl-12">
+        <div class="config-header">
+          <h4 class="text-center">Assign People to Slots</h4>
+        </div>
+        <div class="p-3 border rounded">
+          <div id="pco-assign-summary" class="mb-2"></div>
+          <div class="table-responsive" id="pco-assign-table" style="display:none;">
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Extended Name</th><th>Select Person</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button type="button" id="pco-autofill-assignments" class="btn btn-success">Auto-Fill From Notes</button>
+            <button type="button" id="pco-apply-assignments" class="btn btn-primary">Apply Assignments</button>
+            <button type="button" id="pco-clear-assignment-selects" class="btn btn-outline-secondary">Clear Selections</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-4">
+      <div class="col-xl-12">
+        <div class="config-header">
+          <h4 class="text-center">PCO API Log</h4>
+        </div>
+        <div class="p-3 border rounded">
+          <div id="pco-log-entries" class="bg-dark text-light small rounded p-2 mb-3"></div>
+          <div id="pco-sync-summary" class="mb-2"></div>
+          <div class="table-responsive" id="pco-assignments-table" style="display:none;">
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr><th>ID</th><th>Name</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <pre id="pco-sync-json" class="bg-light p-2" style="max-height: 300px; overflow: auto;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
     <div class="container-fluid fullHeight deskmode" id="container">
 
       <div id="qr-modal" class="modal fade bd-example-modal-lg" tabindex="-1" role="dialog" aria-labelledby="myLargeModalLabel" aria-hidden="true">
@@ -291,9 +358,40 @@
         </div>
 
         <div id="config-devices-view" class="config-view">
-          <div class="row">
+          <div class="row gy-4">
 
-            <div class="col-xl-6" id="cfg-discovered-col">
+            <div class="col-12 col-xl-6" id="cfg-discovered-col">
+              <div class="config-header">
+                <h3 class="text-center">Discovery</h3>
+              </div>
+
+              <div id="discovery-settings-panel" class="config-panel p-3 border rounded mb-3">
+                <form id="discovery-settings-form" class="row g-3">
+                  <div class="col-12">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" id="discovery-auto">
+                      <label class="form-check-label" for="discovery-auto">Automatic subnets</label>
+                    </div>
+                    <small class="form-text text-muted">Include the active interface's IPv4 subnet.</small>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label" for="discovery-subnets">Manual CIDR ranges</label>
+                    <textarea class="form-control" id="discovery-subnets" rows="4" placeholder="10.10.10.0/24&#10;192.168.40.32/27"></textarea>
+                    <small class="form-text text-muted">One network per line. Leave blank to scan automatic subnets only.</small>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="discovery-scan-interval">Scan interval (seconds)</label>
+                    <input type="number" class="form-control" id="discovery-scan-interval" min="15" max="900" step="5" placeholder="60">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="discovery-timeout">Probe timeout (ms)</label>
+                    <input type="number" class="form-control" id="discovery-timeout" min="100" max="5000" step="50" placeholder="750">
+                  </div>
+                </form>
+                <div id="dcid-warning" class="alert alert-warning small mt-3 d-none" role="alert"></div>
+                <div id="discovery-status" class="small text-muted mt-2"></div>
+              </div>
+
               <div class="config-header">
                 <h3 class="text-center">Discovered Devices</h3>
               </div>
@@ -301,16 +399,14 @@
               <div id="discovered_list"></div>
               <div class="config-footer">
                 <div class="row">
-
                   <div class="col d-grid gap-2">
                     <button id="add-discovered" class="btn btn-danger">Add All Discovered Devices</button>
                   </div>
-
                 </div>
               </div>
             </div>
 
-            <div class="col-xl-6" id="cfg-slot-col">
+            <div class="col-12 col-xl-6" id="cfg-slot-col">
               <div class="config-header">
                 <h3 class="text-center">Slot Configuration</h3>
               </div>
@@ -354,29 +450,6 @@
                 </div>
               </div>
 
-            </div>
-          </div>
-          <div class="row mt-4">
-            <div class="col-xl-12">
-              <div class="config-header">
-                <h3 class="text-center">Background Library</h3>
-              </div>
-              <div class="p-3 border rounded">
-                <form id="background-directory-form" class="row g-3 align-items-end">
-                  <div class="col-md-8 col-12">
-                    <label for="background-directory" class="form-label text-muted">Folder</label>
-                    <input type="text" id="background-directory" class="form-control" placeholder="~/Library/Application Support/wirelessboard/backgrounds">
-                    <small id="background-directory-help" class="form-text text-muted"></small>
-                  </div>
-                  <div class="col-md-4 col-12">
-                    <div class="d-grid gap-2">
-                      <button type="submit" id="background-directory-save" class="btn btn-primary">Save Folder</button>
-                      <button type="button" id="background-directory-reset" class="btn btn-outline-secondary">Use Default</button>
-                    </div>
-                  </div>
-                </form>
-                <div id="background-directory-status" class="small text-muted mt-2"></div>
-              </div>
             </div>
           </div>
         </div>

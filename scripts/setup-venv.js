@@ -8,9 +8,10 @@ const projectRoot = path.resolve(__dirname, '..');
 const venvPath = path.join(projectRoot, '.venv');
 const requirementsPath = path.join(projectRoot, 'py', 'requirements.txt');
 
+const envOverride = process.env.WIRELESSBOARD_PYTHON && process.env.WIRELESSBOARD_PYTHON.trim();
 const pythonCandidates = process.platform === 'win32'
   ? ['py', 'python3', 'python']
-  : ['python3', 'python'];
+  : ['python3.12', 'python3', 'python'];
 
 function run(cmd, args, options = {}) {
   console.log(`Running: ${cmd} ${args.join(' ')}`);
@@ -30,13 +31,24 @@ function run(cmd, args, options = {}) {
 }
 
 function resolvePython() {
+  if (envOverride) {
+    const parts = envOverride.split(/\s+/);
+    const cmd = parts[0];
+    const args = parts.slice(1).length ? parts.slice(1) : [];
+    const check = spawnSync(cmd, [...args, '--version'], { cwd: projectRoot, stdio: 'ignore' });
+    if (check.status === 0) {
+      return { cmd, args, label: envOverride };
+    }
+    console.warn(`WIRELESSBOARD_PYTHON=${envOverride} did not respond to --version; falling back to search.`);
+  }
+
   for (const cmd of pythonCandidates) {
     const check = spawnSync(cmd, ['--version'], { cwd: projectRoot, stdio: 'ignore' });
     if (check.status === 0) {
-      return cmd;
+      return { cmd, args: [], label: cmd };
     }
   }
-  throw new Error('Unable to locate a usable Python interpreter. Install Python 3.9+ and ensure it is on your PATH.');
+  throw new Error('Unable to locate a usable Python interpreter. Install Python 3.12+ and ensure it is on your PATH.');
 }
 
 function resolveVenvPython() {
@@ -52,11 +64,11 @@ function resolveVenvPython() {
 
 (async () => {
   try {
-    const python = resolvePython();
-    console.log(`Using Python interpreter: ${python}`);
+  const { cmd: python, args: pythonArgs, label } = resolvePython();
+  console.log(`Using Python interpreter: ${label}`);
 
     console.log('Creating virtual environment...');
-    run(python, ['-m', 'venv', '.venv']);
+  run(python, [...pythonArgs, '-m', 'venv', '.venv']);
 
     const venvPython = resolveVenvPython();
     console.log(`Bootstrapping virtual environment via: ${venvPython}`);

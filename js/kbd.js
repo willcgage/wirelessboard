@@ -1,7 +1,7 @@
 'use strict';
 
-import { Collapse, Modal } from 'bootstrap'
-import { micboard, updateHash, generateQR } from './app.js';
+import { Modal } from 'bootstrap'
+import { micboard, updateHash, generateQR, showHudPane } from './app.js';
 import { toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode } from './display';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle, initEditor } from './dnd.js';
@@ -133,10 +133,7 @@ export function keybindings() {
     }
 
     if (e.key === '?') {
-      const hud = document.getElementById('hud');
-      if (hud) {
-        Collapse.getOrCreateInstance(hud, { toggle: false }).toggle();
-      }
+      showHudPane('help', { toggleIfVisible: true });
     }
   }, false);
 }

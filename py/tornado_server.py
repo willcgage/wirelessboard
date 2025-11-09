@@ -12,6 +12,7 @@ import config as config_module
 import discover
 import offline
 import pco
+import google_drive
 from pco_credentials import CredentialError
 from logging_utils import available_levels, available_sources, purge_logs, read_log_entries
 
@@ -60,8 +61,14 @@ def wirelessboard_json(network_devices):
         discovered.append(device)
 
     return json.dumps({
-        'receivers': data, 'url': url, 'gif': gifs, 'jpg': jpgs, 'mp4': mp4s,
-        'config': config.config_tree, 'discovered': discovered
+        'receivers': data,
+        'url': url,
+        'gif': gifs,
+        'jpg': jpgs,
+        'mp4': mp4s,
+        'config': config.config_tree,
+        'discovered': discovered,
+        'discovery_status': discover.get_dcid_status(),
     }, sort_keys=True, indent=4)
 
 
@@ -237,6 +244,20 @@ def _parse_sources(params: Iterable[str]) -> Iterable[str]:
 class LogsHandler(web.RequestHandler):
     def get(self):
         self.set_header('Content-Type', 'application/json')
+        class GoogleDriveAuthLandingHandler(web.RequestHandler):
+            def get(self):
+                landing_path = config.app_dir('static/google-drive-auth.html')
+                if not isinstance(landing_path, str) or landing_path is None or not os.path.exists(landing_path):
+                    self.set_status(404)
+                    self.write('Google Drive authorization landing page is unavailable.')
+                    return
+
+                self.set_header('Content-Type', 'text/html; charset=utf-8')
+                self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+                with open(landing_path, 'r', encoding='utf-8') as handle:
+                    self.write(handle.read())
+
+
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
 
         limit_arg = self.get_query_argument('limit', default='200')
@@ -357,13 +378,43 @@ class LogSettingsHandler(web.RequestHandler):
 
 class ConfigHandler(web.RequestHandler):
     def get(self):
-        self.write("hi - slot")
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        config.ensure_discovery_defaults()
+        response = {
+            'ok': True,
+            'config': config.config_tree,
+            'discovery': config.get_discovery_settings(),
+            'discovery_status': discover.get_dcid_status(),
+        }
+        self.write(json.dumps(response))
 
     def post(self):
-        data = json.loads(self.request.body)
-        print(data)
-        self.write('{}')
-        config.reconfig(data)
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+        try:
+            payload = json.loads(self.request.body or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid JSON payload'}))
+            return
+
+        try:
+            config.reconfig(payload)
+        except Exception as exc:
+            logger.exception('Failed to apply configuration update')
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': 'Unable to apply configuration'}))
+            return
+
+        response = {
+            'ok': True,
+            'config': config.config_tree,
+            'discovery': config.get_discovery_settings(),
+            'discovery_status': discover.get_dcid_status(),
+        }
+        self.write(json.dumps(response))
 
 class GroupUpdateHandler(web.RequestHandler):
     def get(self):
@@ -493,6 +544,205 @@ class BackgroundDirectoryHandler(web.RequestHandler):
 
         self.write(json.dumps({'ok': True, 'backgrounds': state}))
 
+
+class GoogleDriveConfigHandler(web.RequestHandler):
+    def _set_headers(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+    def get(self):
+        self._set_headers()
+        try:
+            payload = google_drive.public_provider_state()
+        except google_drive.DriveConfigError as exc:
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        self.write(json.dumps({'ok': True, 'drive': payload}))
+
+    def post(self):
+        self._set_headers()
+        try:
+            data = json.loads(self.request.body or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid JSON'}))
+            return
+
+        client_payload = data.get('client')
+        if isinstance(client_payload, str):
+            try:
+                data['client'] = json.loads(client_payload)
+            except json.JSONDecodeError:
+                self.set_status(400)
+                self.write(json.dumps({'ok': False, 'error': 'client configuration must be valid JSON'}))
+                return
+
+        try:
+            config.update_google_drive_settings(data)
+            payload = google_drive.public_provider_state()
+        except ValueError as exc:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('Failed to update Google Drive settings')
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': 'Unable to update Google Drive settings'}))
+            return
+
+        self.write(json.dumps({'ok': True, 'drive': payload}))
+
+
+class GoogleDriveAuthStartHandler(web.RequestHandler):
+    def _set_headers(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+    def post(self):
+        self._set_headers()
+        try:
+            payload = json.loads(self.request.body or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid JSON'}))
+            return
+
+        redirect_uri = str(payload.get('redirect_uri') or '').strip()
+        prompt = str(payload.get('prompt') or 'consent').strip() or 'consent'
+        if not redirect_uri:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'redirect_uri is required'}))
+            return
+
+        try:
+            flow_payload = google_drive.start_authorization_flow(redirect_uri, prompt=prompt)
+            auth_state = google_drive.public_auth_state()
+        except google_drive.DriveConfigError as exc:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except google_drive.DriveCredentialError as exc:
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+
+        self.write(json.dumps({'ok': True, 'flow': flow_payload, 'auth': auth_state}))
+
+
+class GoogleDriveAuthCompleteHandler(web.RequestHandler):
+    def _set_headers(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+    def post(self):
+        self._set_headers()
+        try:
+            payload = json.loads(self.request.body or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid JSON'}))
+            return
+
+        state = str(payload.get('state') or '').strip()
+        code = str(payload.get('code') or '').strip()
+        if not state or not code:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'state and code are required'}))
+            return
+
+        try:
+            meta = google_drive.complete_authorization_flow(state, code)
+        except google_drive.DriveCredentialError as exc:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+
+        self.write(json.dumps({'ok': True, 'auth': meta.public_view()}))
+
+
+class GoogleDriveAuthClearHandler(web.RequestHandler):
+    def _set_headers(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+    def post(self):
+        self._set_headers()
+        try:
+            meta = google_drive.clear_credentials()
+        except google_drive.DriveCredentialError as exc:
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+
+        self.write(json.dumps({'ok': True, 'auth': meta.public_view()}))
+
+
+class GoogleDriveFilesHandler(web.RequestHandler):
+    def _set_headers(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+    def get(self):
+        self._set_headers()
+
+        page_size_arg = self.get_query_argument('page_size', default='100')
+        try:
+            page_size = int(page_size_arg)
+        except (TypeError, ValueError):
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'page_size must be an integer'}))
+            return
+
+        page_token = self.get_query_argument('page_token', default=None)
+        folder_id = self.get_query_argument('folder', default=None)
+        query = self.get_query_argument('query', default=None)
+        order_by = self.get_query_argument('order_by', default='modifiedTime desc')
+
+        try:
+            listing = google_drive.list_media_files(
+                page_size=page_size,
+                page_token=page_token,
+                folder_id=folder_id,
+                query=query,
+                order_by=order_by,
+            )
+        except google_drive.DriveCredentialError as exc:
+            self.set_status(401)
+            self.write(json.dumps({'ok': False, 'error': str(exc), 'auth': google_drive.public_auth_state()}))
+            return
+        except google_drive.DriveConfigError as exc:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except google_drive.DriveApiError as exc:
+            self.set_status(502)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+
+        response = {
+            'ok': True,
+            'files': listing.get('files', []),
+            'next_page_token': listing.get('next_page_token'),
+            'query': listing.get('query'),
+            'auth': google_drive.public_auth_state(),
+        }
+        self.write(json.dumps(response))
+
+
+class GoogleDriveAuthLandingHandler(web.RequestHandler):
+    def get(self):
+        landing_path = config.app_dir('static/google-drive-auth.html')
+        if not isinstance(landing_path, str) or landing_path is None or not os.path.exists(landing_path):
+            self.set_status(404)
+            self.write('Google Drive authorization landing page is unavailable.')
+            return
+
+        self.set_header('Content-Type', 'text/html; charset=utf-8')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        with open(landing_path, 'r', encoding='utf-8') as handle:
+            self.write(handle.read())
+
 # https://stackoverflow.com/questions/12031007/disable-static-file-caching-in-tornado
 class NoCacheHandler(web.StaticFileHandler):
     def set_extra_headers(self, path):
@@ -527,6 +777,12 @@ def twisted():
         (r'/api/pco/plans', PcoPlansHandler),
         (r'/api/pco/people', PcoPeopleHandler),
         (r'/api/backgrounds', BackgroundDirectoryHandler),
+        (r'/api/cloud/google-drive/config', GoogleDriveConfigHandler),
+        (r'/api/cloud/google-drive/auth/start', GoogleDriveAuthStartHandler),
+        (r'/api/cloud/google-drive/auth/complete', GoogleDriveAuthCompleteHandler),
+        (r'/api/cloud/google-drive/auth/clear', GoogleDriveAuthClearHandler),
+        (r'/api/cloud/google-drive/files', GoogleDriveFilesHandler),
+        (r'/oauth/google-drive', GoogleDriveAuthLandingHandler),
     # (r'/restart/', WirelessboardReloadConfigHandler),
         (r'/static/(.*)', web.StaticFileHandler, {'path': config.app_dir('static')}),
         (r'/bg/(.*)', BackgroundAssetHandler, {'path': ''}),

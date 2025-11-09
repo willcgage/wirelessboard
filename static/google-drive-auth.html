@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Wirelessboard · Google Drive Authorization</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 2rem;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .panel {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 18px 60px rgba(15, 23, 42, 0.45);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 1.5rem;
+      color: #38bdf8;
+    }
+    p {
+      line-height: 1.5;
+      margin: 0 0 1rem 0;
+    }
+    .status {
+      border-radius: 8px;
+      padding: 1rem;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      word-break: break-word;
+      min-height: 3rem;
+    }
+    .status.success {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: rgba(22, 101, 52, 0.35);
+      color: #bbf7d0;
+    }
+    .status.error {
+      border-color: rgba(248, 113, 113, 0.45);
+      background: rgba(127, 29, 29, 0.35);
+      color: #fecaca;
+    }
+    .status.muted {
+      color: #94a3b8;
+    }
+    a {
+      color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>Completing Google Drive Sign-In</h1>
+    <p id="message" class="status muted">Finalizing authorization…</p>
+    <p class="small" style="font-size:0.85rem;color:#94a3b8;">This page will close automatically once the process is complete. If the window stays open, you can close it after checking the status in Wirelessboard.</p>
+  </div>
+  <script>
+    (async () => {
+      const statusEl = document.getElementById('message');
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      const state = params.get('state');
+      const error = params.get('error');
+
+      function updateStatus(text, level) {
+        statusEl.textContent = text || '';
+        statusEl.classList.remove('success', 'error', 'muted');
+        if (level === 'success') {
+          statusEl.classList.add('success');
+        } else if (level === 'error') {
+          statusEl.classList.add('error');
+        } else {
+          statusEl.classList.add('muted');
+        }
+      }
+
+      if (error) {
+        const description = params.get('error_description') || 'Authorization was cancelled.';
+        updateStatus(description, 'error');
+        if (window.opener) {
+          window.opener.postMessage({ type: 'wirelessboard:drive-auth', ok: false, error: description }, window.location.origin);
+        }
+        return;
+      }
+
+      if (!code || !state) {
+        updateStatus('Missing authorization response. Please restart the sign-in flow.', 'error');
+        if (window.opener) {
+          window.opener.postMessage({ type: 'wirelessboard:drive-auth', ok: false, error: 'Missing authorization response.' }, window.location.origin);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/cloud/google-drive/auth/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, state })
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          const message = (payload && payload.error) || `Authorization failed (${response.status})`;
+          updateStatus(message, 'error');
+          if (window.opener) {
+            window.opener.postMessage({ type: 'wirelessboard:drive-auth', ok: false, error: message }, window.location.origin);
+          }
+          return;
+        }
+        const data = await response.json();
+        updateStatus('Google Drive access granted. You can return to Wirelessboard.', 'success');
+        if (window.opener) {
+          window.opener.postMessage({ type: 'wirelessboard:drive-auth', ok: true, auth: data.auth }, window.location.origin);
+        }
+        setTimeout(() => {
+          try { window.close(); } catch (_) {}
+        }, 1500);
+      } catch (err) {
+        const message = err && err.message ? err.message : 'Unexpected error completing authorization.';
+        updateStatus(message, 'error');
+        if (window.opener) {
+          window.opener.postMessage({ type: 'wirelessboard:drive-auth', ok: false, error: message }, window.location.origin);
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

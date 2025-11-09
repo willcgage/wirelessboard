@@ -1,6 +1,36 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.3.0] - 2025-11-08
+### Added
+- Google Drive background provider with OAuth flow, REST endpoints, and Config UI controls for uploading client secrets, managing tokens, and browsing shared media.
+
+### Changed
+- Minimum supported Python runtime is now 3.12; local virtualenv bootstrap prefers `python3.12`, and release bundles are built from the Homebrew 3.12 toolchain.
+- Background Library card now groups local folders and cloud providers, preventing layout overlap with discovered devices and keeping background settings together.
+- Top navigation now surfaces a consolidated Menu dropdown: Help opens the HUD overlay, and Background Library / Planning Center launch their own full-screen configuration views.
+
+### Fixed
+- PyInstaller distribution now embeds the Python 3.12 framework, restoring the packaged UI launch on macOS after adding Google API dependencies.
+- Google Drive OAuth flow now reuses the scopes negotiated during authorization when reporting state back to the UI, preventing missing scope metadata after consent.
+- Added an inline close control so the Config and PCO sections can be dismissed reliably on 4K televisions and other ultra-high-resolution displays.
+
+## [1.2.5] - 2025-11-08
+
+### Added
+- Discovery controls now live alongside the Discovered Devices list in the Config view, with an inline alert that surfaces Shure Update Utility/DCID requirements.
+
+### Changed
+- Configuration API responses (`GET/POST /api/config`) and downstream UI now expose live discovery/DCID status so the browser reflects backend readiness without a reload.
 
 ## [1.2.0] - 2025-11-05
 ### Added

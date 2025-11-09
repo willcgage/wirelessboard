@@ -12,7 +12,15 @@ Each wireless channel is assigned unique slot. A single channel QLXD receiver wo
   <img src="img/manual_config.png">
 </p>
 
-Production environments often include multiple networks.  For now, Wirelessboard only discovers devices through the primary NIC.  On macOS, this would be the NIC on the top of the Service Order.  Devices on other networks may have to be manually added.  Select a device type, input an IP, and select a channel.
+Production environments often include multiple networks. Wirelessboard now supports simultaneous discovery across the primary NIC and any additional IPv4 subnets you specify. Use the **Discovery** sidebar on the configuration screen to:
+
+- **Auto-discover local subnets:** Leave **Automatic subnets** enabled to probe the active interface (typically the top entry in macOS Service Order).
+- **Add manual ranges:** Enter CIDR blocks (for example `10.10.10.0/24` or `192.168.40.32/27`) to scan VLANs or routed segments that do not broadcast multicast advertisements.
+- **Tune frequency and timeout:** Adjust the active-scan interval and TCP probe timeout to match site topology.
+
+Wirelessboard classifies receivers by consulting Shure's Device ID database. If the `dcid.json` export is missing, the Discovery sidebar displays a warning that points you to the Shure Update Utility workflow, and active scans continue with generic model names until the map is installed.
+
+Devices on networks that are unreachable from the Wirelessboard host still need to be added manually. Select a device type, input an IP, and select a channel.
 
 Press Save to apply the configuration.
 

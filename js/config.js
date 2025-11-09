@@ -97,10 +97,193 @@ function invokeUpdateHash() {
 
 const NET_DEVICE_TYPES = ['axtd', 'ulxd', 'qlxd', 'uhfr', 'p10t'];
 
+const DISCOVERY_DEFAULTS = {
+  auto: true,
+  subnets: [],
+  scan_interval: 60,
+  timeout_ms: 750,
+};
+
+const DISCOVERY_MIN_INTERVAL = 15;
+const DISCOVERY_MAX_INTERVAL = 900;
+const DISCOVERY_MIN_TIMEOUT = 100;
+const DISCOVERY_MAX_TIMEOUT = 5000;
+
+const discoveryFormState = {
+  initialized: false,
+  dirty: false,
+  settings: { ...DISCOVERY_DEFAULTS },
+};
+
+function normalizeDiscoverySettingsInput(raw) {
+  const normalized = { ...DISCOVERY_DEFAULTS };
+  if (!raw || typeof raw !== 'object') {
+    return normalized;
+  }
+
+  if (typeof raw.auto === 'boolean') {
+    normalized.auto = raw.auto;
+  }
+
+  let subnets = [];
+  if (Array.isArray(raw.subnets)) {
+    subnets = raw.subnets;
+  } else if (typeof raw.subnets === 'string') {
+    subnets = raw.subnets.replace(/[,;]/g, '\n').split(/\r?\n/);
+  }
+
+  const seen = new Set();
+  normalized.subnets = subnets
+    .map((value) => String(value || '').trim())
+    .filter((value) => {
+      if (!value) return false;
+      if (seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+
+  const interval = parseInt(raw.scan_interval, 10);
+  if (Number.isFinite(interval)) {
+    normalized.scan_interval = Math.min(Math.max(interval, DISCOVERY_MIN_INTERVAL), DISCOVERY_MAX_INTERVAL);
+  }
+
+  const timeout = parseInt(raw.timeout_ms, 10);
+  if (Number.isFinite(timeout)) {
+    normalized.timeout_ms = Math.min(Math.max(timeout, DISCOVERY_MIN_TIMEOUT), DISCOVERY_MAX_TIMEOUT);
+  }
+
+  return normalized;
+}
+
+function setDiscoveryStatus(message, level = 'info') {
+  const statusEl = document.getElementById('discovery-status');
+  if (!statusEl) return;
+
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('text-muted', 'text-success', 'text-danger', 'text-warning', 'text-info');
+
+  if (!message) {
+    statusEl.classList.add('text-muted');
+    return;
+  }
+
+  let cls = 'text-info';
+  if (level === 'success') {
+    cls = 'text-success';
+  } else if (level === 'error') {
+    cls = 'text-danger';
+  } else if (level === 'warn') {
+    cls = 'text-warning';
+  } else if (level === 'muted') {
+    cls = 'text-muted';
+  }
+
+  statusEl.classList.add(cls);
+}
+
+function renderDiscoveryEnvironmentStatus(status) {
+  const alert = document.getElementById('dcid-warning');
+  if (!alert) return;
+
+  alert.classList.add('d-none');
+  alert.classList.remove('alert-danger', 'alert-warning', 'alert-info', 'alert-success');
+  alert.textContent = '';
+
+  if (!status || typeof status !== 'object') {
+    return;
+  }
+
+  const { loaded, message, last_error: lastError } = status;
+
+  if (loaded) {
+    if (message) {
+      alert.textContent = message;
+      alert.classList.add('alert-info');
+      alert.classList.remove('d-none');
+    }
+    return;
+  }
+
+  const fallbackMessage = 'Model resolution is unavailable. Install Shure Update Utility and export dcid.json to enable richer discovery results.';
+  alert.textContent = message || lastError || fallbackMessage;
+  alert.classList.add('alert-warning');
+  alert.classList.remove('d-none');
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('wirelessboard:discovery-status', (event) => {
+    const status = event && event.detail && typeof event.detail === 'object'
+      ? event.detail.status
+      : micboard.discovery_status;
+    renderDiscoveryEnvironmentStatus(status);
+  });
+}
+
+function ensureDiscoveryFormBindings() {
+  if (discoveryFormState.initialized) return;
+  const form = document.getElementById('discovery-settings-form');
+  if (!form) return;
+
+  const markDirty = () => {
+    discoveryFormState.dirty = true;
+    setDiscoveryStatus('Pending changes — click Save Config to apply.', 'warn');
+  };
+
+  form.querySelectorAll('input, textarea').forEach((el) => {
+    const eventName = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(eventName, markDirty);
+  });
+
+  discoveryFormState.initialized = true;
+}
+
+function renderDiscoverySettings(rawSettings) {
+  const settings = normalizeDiscoverySettingsInput(rawSettings);
+  discoveryFormState.settings = settings;
+  discoveryFormState.dirty = false;
+
+  const autoInput = document.getElementById('discovery-auto');
+  if (autoInput) autoInput.checked = !!settings.auto;
+
+  const subnetsInput = document.getElementById('discovery-subnets');
+  if (subnetsInput) subnetsInput.value = settings.subnets.join('\n');
+
+  const intervalInput = document.getElementById('discovery-scan-interval');
+  if (intervalInput) intervalInput.value = settings.scan_interval;
+
+  const timeoutInput = document.getElementById('discovery-timeout');
+  if (timeoutInput) timeoutInput.value = settings.timeout_ms;
+
+  setDiscoveryStatus('', 'muted');
+  renderDiscoveryEnvironmentStatus(micboard.discovery_status);
+}
+
+function collectDiscoverySettingsFromForm() {
+  const form = document.getElementById('discovery-settings-form');
+  if (!form) {
+    return { ...discoveryFormState.settings };
+  }
+
+  const autoInput = document.getElementById('discovery-auto');
+  const subnetsInput = document.getElementById('discovery-subnets');
+  const intervalInput = document.getElementById('discovery-scan-interval');
+  const timeoutInput = document.getElementById('discovery-timeout');
+
+  const payload = {
+    auto: autoInput ? !!autoInput.checked : DISCOVERY_DEFAULTS.auto,
+    subnets: subnetsInput ? subnetsInput.value : [],
+    scan_interval: intervalInput ? intervalInput.value : DISCOVERY_DEFAULTS.scan_interval,
+    timeout_ms: timeoutInput ? timeoutInput.value : DISCOVERY_DEFAULTS.timeout_ms,
+  };
+
+  return normalizeDiscoverySettingsInput(payload);
+}
+
 // Render the discovered device list in the config editor
 function renderDiscoveredDeviceList() {
   const discoveredList = document.getElementById('discovered_list');
   if (!discoveredList) return;
+  renderDiscoveryEnvironmentStatus(micboard.discovery_status);
   discoveredList.innerHTML = '';
   const discovered = micboard.discovered || [];
   if (!Array.isArray(discovered) || discovered.length === 0) return;
@@ -233,6 +416,17 @@ const backgroundDirectoryState = {
   loading: false,
   saving: false,
 };
+
+const GOOGLE_DRIVE_AUTH_MESSAGE = 'wirelessboard:drive-auth';
+
+const googleDriveState = {
+  provider: null,
+  loading: false,
+  saving: false,
+  authWindow: null,
+};
+
+let googleDriveMessageListenerBound = false;
 
 function logEl(id) {
   return document.getElementById(id);
@@ -945,49 +1139,7 @@ function downloadLogsAsJson() {
   }
 }
 
-function showPCOView() {
-  hideHUDOverlay();
-  stopLogAutoRefresh(true);
-  micboard.settingsMode = 'PCO';
-  invokeUpdateHash();
-  const mb = document.getElementById('micboard');
-  if (mb) mb.style.display = 'none';
-  const settings = document.querySelector('.settings');
-  if (settings) settings.style.display = 'none';
-  const pcoView = document.getElementById('pco-settings');
-  if (pcoView) pcoView.style.display = 'block';
-  const backBtn = document.getElementById('pco-close') || document.getElementById('pco-back');
-  if (backBtn) {
-    backBtn.id = 'pco-close';
-    backBtn.textContent = 'Close';
-    backBtn.classList.remove('btn-link');
-    backBtn.classList.add('btn-outline-secondary');
-  }
-  try { document.getElementById('pco-settings').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
-  const p = micboard.config.pco || {};
-  const eEnabled = document.getElementById('pco-enabled');
-  if (eEnabled) eEnabled.checked = !!p.enabled;
-  const eToken = document.getElementById('pco-token');
-  const eSecret = document.getElementById('pco-secret');
-  if (eToken) eToken.value = '';
-  if (eSecret) eSecret.value = '';
-  renderPcoCredentialStatus(p.auth || {});
-  const s = p.services || {};
-  const eStid = document.getElementById('pco-service-type-id');
-  if (eStid) eStid.value = s.service_type_id || '';
-  const m = p.mapping || {};
-  const eCat = document.getElementById('pco-note-category');
-  const eTeam = document.getElementById('pco-team-filter');
-  if (eCat) eCat.value = m.note_category || 'Mic / IEM Assignments';
-  if (eTeam) eTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
-  populatePCOFormFromServer();
-  const planSel = document.getElementById('pco-plan-select');
-  if (planSel) planSel.innerHTML = '<option value="">Select a plan…</option>';
-  const loadBtn = document.getElementById('pco-load-people');
-  if (loadBtn) loadBtn.disabled = true;
-  appendPcoLog('Opened PCO settings view');
-}
-function generateJSONConfig() {
+function collectSlotConfiguration() {
   const slotList = [];
   const holder = document.getElementById('editor_holder');
   if (!holder) return slotList;
@@ -1044,6 +1196,13 @@ function generateJSONConfig() {
     }
   }
   return slotList;
+}
+
+
+function generateJSONConfig() {
+  const slots = collectSlotConfiguration();
+  const discovery = collectDiscoverySettingsFromForm();
+  return { slots, discovery };
 }
 
 
@@ -1434,6 +1593,351 @@ async function saveBackgroundDirectory(path, { useDefault = false } = {}) {
   }
 }
 
+function setGoogleDriveStatus(message, level = 'info') {
+  const statusEl = document.getElementById('google-drive-status');
+  if (!statusEl) return;
+
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('text-success', 'text-danger', 'text-warning', 'text-muted');
+
+  if (!message) {
+    statusEl.classList.add('text-muted');
+    return;
+  }
+
+  const className = level === 'success'
+    ? 'text-success'
+    : level === 'error'
+      ? 'text-danger'
+      : level === 'warn'
+        ? 'text-warning'
+        : 'text-muted';
+  statusEl.classList.add(className);
+}
+
+function formatGoogleDriveClientSummary(summary = {}) {
+  if (!summary || !summary.has_configuration) {
+    return 'No OAuth client uploaded yet.';
+  }
+
+  const info = summary.installed || summary.web || {};
+  const parts = [];
+  if (info.project_id) parts.push(`Project: ${info.project_id}`);
+  if (info.client_id) parts.push(`Client ID: ${info.client_id}`);
+  if (Array.isArray(info.redirect_uris) && info.redirect_uris.length) {
+    parts.push(`Redirect URIs: ${info.redirect_uris.length}`);
+  }
+  if (Array.isArray(info.javascript_origins) && info.javascript_origins.length) {
+    parts.push(`Origins: ${info.javascript_origins.length}`);
+  }
+
+  return parts.length ? parts.join('\n') : 'OAuth client is present.';
+}
+
+function updateGoogleDriveControlState() {
+  const busy = googleDriveState.loading || googleDriveState.saving;
+  const provider = googleDriveState.provider || {};
+  const hasClient = !!(provider.client && provider.client.has_configuration);
+  const hasAuth = !!(provider.auth && provider.auth.has_credentials);
+
+  const enabledInput = document.getElementById('google-drive-enabled');
+  if (enabledInput) {
+    enabledInput.disabled = googleDriveState.loading && !provider;
+    enabledInput.checked = !!provider.enabled;
+  }
+
+  const fileInput = document.getElementById('google-drive-client-file');
+  if (fileInput) fileInput.disabled = busy;
+
+  const clearClientBtn = document.getElementById('google-drive-client-clear');
+  if (clearClientBtn) clearClientBtn.disabled = busy || !hasClient;
+
+  const refreshBtn = document.getElementById('google-drive-refresh');
+  if (refreshBtn) refreshBtn.disabled = busy;
+
+  const authStartBtn = document.getElementById('google-drive-auth-start');
+  if (authStartBtn) authStartBtn.disabled = busy || !hasClient;
+
+  const authClearBtn = document.getElementById('google-drive-auth-clear');
+  if (authClearBtn) authClearBtn.disabled = busy || !hasAuth;
+
+  const authRefreshBtn = document.getElementById('google-drive-auth-refresh');
+  if (authRefreshBtn) authRefreshBtn.disabled = busy;
+}
+
+function renderGoogleDriveSettings(provider = {}) {
+  googleDriveState.provider = provider;
+
+  const summaryEl = document.getElementById('google-drive-client-summary');
+  if (summaryEl) {
+    summaryEl.textContent = formatGoogleDriveClientSummary(provider.client);
+  }
+
+  const authStatusEl = document.getElementById('google-drive-auth-status');
+  if (authStatusEl) {
+    authStatusEl.classList.remove('text-success', 'text-warning', 'text-danger', 'text-muted');
+    if (provider.auth && provider.auth.has_credentials) {
+      authStatusEl.classList.add('text-success');
+      const updated = provider.auth.updated_at ? new Date(provider.auth.updated_at).toLocaleString() : null;
+      authStatusEl.textContent = updated
+        ? `Authorized · updated ${updated}`
+        : 'Authorized for Google Drive access.';
+    } else {
+      authStatusEl.classList.add('text-warning');
+      authStatusEl.textContent = 'Not authorized yet. Start the Google sign-in flow to grant access.';
+    }
+  }
+
+  updateGoogleDriveControlState();
+}
+
+function ensureGoogleDriveMessageBinding() {
+  if (googleDriveMessageListenerBound) return;
+  googleDriveMessageListenerBound = true;
+  window.addEventListener('message', handleGoogleDriveAuthMessage);
+}
+
+function handleGoogleDriveAuthMessage(event) {
+  if (!event || !event.data || event.origin !== window.location.origin) {
+    return;
+  }
+
+  const payload = event.data;
+  if (payload.type !== GOOGLE_DRIVE_AUTH_MESSAGE) {
+    return;
+  }
+
+  if (googleDriveState.authWindow && !googleDriveState.authWindow.closed) {
+    try { googleDriveState.authWindow.close(); } catch (_) {}
+  }
+  googleDriveState.authWindow = null;
+
+  if (payload.ok) {
+    setGoogleDriveStatus('Google Drive access granted.', 'success');
+  } else {
+    const message = payload.error || 'Google Drive authorization failed.';
+    setGoogleDriveStatus(message, 'error');
+  }
+
+  loadGoogleDriveState({ silent: true }).catch(() => {});
+}
+
+async function loadGoogleDriveState({ silent = false } = {}) {
+  if (googleDriveState.loading) {
+    return;
+  }
+
+  googleDriveState.loading = true;
+  updateGoogleDriveControlState();
+  if (!silent) {
+    setGoogleDriveStatus('Loading Google Drive settings…', 'info');
+  }
+
+  try {
+    const response = await fetch('api/cloud/google-drive/config?_=' + Date.now(), { cache: 'no-store' });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.ok === false) {
+      const message = data && data.error ? data.error : `Request failed (${response.status})`;
+      throw new Error(message);
+    }
+    renderGoogleDriveSettings(data.drive || {});
+    if (!silent) {
+      setGoogleDriveStatus('Google Drive settings loaded.', 'success');
+    }
+  } catch (err) {
+    setGoogleDriveStatus(`Failed to load Google Drive settings: ${formatError(err)}`, 'error');
+    throw err;
+  } finally {
+    googleDriveState.loading = false;
+    updateGoogleDriveControlState();
+  }
+}
+
+async function updateGoogleDriveSettings(payload, { successMessage } = {}) {
+  googleDriveState.saving = true;
+  updateGoogleDriveControlState();
+  setGoogleDriveStatus('Saving Google Drive settings…', 'info');
+
+  try {
+    const response = await fetch('api/cloud/google-drive/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.ok === false) {
+      const message = data && data.error ? data.error : `Request failed (${response.status})`;
+      throw new Error(message);
+    }
+
+    renderGoogleDriveSettings(data.drive || {});
+    setGoogleDriveStatus(successMessage || 'Google Drive settings saved.', 'success');
+  } catch (err) {
+    setGoogleDriveStatus(`Failed to update Google Drive settings: ${formatError(err)}`, 'error');
+    throw err;
+  } finally {
+    googleDriveState.saving = false;
+    updateGoogleDriveControlState();
+  }
+}
+
+async function handleGoogleDriveClientFile(event) {
+  const input = event.target;
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    await updateGoogleDriveSettings({ client: parsed }, { successMessage: 'OAuth client uploaded.' });
+  } catch (err) {
+    setGoogleDriveStatus(`Failed to upload OAuth client: ${formatError(err)}`, 'error');
+    throw err;
+  } finally {
+    try { if (input) input.value = ''; } catch (_) {}
+  }
+}
+
+async function removeGoogleDriveClient() {
+  try {
+    await updateGoogleDriveSettings({ client: null }, { successMessage: 'OAuth client removed.' });
+  } catch (err) {
+    // status already handled inside updateGoogleDriveSettings
+  }
+}
+
+async function startGoogleDriveAuthorization() {
+  if (googleDriveState.saving) return;
+  ensureGoogleDriveMessageBinding();
+
+  googleDriveState.saving = true;
+  updateGoogleDriveControlState();
+  setGoogleDriveStatus('Starting Google authorization…', 'info');
+
+  const redirectUri = window.location.origin + '/oauth/google-drive';
+
+  try {
+    const response = await fetch('api/cloud/google-drive/auth/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ redirect_uri: redirectUri }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.ok === false) {
+      const message = data && data.error ? data.error : `Request failed (${response.status})`;
+      throw new Error(message);
+    }
+
+    const authUrl = data.flow && data.flow.authorization_url;
+    if (!authUrl) {
+      throw new Error('Authorization URL missing from response.');
+    }
+
+    const popup = window.open(authUrl, 'wirelessboard-google-drive', 'width=520,height=720');
+    if (!popup) {
+      throw new Error('Popup blocked. Allow popups for this site and try again.');
+    }
+
+    googleDriveState.authWindow = popup;
+    try { popup.focus(); } catch (_) {}
+    setGoogleDriveStatus('Complete the Google window to finish sign-in.', 'info');
+  } catch (err) {
+    setGoogleDriveStatus(`Failed to start Google authorization: ${formatError(err)}`, 'error');
+    throw err;
+  } finally {
+    googleDriveState.saving = false;
+    updateGoogleDriveControlState();
+  }
+}
+
+async function clearGoogleDriveCredentials() {
+  if (googleDriveState.saving) return;
+
+  googleDriveState.saving = true;
+  updateGoogleDriveControlState();
+  setGoogleDriveStatus('Removing Google Drive credentials…', 'info');
+
+  try {
+    const response = await fetch('api/cloud/google-drive/auth/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.ok === false) {
+      const message = data && data.error ? data.error : `Request failed (${response.status})`;
+      throw new Error(message);
+    }
+
+    await loadGoogleDriveState({ silent: true });
+    setGoogleDriveStatus('Google Drive credentials removed.', 'success');
+  } catch (err) {
+    setGoogleDriveStatus(`Failed to remove Google Drive credentials: ${formatError(err)}`, 'error');
+    throw err;
+  } finally {
+    googleDriveState.saving = false;
+    updateGoogleDriveControlState();
+  }
+}
+
+function ensureGoogleDriveBindings() {
+  const container = document.getElementById('cloud-google-drive');
+  if (!container || container.dataset.bound === 'true') return;
+  container.dataset.bound = 'true';
+
+  ensureGoogleDriveMessageBinding();
+
+  const enabledInput = document.getElementById('google-drive-enabled');
+  if (enabledInput) {
+    enabledInput.addEventListener('change', () => {
+      updateGoogleDriveSettings({ enabled: !!enabledInput.checked }, { successMessage: 'Google Drive provider updated.' })
+        .catch(() => { loadGoogleDriveState({ silent: true }).catch(() => {}); });
+    });
+  }
+
+  const fileInput = document.getElementById('google-drive-client-file');
+  if (fileInput) {
+    fileInput.addEventListener('change', (event) => {
+      handleGoogleDriveClientFile(event).catch(() => {});
+    });
+  }
+
+  const clearClientBtn = document.getElementById('google-drive-client-clear');
+  if (clearClientBtn) {
+    clearClientBtn.addEventListener('click', () => {
+      removeGoogleDriveClient().catch(() => {});
+    });
+  }
+
+  const refreshBtn = document.getElementById('google-drive-refresh');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      loadGoogleDriveState().catch(() => {});
+    });
+  }
+
+  const authStartBtn = document.getElementById('google-drive-auth-start');
+  if (authStartBtn) {
+    authStartBtn.addEventListener('click', () => {
+      startGoogleDriveAuthorization().catch(() => {});
+    });
+  }
+
+  const authClearBtn = document.getElementById('google-drive-auth-clear');
+  if (authClearBtn) {
+    authClearBtn.addEventListener('click', () => {
+      clearGoogleDriveCredentials().catch(() => {});
+    });
+  }
+
+  const authRefreshBtn = document.getElementById('google-drive-auth-refresh');
+  if (authRefreshBtn) {
+    authRefreshBtn.addEventListener('click', () => {
+      loadGoogleDriveState().catch(() => {});
+    });
+  }
+}
+
 function closePCOView() {
   const pcoView = document.getElementById('pco-settings');
   if (pcoView) pcoView.style.display = 'none';
@@ -1442,6 +1946,9 @@ function closePCOView() {
   const mb = document.getElementById('micboard');
   if (mb) mb.style.display = '';
   micboard.settingsMode = 'CONFIG';
+  micboard.url.background = undefined;
+  const pcoNavBtn = document.getElementById('go-pco');
+  if (pcoNavBtn) pcoNavBtn.setAttribute('aria-expanded', 'false');
   invokeUpdateHash();
   try { initConfigEditor(true); } catch (_) {}
 }
@@ -1457,6 +1964,7 @@ export function initConfigEditor(force = false) {
 
   hideHUDOverlay();
   micboard.settingsMode = 'CONFIG';
+  micboard.url.background = undefined;
   invokeUpdateHash();
   const mb = document.getElementById('micboard');
   if (mb) mb.style.display = '';
@@ -1475,6 +1983,9 @@ export function initConfigEditor(force = false) {
   } else {
     renderBackgroundDirectory(backgroundDirectoryState.info);
   }
+
+  ensureGoogleDriveBindings();
+  loadGoogleDriveState({ silent: true }).catch(() => {});
 
   // Render slot list (replacement for missing renderSlotList)
   const holder = document.getElementById('editor_holder');
@@ -1519,6 +2030,10 @@ export function initConfigEditor(force = false) {
     }
   }
   renderDiscoveredDeviceList();
+
+  ensureDiscoveryFormBindings();
+  const discoveryConfig = (micboard.config && micboard.config.discovery) || discoveryFormState.settings;
+  renderDiscoverySettings(discoveryConfig);
 
 
   updateHiddenSlots();
@@ -1650,10 +2165,27 @@ export function initConfigEditor(force = false) {
     const data = generateJSONConfig();
     const url = 'api/config';
     console.log(data);
-    postJSON(url, data, () => {
+    setDiscoveryStatus('Saving discovery settings…', 'info');
+    postJSON(url, data, (resp) => {
+      if (resp && typeof resp === 'object') {
+        if (!micboard.config) micboard.config = {};
+        if (resp.config && typeof resp.config === 'object') {
+          micboard.config = resp.config;
+        }
+        if (resp.discovery && typeof resp.discovery === 'object') {
+          micboard.config.discovery = resp.discovery;
+        }
+        if (resp.discovery_status && typeof resp.discovery_status === 'object') {
+          micboard.discovery_status = resp.discovery_status;
+        }
+      }
+      setDiscoveryStatus('Discovery settings saved. Reloading…', 'success');
+      renderDiscoveryEnvironmentStatus(micboard.discovery_status);
       micboard.settingsMode = 'NONE';
       invokeUpdateHash();
       window.location.reload();
+    }, (err) => {
+      setDiscoveryStatus(`Failed to save discovery settings: ${formatError(err)}`, 'error');
     });
   });
 
@@ -1779,6 +2311,63 @@ function buildPcoPayload() {
     payload.auth = { token, secret };
   }
   return payload;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('wirelessboard:background-view-opened', () => {
+    try { ensureBackgroundDirectoryBindings(); } catch (_) {}
+    try { loadBackgroundDirectoryState({ silent: true }); } catch (_) {}
+    try { ensureGoogleDriveBindings(); } catch (_) {}
+    try { loadGoogleDriveState({ silent: true }); } catch (_) {}
+  });
+}
+
+function showPCOView() {
+  hideHUDOverlay();
+  stopLogAutoRefresh(true);
+  micboard.settingsMode = 'PCO';
+  micboard.url.background = undefined;
+  const bgNavBtn = document.getElementById('go-background');
+  if (bgNavBtn) bgNavBtn.setAttribute('aria-expanded', 'false');
+  const pcoNavBtn = document.getElementById('go-pco');
+  if (pcoNavBtn) pcoNavBtn.setAttribute('aria-expanded', 'true');
+  invokeUpdateHash();
+  const mb = document.getElementById('micboard');
+  if (mb) mb.style.display = 'none';
+  const settings = document.querySelector('.settings');
+  if (settings) settings.style.display = 'none';
+  const pcoView = document.getElementById('pco-settings');
+  if (pcoView) pcoView.style.display = 'block';
+  const backBtn = document.getElementById('pco-close') || document.getElementById('pco-back');
+  if (backBtn) {
+    backBtn.id = 'pco-close';
+    backBtn.textContent = 'Close';
+    backBtn.classList.remove('btn-link');
+    backBtn.classList.add('btn-outline-secondary');
+  }
+  try { document.getElementById('pco-settings').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+  const p = micboard.config.pco || {};
+  const eEnabled = document.getElementById('pco-enabled');
+  if (eEnabled) eEnabled.checked = !!p.enabled;
+  const eToken = document.getElementById('pco-token');
+  const eSecret = document.getElementById('pco-secret');
+  if (eToken) eToken.value = '';
+  if (eSecret) eSecret.value = '';
+  renderPcoCredentialStatus(p.auth || {});
+  const s = p.services || {};
+  const eStid = document.getElementById('pco-service-type-id');
+  if (eStid) eStid.value = s.service_type_id || '';
+  const m = p.mapping || {};
+  const eCat = document.getElementById('pco-note-category');
+  const eTeam = document.getElementById('pco-team-filter');
+  if (eCat) eCat.value = m.note_category || 'Mic / IEM Assignments';
+  if (eTeam) eTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
+  populatePCOFormFromServer();
+  const planSel = document.getElementById('pco-plan-select');
+  if (planSel) planSel.innerHTML = '<option value="">Select a plan...</option>';
+  const loadBtn = document.getElementById('pco-load-people');
+  if (loadBtn) loadBtn.disabled = true;
+  appendPcoLog('Opened PCO settings view');
 }
 
 function handlePcoSave() {
