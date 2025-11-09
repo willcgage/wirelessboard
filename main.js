@@ -19,6 +19,11 @@ const SERVICE_CANDIDATES = [
   ['micboard-service', 'micboard-service'],
 ];
 
+const LOG_DIR_CANDIDATES = [
+  ['wirelessboard', 'logs'],
+  ['micboard', 'logs'],
+];
+
 function resolveServiceBinary() {
   const resourcesRoot = process.resourcesPath ? path.join(process.resourcesPath, 'dist') : null;
   const unpackedRoot = path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), 'dist');
@@ -50,6 +55,70 @@ function resolveAppDataPath(file) {
   return path.join(base, 'micboard', file);
 }
 
+function resolveLogDirectory() {
+  const base = app.getPath('appData');
+  for (const segments of LOG_DIR_CANDIDATES) {
+    const candidate = path.join(base, ...segments);
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function collectLogSegments(logDir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(logDir, { withFileTypes: true });
+  } catch (err) {
+    console.error('Unable to read log directory', err);
+    return [];
+  }
+  const rotated = [];
+  let baseExists = false;
+  entries.forEach((entry) => {
+    if (!entry.isFile()) return;
+    if (entry.name === 'application.log') {
+      baseExists = true;
+      return;
+    }
+    const match = entry.name.match(/^application\.log\.(\d+)$/);
+    if (match) {
+      rotated.push({ name: entry.name, index: parseInt(match[1], 10) });
+    }
+  });
+
+  rotated.sort((a, b) => b.index - a.index);
+  const segments = rotated.map(item => path.join(logDir, item.name));
+  if (baseExists) segments.push(path.join(logDir, 'application.log'));
+  return segments;
+}
+
+function consolidateLogs(logDir) {
+  const segments = collectLogSegments(logDir);
+  if (segments.length === 0) {
+    return null;
+  }
+  if (segments.length === 1) {
+    return segments[0];
+  }
+
+  const bundlePath = path.join(logDir, 'wirelessboard-logs.txt');
+  try {
+    fs.writeFileSync(bundlePath, '', 'utf8');
+    segments.forEach((segment) => {
+      const header = `\n===== ${path.basename(segment)} =====\n`;
+      fs.appendFileSync(bundlePath, header, 'utf8');
+      fs.appendFileSync(bundlePath, fs.readFileSync(segment, 'utf8'), 'utf8');
+      fs.appendFileSync(bundlePath, '\n', 'utf8');
+    });
+    return bundlePath;
+  } catch (err) {
+    console.error('Failed to consolidate log files', err);
+    return segments[segments.length - 1];
+  }
+}
+
 function createWindow(url) {
   win = new BrowserWindow({
     width: 400,
@@ -72,6 +141,15 @@ function openConfigFolder(file) {
 }
 
 function openLogFile() {
+  const logDir = resolveLogDirectory();
+  if (logDir) {
+    const target = consolidateLogs(logDir);
+    if (target) {
+      shell.openPath(target);
+      return;
+    }
+  }
+
   const newLog = resolveAppDataPath('wirelessboard.log');
   if (fs.existsSync(newLog)) {
     shell.openPath(newLog);

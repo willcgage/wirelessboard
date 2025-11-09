@@ -10,6 +10,10 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.3.1] - 2025-11-08
+### Fixed
+- Wirelessboard Server tray icon now bundles the current rotating log files so the "Open log file" item matches the UI log viewer.
+
 ## [1.3.0] - 2025-11-08
 ### Added
 - Google Drive background provider with OAuth flow, REST endpoints, and Config UI controls for uploading client secrets, managing tokens, and browsing shared media.
