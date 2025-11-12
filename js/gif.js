@@ -96,7 +96,8 @@ export function updateBackground(slotEl) {
     return;
   }
 
-  const baseName = String(nameEl.innerHTML || '')
+  const rawName = nameEl.textContent || nameEl.innerText || nameEl.innerHTML || '';
+  const baseName = String(rawName)
     .trim()
     .toLowerCase();
   if (!baseName) {

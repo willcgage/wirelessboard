@@ -121,6 +121,15 @@
                     <label for="background-directory" class="form-label text-muted">Folder</label>
                     <input type="text" id="background-directory" class="form-control" placeholder="~/Library/Application Support/wirelessboard/backgrounds">
                     <small id="background-directory-help" class="form-text text-muted"></small>
+                    <div class="mt-3">
+                      <label for="background-default-mode" class="form-label text-muted">TV Mode Default Background</label>
+                      <select id="background-default-mode" class="form-select">
+                        <option value="NONE">Do not auto-enable</option>
+                        <option value="IMG">Images (.jpg)</option>
+                        <option value="MP4">Videos (.mp4)</option>
+                      </select>
+                      <small id="background-default-mode-help" class="form-text text-muted">When TV mode opens and backgrounds are off, Wirelessboard will switch to this media type automatically.</small>
+                    </div>
                   </div>
                   <div class="col-md-4 col-12">
                     <div class="d-grid gap-2">
@@ -163,6 +172,30 @@
                     <button type="button" class="btn btn-outline-secondary" id="google-drive-auth-refresh">Check Status</button>
                   </div>
                   <div id="google-drive-status" class="small text-muted mt-3"></div>
+                </div>
+              </section>
+            </div>
+            <div class="col-12">
+              <section class="library-section" id="background-filename-guide">
+                <h5 class="h6 text-muted text-uppercase">Background Filenames</h5>
+                <p class="small text-muted" id="background-filename-description">
+                  Wirelessboard looks for media named after each slot's device name, lowercased and trimmed. Reference the expected filenames below when preparing artwork or videos.
+                </p>
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped mb-0" id="background-filename-table" aria-describedby="background-filename-description">
+                    <thead class="table-dark">
+                      <tr>
+                        <th scope="col">Slot</th>
+                        <th scope="col">Device Name</th>
+                        <th scope="col">Image (.jpg)</th>
+                        <th scope="col">Video (.mp4)</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="small text-muted" id="background-filename-empty" hidden>
+                  No active device names are available yet. Once the board receives data for a slot, the expected filenames will appear here.
                 </div>
               </section>
             </div>

@@ -13,7 +13,8 @@ import { slotEditToggle } from './extended.js';
 import { keybindings } from './kbd.js';
 import { setBackground, setInfoDrawer } from './display.js';
 import { setTimeMode } from './chart-smoothie.js';
-import { initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule } from './config.js';
+import { initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule, scheduleBackgroundFilenameGuide } from './config.js';
+import { startTvLayoutWatchers } from './tv-layout.js';
 
 import '../css/colors.scss';
 import '../css/style.scss';
@@ -31,6 +32,7 @@ micboard.url = [];
 micboard.displayMode = 'deskmode';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
+micboard.backgroundDefaultMode = 'NONE';
 micboard.settingsMode = 'NONE';
 micboard.configTab = 'devices';
 micboard.chartTimeSrc = 'SERVER';
@@ -514,6 +516,14 @@ function initialMap(callback) {
         micboard.localURL = data.url;
         try { micboard.groups = groupTableBuilder(data); } catch (e) { micboard.groups = {}; }
         micboard.config = data.config;
+        const defaultBackground = data.background_defaults && typeof data.background_defaults.mode === 'string'
+          ? String(data.background_defaults.mode).trim().toUpperCase()
+          : 'NONE';
+        if (defaultBackground === 'IMG' || defaultBackground === 'MP4') {
+          micboard.backgroundDefaultMode = defaultBackground;
+        } else {
+          micboard.backgroundDefaultMode = 'NONE';
+        }
   micboard.discovery_status = data.discovery_status || null;
         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
           try {
@@ -547,6 +557,15 @@ function initialMap(callback) {
           setInfoDrawer(micboard.url.tvmode);
         }
         initEditor();
+        try { scheduleBackgroundFilenameGuide(); } catch (_) {}
+        try {
+          if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            const evt = (typeof window.CustomEvent === 'function')
+              ? new CustomEvent('wirelessboard:background-library-updated')
+              : new Event('wirelessboard:background-library-updated');
+            window.dispatchEvent(evt);
+          }
+        } catch (_) {}
       });
     });
 }
@@ -570,6 +589,8 @@ document.addEventListener('DOMContentLoaded', () => {
   keybindings();
   // Bind PCO navbar and handlers
   try { bindPcoNav(); bindPcoHandlers(); } catch (e) {}
+  try { startTvLayoutWatchers(); } catch (_) {}
+  try { scheduleBackgroundFilenameGuide(); } catch (_) {}
 
   if (micboard.url.demo === 'true' && micboard.url.settings !== 'true' && micboard.url.settings !== 'logs' && micboard.url.pco !== 'true') {
     // Show HUD only once on initial load

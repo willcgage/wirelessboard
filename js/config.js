@@ -35,7 +35,11 @@ const micboard = new Proxy({}, {
   get(_target, prop) {
     const board = currentMicboard();
     if (board && prop in board) {
-      return board[prop];
+      const value = board[prop];
+      if (typeof value === 'function') {
+        return value.bind(board);
+      }
+      return value;
     }
     if (pendingMicboard && prop in pendingMicboard) {
       return pendingMicboard[prop];
@@ -86,6 +90,34 @@ const micboard = new Proxy({}, {
     return undefined;
   },
 });
+
+const BACKGROUND_DEFAULT_MODES = ['NONE', 'IMG', 'MP4'];
+
+function normalizeBackgroundDefault(value) {
+  if (typeof value !== 'string') {
+    return 'NONE';
+  }
+  const mode = value.trim().toUpperCase();
+  return BACKGROUND_DEFAULT_MODES.includes(mode) ? mode : 'NONE';
+}
+
+function syncBackgroundDefaultMode(info) {
+  const mode = normalizeBackgroundDefault(info && info.default_mode);
+  try {
+    const currentMode = normalizeBackgroundDefault(micboard.backgroundDefaultMode);
+    if (currentMode === mode) {
+      return;
+    }
+    micboard.backgroundDefaultMode = mode;
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      const eventName = 'wirelessboard:background-default-mode-updated';
+      const evt = (typeof window.CustomEvent === 'function')
+        ? new CustomEvent(eventName, { detail: { mode } })
+        : new Event(eventName);
+      window.dispatchEvent(evt);
+    }
+  } catch (_) {}
+}
 
 function invokeUpdateHash() {
   try {
@@ -415,6 +447,10 @@ const backgroundDirectoryState = {
   info: null,
   loading: false,
   saving: false,
+};
+
+const backgroundFilenameGuideState = {
+  scheduled: false,
 };
 
 const GOOGLE_DRIVE_AUTH_MESSAGE = 'wirelessboard:drive-auth';
@@ -1441,11 +1477,173 @@ function setBackgroundDirectoryStatus(message, level = 'info') {
   statusEl.classList.add(className);
 }
 
+function normalizeBackgroundKey(value) {
+  if (!value) return '';
+  return String(value).trim().toLowerCase();
+}
+
+function dispatchBackgroundLibraryUpdated() {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return;
+  }
+  try {
+    const event = (typeof window.CustomEvent === 'function')
+      ? new CustomEvent('wirelessboard:background-library-updated')
+      : new Event('wirelessboard:background-library-updated');
+    window.dispatchEvent(event);
+  } catch (err) {
+    console.warn('Failed to dispatch background-library-updated', err);
+  }
+}
+
+function currentSlotList() {
+  const slots = (micboard.config && Array.isArray(micboard.config.slots)) ? micboard.config.slots : [];
+  if (!Array.isArray(slots)) {
+    return [];
+  }
+  return [...slots].sort((a, b) => {
+    const aSlot = Number(a && a.slot);
+    const bSlot = Number(b && b.slot);
+    if (!Number.isFinite(aSlot) && !Number.isFinite(bSlot)) return 0;
+    if (!Number.isFinite(aSlot)) return 1;
+    if (!Number.isFinite(bSlot)) return -1;
+    return aSlot - bSlot;
+  });
+}
+
+function resolveDeviceName(slotNumber, slotConfig) {
+  const txList = micboard && micboard.transmitters;
+  let name = '';
+  if (txList && typeof txList === 'object') {
+    const tx = Array.isArray(txList) ? txList[slotNumber] : txList[String(slotNumber)] || txList[slotNumber];
+    if (tx) {
+      name = tx.name_raw || tx.name || tx.device_name || tx.device || tx.label || '';
+    }
+  }
+  if (!name && slotConfig) {
+    name = slotConfig.chan_name_raw || slotConfig.device || slotConfig.name || '';
+  }
+  return name || '';
+}
+
+function decorateFilenameCell(cell, filename, exists) {
+  cell.textContent = '';
+  cell.classList.remove('text-muted');
+  if (!filename) {
+    cell.textContent = '—';
+    cell.classList.add('text-muted');
+    return;
+  }
+
+  const filenameEl = document.createElement('span');
+  filenameEl.textContent = filename;
+  cell.appendChild(filenameEl);
+
+  const statusEl = document.createElement('span');
+  statusEl.className = `small ms-2 ${exists ? 'text-success' : 'text-warning'}`;
+  statusEl.textContent = exists ? 'available' : 'missing';
+  cell.appendChild(statusEl);
+}
+
+export function renderBackgroundFilenameGuide() {
+  const table = document.getElementById('background-filename-table');
+  if (!table) return;
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+  const emptyNotice = document.getElementById('background-filename-empty');
+
+  while (tbody.firstChild) {
+    tbody.removeChild(tbody.firstChild);
+  }
+
+  const slots = currentSlotList();
+  const hasSlots = slots.length > 0;
+  let populated = false;
+
+  const imgList = Array.isArray(micboard.img_list) ? micboard.img_list : [];
+  const mp4List = Array.isArray(micboard.mp4_list) ? micboard.mp4_list : [];
+
+  slots.forEach((slotConfig) => {
+    const slotNumber = Number(slotConfig && slotConfig.slot);
+    if (!Number.isFinite(slotNumber)) {
+      return;
+    }
+
+    const deviceName = resolveDeviceName(slotNumber, slotConfig);
+    const baseKey = normalizeBackgroundKey(deviceName);
+    const imgFilename = baseKey ? `${baseKey}.jpg` : '';
+    const videoFilename = baseKey ? `${baseKey}.mp4` : '';
+    const hasImg = !!(imgFilename && imgList.indexOf(imgFilename) > -1);
+    const hasVideo = !!(videoFilename && mp4List.indexOf(videoFilename) > -1);
+
+    const row = document.createElement('tr');
+
+    const slotCell = document.createElement('th');
+    slotCell.scope = 'row';
+    slotCell.textContent = Number.isFinite(slotNumber) ? slotNumber : '—';
+    row.appendChild(slotCell);
+
+    const nameCell = document.createElement('td');
+    if (deviceName) {
+      nameCell.textContent = deviceName;
+    } else {
+      nameCell.textContent = '—';
+      nameCell.classList.add('text-muted');
+    }
+    row.appendChild(nameCell);
+
+    const imgCell = document.createElement('td');
+    decorateFilenameCell(imgCell, imgFilename, hasImg);
+    row.appendChild(imgCell);
+
+    const videoCell = document.createElement('td');
+    decorateFilenameCell(videoCell, videoFilename, hasVideo);
+    row.appendChild(videoCell);
+
+    tbody.appendChild(row);
+    populated = true;
+  });
+
+  table.classList.toggle('d-none', !hasSlots);
+  if (emptyNotice) {
+    emptyNotice.hidden = hasSlots;
+  }
+
+  if (!populated && hasSlots) {
+    const placeholder = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 4;
+    cell.className = 'text-muted';
+    cell.textContent = 'Slots are configured but no device names are available yet.';
+    placeholder.appendChild(cell);
+    tbody.appendChild(placeholder);
+  }
+}
+
+export function scheduleBackgroundFilenameGuide() {
+  if (backgroundFilenameGuideState.scheduled) {
+    return;
+  }
+  backgroundFilenameGuideState.scheduled = true;
+  const scheduleFn = (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function')
+    ? window.requestAnimationFrame.bind(window)
+    : (cb) => setTimeout(cb, 16);
+  scheduleFn(() => {
+    backgroundFilenameGuideState.scheduled = false;
+    try {
+      renderBackgroundFilenameGuide();
+    } catch (err) {
+      console.error('Failed to render background filename guide', err);
+    }
+  });
+}
+
 function renderBackgroundDirectory(info) {
   const input = document.getElementById('background-directory');
   const help = document.getElementById('background-directory-help');
   const saveBtn = document.getElementById('background-directory-save');
   const resetBtn = document.getElementById('background-directory-reset');
+  const defaultModeSelect = document.getElementById('background-default-mode');
   const busy = backgroundDirectoryState.loading || backgroundDirectoryState.saving;
 
   if (input) {
@@ -1472,6 +1670,21 @@ function renderBackgroundDirectory(info) {
   if (resetBtn) {
     const disableReset = busy || !info || info.source === 'cli' || (info && info.source === 'default');
     resetBtn.disabled = disableReset;
+  }
+
+  if (defaultModeSelect) {
+    const mode = normalizeBackgroundDefault(info && info.default_mode);
+    defaultModeSelect.value = mode;
+    const supported = Array.isArray(info && info.supported_modes)
+      ? (info.supported_modes.map((item) => normalizeBackgroundDefault(item))).filter((item, index, list) => list.indexOf(item) === index)
+      : BACKGROUND_DEFAULT_MODES;
+    Array.from(defaultModeSelect.options || []).forEach((option) => {
+      const optionMode = normalizeBackgroundDefault(option.value);
+      const allowed = supported.includes(optionMode);
+      option.hidden = !allowed;
+      option.disabled = !allowed;
+    });
+    defaultModeSelect.disabled = busy;
   }
 
   if (help) {
@@ -1501,7 +1714,9 @@ function ensureBackgroundDirectoryBindings() {
       const input = document.getElementById('background-directory');
       const value = input ? input.value.trim() : '';
       const useDefault = !value;
-      saveBackgroundDirectory(value, { useDefault }).catch(() => {});
+      const modeSelect = document.getElementById('background-default-mode');
+      const defaultMode = modeSelect ? modeSelect.value : 'NONE';
+      saveBackgroundDirectory(value, { useDefault, defaultMode }).catch(() => {});
     });
   }
 
@@ -1509,7 +1724,9 @@ function ensureBackgroundDirectoryBindings() {
   if (resetBtn && resetBtn.dataset.bound !== 'true') {
     resetBtn.dataset.bound = 'true';
     resetBtn.addEventListener('click', () => {
-      saveBackgroundDirectory('', { useDefault: true }).catch(() => {});
+      const modeSelect = document.getElementById('background-default-mode');
+      const defaultMode = modeSelect ? modeSelect.value : 'NONE';
+      saveBackgroundDirectory('', { useDefault: true, defaultMode }).catch(() => {});
     });
   }
 }
@@ -1535,12 +1752,14 @@ async function loadBackgroundDirectoryState({ silent = false } = {}) {
       throw new Error((data && data.error) || 'Unable to load background folder details');
     }
     backgroundDirectoryState.info = data.backgrounds || null;
+    syncBackgroundDefaultMode(backgroundDirectoryState.info);
     renderBackgroundDirectory(backgroundDirectoryState.info);
     if (!silent) {
       setBackgroundDirectoryStatus('Background folder loaded.', 'success');
     } else {
       setBackgroundDirectoryStatus('', 'info');
     }
+    dispatchBackgroundLibraryUpdated();
   } catch (err) {
     renderBackgroundDirectory(backgroundDirectoryState.info);
     if (!silent) {
@@ -1555,7 +1774,7 @@ async function loadBackgroundDirectoryState({ silent = false } = {}) {
   }
 }
 
-async function saveBackgroundDirectory(path, { useDefault = false } = {}) {
+async function saveBackgroundDirectory(path, { useDefault = false, defaultMode = 'NONE' } = {}) {
   if (backgroundDirectoryState.saving) {
     return;
   }
@@ -1566,8 +1785,10 @@ async function saveBackgroundDirectory(path, { useDefault = false } = {}) {
   setBackgroundDirectoryStatus(savingMessage, 'info');
 
   try {
-    const effectivePath = useDefault ? '' : path;
+    const normalizedPath = typeof path === 'string' ? path.trim() : '';
+    const effectivePath = useDefault ? '' : normalizedPath;
     const payload = effectivePath ? { directory: effectivePath } : { use_default: true };
+    payload.default_mode = normalizeBackgroundDefault(defaultMode);
     const response = await fetch('api/backgrounds', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1581,8 +1802,10 @@ async function saveBackgroundDirectory(path, { useDefault = false } = {}) {
       throw new Error((data && data.error) || 'Unable to update background folder');
     }
     backgroundDirectoryState.info = data.backgrounds || null;
+    syncBackgroundDefaultMode(backgroundDirectoryState.info);
     renderBackgroundDirectory(backgroundDirectoryState.info);
     setBackgroundDirectoryStatus('Background folder updated. Refresh the board if new media does not appear automatically.', 'success');
+    dispatchBackgroundLibraryUpdated();
   } catch (err) {
     setBackgroundDirectoryStatus(`Failed to update background folder: ${formatError(err)}`, 'error');
     renderBackgroundDirectory(backgroundDirectoryState.info);
@@ -2319,6 +2542,15 @@ if (typeof window !== 'undefined') {
     try { loadBackgroundDirectoryState({ silent: true }); } catch (_) {}
     try { ensureGoogleDriveBindings(); } catch (_) {}
     try { loadGoogleDriveState({ silent: true }); } catch (_) {}
+    try { scheduleBackgroundFilenameGuide(); } catch (_) {}
+  });
+
+  window.addEventListener('wirelessboard:slot-name-updated', () => {
+    try { scheduleBackgroundFilenameGuide(); } catch (_) {}
+  });
+
+  window.addEventListener('wirelessboard:background-library-updated', () => {
+    try { scheduleBackgroundFilenameGuide(); } catch (_) {}
   });
 }
 

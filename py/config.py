@@ -80,6 +80,46 @@ DEFAULT_CLOUD_SETTINGS = {
     'slot_sources': {},
 }
 
+BACKGROUND_MODES = ('NONE', 'IMG', 'MP4')
+DEFAULT_BACKGROUND_SETTINGS = {
+    'mode': 'NONE',
+}
+
+
+def ensure_background_defaults() -> Dict[str, Any]:
+    defaults = config_tree.get('background_defaults')
+    if not isinstance(defaults, dict):
+        defaults = {}
+
+    raw_mode = defaults.get('mode')
+    mode = str(raw_mode).strip().upper() if isinstance(raw_mode, str) else None
+    if not mode or mode not in BACKGROUND_MODES:
+        mode = DEFAULT_BACKGROUND_SETTINGS['mode']
+
+    defaults['mode'] = mode
+    config_tree['background_defaults'] = defaults
+    return defaults
+
+
+def get_background_defaults() -> Dict[str, Any]:
+    return copy.deepcopy(ensure_background_defaults())
+
+
+def get_background_default_mode() -> str:
+    defaults = ensure_background_defaults()
+    return defaults.get('mode', DEFAULT_BACKGROUND_SETTINGS['mode'])
+
+
+def _normalize_background_mode(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    mode = str(value).strip().upper()
+    if not mode:
+        return None
+    if mode not in BACKGROUND_MODES:
+        raise ValueError('default_mode must be one of: ' + ', '.join(BACKGROUND_MODES))
+    return mode
+
 
 def _normalized_subnet_list(candidates) -> List[str]:
     normalized: List[str] = []
@@ -546,6 +586,10 @@ def get_background_directory_state() -> Dict[str, Any]:
     if background_directory in (None, ''):
         background_directory = None
 
+    defaults = ensure_background_defaults()
+    default_mode = defaults.get('mode', DEFAULT_BACKGROUND_SETTINGS['mode'])
+    supported_modes = list(BACKGROUND_MODES)
+
     if background_directory is not None:
         resolved = os.path.abspath(os.path.expanduser(background_directory))
         return {
@@ -555,6 +599,8 @@ def get_background_directory_state() -> Dict[str, Any]:
             'default_path': default_path,
             'cli_override': True,
             'exists': os.path.isdir(resolved),
+            'default_mode': default_mode,
+            'supported_modes': supported_modes,
         }
 
     background_folder = config_tree.get('background-folder')
@@ -567,6 +613,8 @@ def get_background_directory_state() -> Dict[str, Any]:
             'default_path': default_path,
             'cli_override': False,
             'exists': os.path.isdir(resolved),
+            'default_mode': default_mode,
+            'supported_modes': supported_modes,
         }
 
     resolved_default = os.path.abspath(default_gif_dir())
@@ -577,15 +625,15 @@ def get_background_directory_state() -> Dict[str, Any]:
         'default_path': default_path,
         'cli_override': False,
         'exists': os.path.isdir(resolved_default),
+        'default_mode': default_mode,
+        'supported_modes': supported_modes,
     }
 
 
-def set_background_directory(path: Optional[str]) -> Dict[str, Any]:
+def set_background_directory(path: Optional[str], default_mode: Optional[str] = None) -> Dict[str, Any]:
+    ensure_background_defaults()
     background_directory = args.get('background_directory') if isinstance(args, dict) else None
-    if background_directory not in (None, ''):
-        raise RuntimeError('Background directory is controlled by a command-line override.')
 
-    target: Optional[str]
     if path is None:
         target = None
     elif isinstance(path, str):
@@ -593,12 +641,34 @@ def set_background_directory(path: Optional[str]) -> Dict[str, Any]:
     else:
         raise ValueError('Background directory must be a string path.')
 
+    cli_override_active = background_directory not in (None, '')
+
+    normalized_mode = _normalize_background_mode(default_mode)
+    mode_changed = False
+    if default_mode is not None:
+        desired_mode = normalized_mode if normalized_mode is not None else DEFAULT_BACKGROUND_SETTINGS['mode']
+        if config_tree['background_defaults']['mode'] != desired_mode:
+            config_tree['background_defaults']['mode'] = desired_mode
+            mode_changed = True
+
+    if cli_override_active and target not in (None, ''):
+        raise RuntimeError('Background directory is controlled by a command-line override.')
+
     global gif_dir
 
+    changed = mode_changed
+
     if not target:
-        config_tree.pop('background-folder', None)
-        gif_dir = default_gif_dir()
-        save_current_config()
+        if not cli_override_active:
+            if 'background-folder' in config_tree:
+                config_tree.pop('background-folder', None)
+                changed = True
+            gif_dir = default_gif_dir()
+        else:
+            if background_directory:
+                gif_dir = os.path.abspath(os.path.expanduser(background_directory))
+        if changed:
+            save_current_config()
         return get_background_directory_state()
 
     normalized = os.path.abspath(os.path.expanduser(target))
@@ -607,9 +677,12 @@ def set_background_directory(path: Optional[str]) -> Dict[str, Any]:
     except OSError as exc:
         raise ValueError(f'Unable to create background directory: {exc}') from exc
 
-    config_tree['background-folder'] = normalized
+    if config_tree.get('background-folder') != normalized:
+        config_tree['background-folder'] = normalized
+        changed = True
     gif_dir = normalized
-    save_current_config()
+    if changed:
+        save_current_config()
     return get_background_directory_state()
 
 def config_file():
@@ -641,6 +714,7 @@ def config():
     read_json_config(config_file())
     ensure_discovery_defaults()
     ensure_cloud_defaults()
+    ensure_background_defaults()
     settings = ensure_logging_defaults()
     configure_logging(settings)
     uuid_init()
@@ -741,6 +815,7 @@ def read_json_config(file):
     config_tree['micboard_version'] = version
     ensure_discovery_defaults()
     ensure_cloud_defaults()
+    ensure_background_defaults()
     ensure_logging_defaults()
 
 

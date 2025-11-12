@@ -10,6 +10,16 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.3.2] - 2025-11-12
+### Added
+- Background Library option to choose a default TV mode background (images or videos) and auto-enable it when TV mode activates.
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
 ## [1.3.1] - 2025-11-08
 ### Fixed
 - Wirelessboard Server tray icon now bundles the current rotating log files so the "Open log file" item matches the UI log viewer.

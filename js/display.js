@@ -1,6 +1,7 @@
 import { micboard, updateHash } from './app';
 
 import { updateGIFBackgrounds } from './gif';
+import { requestTvLayoutUpdate } from './tv-layout.js';
 
 function swapClass(selector, currentClass, newClass) {
   selector.classList.remove(currentClass);
@@ -20,10 +21,28 @@ export function setBackground(mode) {
 }
 
 
+function applyDefaultBackgroundIfNeeded() {
+  // Auto-enable the preferred background type when TV mode starts with backgrounds off.
+  const preferred = typeof micboard.backgroundDefaultMode === 'string'
+    ? micboard.backgroundDefaultMode.toUpperCase()
+    : 'NONE';
+  if (micboard.backgroundMode !== 'NONE') {
+    return;
+  }
+  if (preferred === 'IMG' || preferred === 'MP4') {
+    setBackground(preferred);
+  }
+}
+
+
 export function setDisplayMode(mode) {
   const selector = document.getElementById('container');
   swapClass(selector, micboard.displayMode, mode);
   micboard.displayMode = mode;
+  requestTvLayoutUpdate();
+  if (mode === 'tvmode') {
+    applyDefaultBackgroundIfNeeded();
+  }
 }
 
 
@@ -92,4 +111,12 @@ export function toggleInfoDrawer() {
     default:
       break;
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('wirelessboard:background-default-mode-updated', () => {
+    if (micboard.displayMode === 'tvmode') {
+      applyDefaultBackgroundIfNeeded();
+    }
+  });
 }

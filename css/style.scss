@@ -310,6 +310,12 @@ canvas.slotgraph {
 /* mic storage mode */
 .tvmode {
   --tvmode-slot-width: 420px;
+  --tvmode-grid-gap: 6px;
+  --tvmode-base-height: 1080;
+  --tvmode-row-height: 100vh;
+  --tvmode-board-height: 100vh;
+  --tvmode-scale: 1;
+  --tvmode-scale-clamped: clamp(0.65, var(--tvmode-scale), 1.25);
 
   #micboard,
   .wirelessboard-board {
@@ -317,20 +323,26 @@ canvas.slotgraph {
       auto-fit,
       minmax(min(var(--tvmode-slot-width), 100%), var(--tvmode-slot-width))
     );
+    grid-auto-rows: var(--tvmode-row-height);
     justify-content: center;
-    grid-gap: 6px;
-    padding-left: 6px;
-    padding-right: 6px;
+    align-content: flex-start;
+    grid-gap: var(--tvmode-grid-gap);
+    padding-left: var(--tvmode-grid-gap);
+    padding-right: var(--tvmode-grid-gap);
+    height: var(--tvmode-board-height, 100vh);
   }
 
   .col-sm {
     background: var(--color-black);
     width: min(var(--tvmode-slot-width), 100%);
     max-width: var(--tvmode-slot-width);
-    height: 100vh;
+    height: var(--tvmode-row-height);
+    min-height: 0;
   }
 
   background-color: black;
+  min-height: 100vh;
+  overflow: hidden;
 
   .blank {
     background: black;
@@ -341,13 +353,13 @@ canvas.slotgraph {
   }
 
   .name {
-    font-size: calc(1vw + 7pt);
+    font-size: clamp(1.8rem, calc(var(--tvmode-row-height) * 0.085), 4rem);
   }
 
   .mic_id {
     position: absolute;
-    top: 0px;
-    font-size: 30pt;
+    top: 0;
+    font-size: clamp(1.4rem, calc(var(--tvmode-row-height) * 0.08), 3.4rem);
   }
 
   .mic_name {
@@ -357,8 +369,9 @@ canvas.slotgraph {
     align-items: center;
     position: relative;
     overflow: hidden;
-    padding: 1.75rem 0.75rem 1rem;
-    gap: 0.4rem;
+    padding: calc(1.4rem * var(--tvmode-scale-clamped)) 0.75rem calc(1rem * var(--tvmode-scale-clamped));
+    gap: calc(0.45rem * var(--tvmode-scale-clamped));
+    min-height: 0;
   }
 
   .mic_name .name {
@@ -378,12 +391,10 @@ canvas.slotgraph {
 
   .mic_name .slot-media {
     position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    inset: 0;
     display: none;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center;
     pointer-events: none;
     z-index: 0;
   }
@@ -394,11 +405,74 @@ canvas.slotgraph {
 
   .mic_name .slot-media img,
   .mic_name .slot-media video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     display: block;
-    max-width: none;
-    max-height: none;
   }
 
+  p.ext-name {
+    font-size: clamp(1.2rem, calc(var(--tvmode-row-height) * 0.06), 3rem);
+    color: var(--color-white);
+    opacity: 0.9;
+    margin: calc(0.3rem * var(--tvmode-scale-clamped)) 0.75rem calc(0.15rem * var(--tvmode-scale-clamped));
+    padding: 0 0.35rem;
+    text-align: center;
+    line-height: clamp(1.1, var(--tvmode-scale-clamped) * 1.2, 1.35);
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+
+  .electrode {
+    bottom: calc(var(--tvmode-scale) * 250px);
+    height: calc(var(--tvmode-scale) * 125px);
+  }
+
+  .battery-bars {
+    bottom: calc(var(--tvmode-scale) * 225px);
+    height: calc(var(--tvmode-scale) * 25px);
+  }
+
+  canvas.slotgraph {
+    bottom: calc(var(--tvmode-scale) * 25px);
+    height: calc(var(--tvmode-scale) * 200px);
+  }
+
+  .offset {
+    bottom: calc(var(--tvmode-scale) * 180px);
+  }
+
+  .runtime {
+    bottom: calc(var(--tvmode-scale) * 180px);
+  }
+
+  .frequency,
+  .quality {
+    bottom: calc(var(--tvmode-scale) * 80px);
+  }
+
+  .errortype {
+    bottom: calc(var(--tvmode-scale) * 80px);
+  }
+
+  .ip {
+    bottom: calc(var(--tvmode-scale) * 60px);
+  }
+
+  .rxinfo {
+    bottom: calc(var(--tvmode-scale) * 40px);
+  }
+
+  .powerlock {
+    bottom: calc(var(--tvmode-scale) * 15px);
+    left: calc(var(--tvmode-scale) * 5px);
+  }
+
+  .diversity {
+    height: calc(var(--tvmode-scale) * 25px);
+  }
 
   /* electrode & info drawer switch */
   /* no electrode or info-drawer */
@@ -416,7 +490,7 @@ canvas.slotgraph {
 
   /* electrode */
   .elinfo01 .col-sm .mic_name {
-    height: calc(100% - 125px);
+    height: calc(100% - (var(--tvmode-scale) * 125px));
     /* background-color: black; */
     background: #262626;
   }
@@ -433,7 +507,7 @@ canvas.slotgraph {
 
   /* info drawer */
   .elinfo10 .col-sm .mic_name {
-    height: calc(100% - 250px);
+    height: calc(100% - (var(--tvmode-scale) * 250px));
   }
 
   .elinfo10 .col-sm .electrode {
@@ -446,7 +520,7 @@ canvas.slotgraph {
 
   /* electrode and info drawer */
   .elinfo11 .col-sm .mic_name {
-    height: calc(100% - 375px);
+    height: calc(100% - (var(--tvmode-scale) * 375px));
     background: var(--color-black);
   }
 
@@ -828,6 +902,35 @@ canvas.slotgraph {
 
 .settings .config-tab {
   min-width: 7.5rem;
+}
+
+.settings #background-filename-guide {
+  background-color: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.settings #background-filename-guide .table {
+  color: var(--color-white);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.settings #background-filename-guide .table thead {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.settings #background-filename-guide .table tbody tr:nth-child(odd) {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.settings #background-filename-guide .table tbody tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+.settings #background-filename-guide .table td,
+.settings #background-filename-guide .table th {
+  border-color: rgba(255, 255, 255, 0.08);
+  vertical-align: middle;
 }
 
 .log-viewer .log-table-wrapper {

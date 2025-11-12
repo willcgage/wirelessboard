@@ -5,7 +5,10 @@ import socket
 import logging
 from typing import Any, cast, Iterable
 
-from tornado import websocket, web, ioloop, escape
+import tornado.websocket as websocket
+import tornado.web as web
+import tornado.ioloop as ioloop
+import tornado.escape as escape
 
 import shure
 import config as config_module
@@ -66,6 +69,7 @@ def wirelessboard_json(network_devices):
         'gif': gifs,
         'jpg': jpgs,
         'mp4': mp4s,
+        'background_defaults': config.get_background_defaults(),
         'config': config.config_tree,
         'discovered': discovered,
         'discovery_status': discover.get_dcid_status(),
@@ -530,9 +534,10 @@ class BackgroundDirectoryHandler(web.RequestHandler):
 
         use_default = bool(payload.get('use_default'))
         directory = payload.get('directory')
+        default_mode = payload.get('default_mode')
 
         try:
-            state = config.set_background_directory(None if use_default else directory)
+            state = config.set_background_directory(None if use_default else directory, default_mode=default_mode)
         except RuntimeError as exc:
             self.set_status(409)
             self.write(json.dumps({'ok': False, 'error': str(exc)}))

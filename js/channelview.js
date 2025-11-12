@@ -105,6 +105,15 @@ function updateName(slotSelector, data) {
     const el = slotSelector.querySelector('p.ext-name');
     if (el) el.textContent = ext || '';
   } catch (_) {}
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      const detail = { slot: data && data.slot, name: data && data.name };
+      const evt = (typeof window.CustomEvent === 'function')
+        ? new CustomEvent('wirelessboard:slot-name-updated', { detail })
+        : new Event('wirelessboard:slot-name-updated');
+      window.dispatchEvent(evt);
+    }
+  } catch (_) {}
 }
 
 function updateStatus(slotSelector, data) {
@@ -321,6 +330,14 @@ export function renderDisplayList(dl) {
   });
 
   infoToggle();
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      const evt = (typeof window.CustomEvent === 'function')
+        ? new CustomEvent('wirelessboard:background-library-updated')
+        : new Event('wirelessboard:background-library-updated');
+      window.dispatchEvent(evt);
+    }
+  } catch (_) {}
 }
 
 export function renderGroup(group) {
