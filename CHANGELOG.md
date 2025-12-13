@@ -5,8 +5,18 @@
 - _Nothing yet._
 
 ### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.3.3] - 2025-12-13
+### Added
+- _Nothing._
+
+### Changed
 - Demo PCO config form now displays explicit labels for all fields to improve accessibility and clarity.
-- Rebuilt frontend bundles to include recent UI fixes.
+- Switched IBM Plex imports to the compiled CSS to remove Sass @import deprecation warnings and rebuilt frontend bundles.
 
 ### Fixed
 - Google Drive OAuth flow now falls back to stored scopes and rejects unexpected credential types when completing authorization.
