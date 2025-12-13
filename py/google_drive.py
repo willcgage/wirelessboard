@@ -305,10 +305,12 @@ def start_authorization_flow(redirect_uri: str, *, prompt: str = 'consent') -> D
     with _FLOW_LOCK:
         _PENDING_FLOWS[state] = (flow, time.time())
 
+    flow_scopes = getattr(flow, 'scopes', None)
+    scopes = list(flow_scopes) if flow_scopes else list(_get_auth_meta().scopes or SCOPES)
     return {
         'authorization_url': auth_url,
         'state': state,
-        'scopes': list(flow.scopes),
+        'scopes': scopes,
     }
 
 
@@ -330,6 +332,8 @@ def complete_authorization_flow(state: str, code: str) -> DriveAuthMeta:
         raise DriveCredentialError('Failed to exchange authorization code for Google Drive tokens.') from exc
 
     credentials = flow.credentials
+    if not isinstance(credentials, Credentials):
+        raise DriveCredentialError('Google OAuth flow returned unsupported credential type.')
     return store_credentials(credentials)
 
 
