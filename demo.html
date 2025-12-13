@@ -216,23 +216,28 @@
         <div class="p-3 border rounded">
           <form id="pco-form" autocomplete="off" novalidate>
             <div class="form-row">
-              <div class="col-md-2 col-6">
-                <div class="input-group-text">
-                  <input type="checkbox" id="pco-enabled">&nbsp;Enable PCO
+              <div class="form-group col-md-2 col-6 d-flex align-items-center">
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="pco-enabled">
+                  <label class="form-check-label" for="pco-enabled">Enable PCO</label>
                 </div>
               </div>
-              <div class="col-md-5 col-12">
+              <div class="form-group col-md-5 col-12">
+                <label for="pco-token" class="form-label">Personal Access Token</label>
                 <input type="text" class="form-control" id="pco-token" name="pco-token" placeholder="PCO Personal Access Token" autocomplete="off">
               </div>
-              <div class="col-md-5 col-12">
+              <div class="form-group col-md-5 col-12">
+                <label for="pco-secret" class="form-label">Personal Access Secret</label>
                 <input type="password" class="form-control" id="pco-secret" name="pco-secret" placeholder="PCO Personal Access Secret" autocomplete="off">
               </div>
             </div>
             <div class="form-row mt-2">
-              <div class="col-md-6 col-12">
+              <div class="form-group col-md-6 col-12">
+                <label for="pco-note-category" class="form-label">Note Category</label>
                 <input type="text" class="form-control" id="pco-note-category" name="pco-note-category" placeholder="Note Category (default: Mic / IEM Assignments)" autocomplete="off">
               </div>
-              <div class="col-md-6 col-12 mt-2 mt-md-0">
+              <div class="form-group col-md-6 col-12 mt-2 mt-md-0">
+                <label for="pco-team-filter" class="form-label">Team Name Filter</label>
                 <input type="text" class="form-control" id="pco-team-filter" name="pco-team-filter" placeholder="Team Name Filter (comma-separated)" autocomplete="off">
               </div>
             </div>
