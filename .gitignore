@@ -4,6 +4,10 @@ node_modules/
 # Python virtual environments
 .venv/
 
+# Python bytecode caches
+__pycache__/
+*.pyc
+
 # Logs and runtime artifacts
 *.log
 config/*.log
