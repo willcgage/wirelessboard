@@ -406,6 +406,13 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
                 out_people[name] = {"name": name, "team": team_name, "notes": notes_list}
 
     people_list = sorted(out_people.values(), key=lambda x: (x.get('team') or '', x.get('name') or ''))
+
+    # Apply optional team name filters (case-insensitive substring match)
+    mapping = pco_cfg.get('mapping') or {}
+    filters = [f.strip().lower() for f in mapping.get('team_name_filter') or [] if f and f.strip()]
+    if filters:
+        people_list = [p for p in people_list if any(f in (p.get('team') or '').lower() for f in filters)]
+
     return {"ok": True, "plan_id": plan_id, "people": people_list, "note_categories": sorted(cat_names)}
 
 

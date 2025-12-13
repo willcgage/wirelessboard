@@ -8,7 +8,7 @@
 - _Nothing yet._
 
 ### Fixed
-- _Nothing yet._
+- PCO people loader now applies the Team Name Filter when fetching plan people.
 
 ## [1.3.3] - 2025-12-13
 ### Added
