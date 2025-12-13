@@ -11,6 +11,7 @@
 ### Fixed
 - Google Drive OAuth flow now falls back to stored scopes and rejects unexpected credential types when completing authorization.
 - Git ignores Python bytecode caches to keep working trees clean.
+- Upgraded urllib3 to 2.6.0 to address compressed-response decompression DoS (CWE-409).
 
 ## [1.3.2] - 2025-11-12
 ### Added
