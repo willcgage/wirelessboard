@@ -5,10 +5,12 @@
 - _Nothing yet._
 
 ### Changed
-- _Nothing yet._
+- Demo PCO config form now displays explicit labels for all fields to improve accessibility and clarity.
+- Rebuilt frontend bundles to include recent UI fixes.
 
 ### Fixed
-- _Nothing yet._
+- Google Drive OAuth flow now falls back to stored scopes and rejects unexpected credential types when completing authorization.
+- Git ignores Python bytecode caches to keep working trees clean.
 
 ## [1.3.2] - 2025-11-12
 ### Added
