@@ -18,7 +18,7 @@ import { startTvLayoutWatchers } from './tv-layout.js';
 
 import '../css/colors.scss';
 import '../css/style.scss';
-import '../node_modules/@ibm/plex/scss/ibm-plex.scss';
+import '../node_modules/@ibm/plex/css/ibm-plex.css';
 
 
 export const dataURL = 'data.json';
