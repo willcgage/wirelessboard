@@ -32,6 +32,12 @@ function activeDiv(querySelector) {
 
 export function keybindings() {
   document.addEventListener('keydown', (e) => {
+    const target = e.target;
+    const tag = target && target.tagName ? target.tagName.toUpperCase() : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.isContentEditable)) {
+      return;
+    }
+
     if (e.key === 'Escape') {
       micboard.settingsMode = 'NONE';
       updateHash();
