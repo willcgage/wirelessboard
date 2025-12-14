@@ -360,6 +360,9 @@ canvas.slotgraph {
     position: absolute;
     top: 0;
     font-size: clamp(1.4rem, calc(var(--tvmode-row-height) * 0.08), 3.4rem);
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 0.35rem;
+    padding: 0.25rem 0.45rem;
   }
 
   .mic_name {
@@ -403,6 +406,19 @@ canvas.slotgraph {
     display: flex;
   }
 
+  .mic_name .slot-media::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.45) 35%, rgba(0, 0, 0, 0.55) 100%);
+    opacity: 0;
+    transition: opacity 160ms ease-in-out;
+  }
+
+  .mic_name .slot-media.is-active::after {
+    opacity: 0.72;
+  }
+
   .mic_name .slot-media img,
   .mic_name .slot-media video {
     width: 100%;
@@ -411,12 +427,22 @@ canvas.slotgraph {
     display: block;
   }
 
+  .mic_name .name,
+  .mic_name .mic_id,
+  p.ext-name {
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65), 0 0 12px rgba(0, 0, 0, 0.55);
+  }
+
   p.ext-name {
     font-size: clamp(1.2rem, calc(var(--tvmode-row-height) * 0.06), 3rem);
     color: var(--color-white);
     opacity: 0.9;
     margin: calc(0.3rem * var(--tvmode-scale-clamped)) 0.75rem calc(0.15rem * var(--tvmode-scale-clamped));
     padding: 0 0.35rem;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 0.4rem;
+    display: inline-block;
+    max-width: 100%;
     text-align: center;
     line-height: clamp(1.1, var(--tvmode-scale-clamped) * 1.2, 1.35);
     white-space: normal;
@@ -832,6 +858,10 @@ canvas.slotgraph {
   // margin-right: -15px;
   // padding: 3em;
   padding-top: 76px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding-bottom: 2rem;
+  overscroll-behavior: contain;
 }
 
 .settings .inline-close-bar {

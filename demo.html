@@ -232,10 +232,18 @@
               </div>
             </div>
             <div class="form-row mt-2">
-              <div class="form-group col-md-6 col-12">
-                <label for="pco-note-category" class="form-label">Note Category</label>
-                <input type="text" class="form-control" id="pco-note-category" name="pco-note-category" placeholder="Note Category (default: Mic / IEM Assignments)" autocomplete="off">
-              </div>
+                <div class="form-group col-md-6 col-12">
+                  <label for="pco-note-category" class="form-label">Note Category</label>
+                  <div class="d-flex flex-column flex-md-row align-items-md-end gap-2 pco-note-row">
+                    <input type="text" class="form-control flex-grow-1" id="pco-note-category" name="pco-note-category" placeholder="Note Category (default: Mic / IEM Assignments)" autocomplete="off">
+                    <select id="pco-note-source" class="form-select form-select-sm mt-2 mt-md-0" aria-label="Note source">
+                      <option value="person">People notes</option>
+                      <option value="plan">Plan notes</option>
+                    </select>
+                    <button type="button" id="pco-note-preview" class="btn btn-outline-secondary btn-sm mt-2 mt-md-0">Fetch Notes</button>
+                  </div>
+                  <div id="pco-note-preview-results" class="small text-muted mt-2"></div>
+                </div>
               <div class="form-group col-md-6 col-12 mt-2 mt-md-0">
                 <label for="pco-team-filter" class="form-label">Team Name Filter</label>
                 <input type="text" class="form-control" id="pco-team-filter" name="pco-team-filter" placeholder="Team Name Filter (comma-separated)" autocomplete="off">
@@ -330,7 +338,7 @@
           <div class="table-responsive" id="pco-assignments-table" style="display:none;">
             <table class="table table-sm table-striped">
               <thead>
-                <tr><th>ID</th><th>Name</th></tr>
+                <tr><th>ID</th><th>Name</th><th>Note</th></tr>
               </thead>
               <tbody></tbody>
             </table>

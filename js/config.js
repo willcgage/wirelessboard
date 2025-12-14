@@ -2372,7 +2372,9 @@ export function initConfigEditor(force = false) {
   if (elSt) elSt.value = (services.service_type || services.service_type_id || '');
   const mapping = pco.mapping || {};
   const elCat = document.getElementById('pco-note-category');
+  const elSource = document.getElementById('pco-note-source');
   if (elCat) elCat.value = mapping.note_category || 'Mic / IEM Assignments';
+  if (elSource) elSource.value = mapping.note_source || 'person';
   if (Array.isArray(mapping.team_name_filter)) {
     const elTeam = document.getElementById('pco-team-filter');
     if (elTeam) elTeam.value = mapping.team_name_filter.join(', ');
@@ -2463,6 +2465,7 @@ function populatePCOFormFromServer() {
         const elSecret = document.getElementById('pco-secret');
         const elStid = document.getElementById('pco-service-type-id');
         const elCat = document.getElementById('pco-note-category');
+        const elSource = document.getElementById('pco-note-source');
         const elTeam = document.getElementById('pco-team-filter');
         if (elEnabled) elEnabled.checked = !!p.enabled;
         if (elToken) elToken.value = '';
@@ -2473,7 +2476,9 @@ function populatePCOFormFromServer() {
         if (elSt2) elSt2.value = (s.service_type || s.service_type_id || '');
         const m = p.mapping || {};
         if (elCat) elCat.value = m.note_category || 'Mic / IEM Assignments';
+        if (elSource) elSource.value = m.note_source || 'person';
         if (elTeam) elTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
+        ensureNotePreviewUI();
         renderPcoCredentialStatus(p.auth || {});
         appendPcoLog('Loaded saved PCO configuration.');
         if (p.auth && p.auth.has_credentials) {
@@ -2512,6 +2517,7 @@ function buildPcoPayload() {
   const serviceType = (document.getElementById('pco-service-type')?.value || '').trim();
   const serviceTypeId = (document.getElementById('pco-service-type-id')?.value || '').trim();
   const noteCategory = (document.getElementById('pco-note-category')?.value || 'Mic / IEM Assignments').trim();
+  const noteSource = (document.getElementById('pco-note-source')?.value || 'person').trim() || 'person';
   const teamFilterRaw = (document.getElementById('pco-team-filter')?.value || '');
   const payload = {
     enabled,
@@ -2521,6 +2527,7 @@ function buildPcoPayload() {
     mapping: {
       strategy: 'note_or_brackets',
       note_category: noteCategory,
+      note_source: noteSource,
       team_name_filter: teamFilterRaw.split(',').map(s => s.trim()).filter(s => s),
     },
   };
@@ -2534,6 +2541,143 @@ function buildPcoPayload() {
     payload.auth = { token, secret };
   }
   return payload;
+}
+
+function ensureNotePreviewUI() {
+  const input = document.getElementById('pco-note-category');
+  if (!input) return;
+
+  const sourceSelect = document.getElementById('pco-note-source');
+  if (!sourceSelect) {
+    const select = document.createElement('select');
+    select.id = 'pco-note-source';
+    select.className = 'form-select form-select-sm mt-2 mt-md-0';
+    ['person', 'plan'].forEach(val => {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = val === 'person' ? 'People notes' : 'Plan notes';
+      select.appendChild(opt);
+    });
+    // Try to place next to the note category input if wrapped in a flex container
+    if (input.parentElement && input.parentElement.classList.contains('pco-note-row')) {
+      input.parentElement.appendChild(select);
+    } else if (input.parentElement) {
+      input.parentElement.appendChild(select);
+    } else {
+      input.insertAdjacentElement('afterend', select);
+    }
+  }
+
+  let btn = document.getElementById('pco-note-preview');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'pco-note-preview';
+    btn.className = 'btn btn-outline-secondary btn-sm ms-2 mt-2 mt-md-0';
+    btn.textContent = 'Fetch Notes';
+    if (input.parentElement) {
+      input.parentElement.appendChild(btn);
+    } else {
+      input.insertAdjacentElement('afterend', btn);
+    }
+  }
+
+  let result = document.getElementById('pco-note-preview-results');
+  if (!result) {
+    result = document.createElement('div');
+    result.id = 'pco-note-preview-results';
+    result.className = 'small text-muted mt-2';
+    const parent = input.parentElement;
+    if (parent && parent.parentElement) {
+      parent.parentElement.insertBefore(result, parent.nextSibling);
+    } else if (parent) {
+      parent.appendChild(result);
+    } else {
+      input.insertAdjacentElement('afterend', result);
+    }
+  }
+}
+
+function renderNotePreviewResults(target, notes, planId, catName) {
+  if (!target) return;
+  target.innerHTML = '';
+
+  const summary = document.createElement('div');
+  summary.textContent = `Plan ${planId || '-'} — ${notes.length} note${notes.length === 1 ? '' : 's'} for "${catName}"`;
+  target.appendChild(summary);
+
+  if (!notes.length) {
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'table table-sm table-striped mt-1';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['Ext ID', 'Person', 'Team', 'Note'].forEach(label => {
+    const th = document.createElement('th');
+    th.textContent = label;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  notes.forEach(n => {
+    const tr = document.createElement('tr');
+    ['ext_id', 'person', 'team', 'note'].forEach(key => {
+      const td = document.createElement('td');
+      td.textContent = (n && n[key]) ? n[key] : '';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  target.appendChild(table);
+}
+
+function handleNotePreview() {
+  ensureNotePreviewUI();
+  const catEl = document.getElementById('pco-note-category');
+  const cat = (catEl?.value || 'Mic / IEM Assignments').trim();
+  const sourceEl = document.getElementById('pco-note-source');
+  const source = (sourceEl?.value || 'person').trim() || 'person';
+  const planSel = document.getElementById('pco-plan-select');
+  const planId = planSel ? (planSel.value || '') : '';
+  const resultEl = document.getElementById('pco-note-preview-results');
+  const btn = document.getElementById('pco-note-preview');
+
+  if (!planId) {
+    if (resultEl) resultEl.innerHTML = '<span class="text-warning">Select a plan, then fetch notes.</span>';
+    appendPcoLog('Select a plan before fetching notes.', 'warn');
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (resultEl) resultEl.innerHTML = '<span class="text-muted">Loading notes...</span>';
+  appendPcoLog(`Fetching ${source === 'plan' ? 'plan' : 'people'} notes for "${cat}"...`);
+
+  fetch('api/pco/notes?plan=' + encodeURIComponent(planId) + '&source=' + encodeURIComponent(source) + '&_=' + Date.now(), { cache: 'no-store' })
+    .then(r => r.json())
+    .then(resp => {
+      if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to fetch notes');
+      const catName = resp.note_category || cat;
+      const respSource = resp.note_source || source;
+      const notes = Array.isArray(resp.notes) ? resp.notes : [];
+      if (notes.length === 0 && resultEl) {
+        resultEl.innerHTML = `<span class="text-warning">No ${respSource === 'plan' ? 'plan' : 'people'} notes found for "${catName}".</span>`;
+      } else {
+        renderNotePreviewResults(resultEl, notes, resp.plan_id || planId, `${catName} (${respSource === 'plan' ? 'Plan' : 'People'})`);
+      }
+      appendPcoLog(`Fetched ${notes.length} ${respSource === 'plan' ? 'plan' : 'people'} note(s) for "${catName}" (plan ${resp.plan_id || planId}).`);
+    })
+    .catch(err => {
+      if (resultEl) resultEl.innerHTML = `<span class="text-danger">${formatError(err)}</span>`;
+      appendPcoLog(`Failed to fetch notes: ${formatError(err)}`, 'error');
+    })
+    .finally(() => {
+      if (btn) btn.disabled = false;
+    });
 }
 
 if (typeof window !== 'undefined') {
@@ -2594,6 +2738,7 @@ function showPCOView() {
   const eTeam = document.getElementById('pco-team-filter');
   if (eCat) eCat.value = m.note_category || 'Mic / IEM Assignments';
   if (eTeam) eTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
+  ensureNotePreviewUI();
   populatePCOFormFromServer();
   const planSel = document.getElementById('pco-plan-select');
   if (planSel) planSel.innerHTML = '<option value="">Select a plan...</option>';
@@ -2690,18 +2835,25 @@ function handlePcoSync() {
         const a = resp.assignments || 0;
         const u = resp.updates || 0;
         const pid = resp.plan_id || '-';
-        if (summaryEl) summaryEl.innerHTML = `Plan ${pid}: ${a} assignment(s), ${u} update(s)`;
-        appendPcoLog(`Sync complete for plan ${pid}: ${a} assignment(s), ${u} update(s).`);
+        const cat = resp.note_category || 'Mic / IEM Assignments';
+        if (summaryEl) summaryEl.innerHTML = `Plan ${pid}: ${a} assignment(s), ${u} update(s) — Note Category: ${cat}`;
+        appendPcoLog(`Sync complete for plan ${pid} (Note Category: ${cat}): ${a} assignment(s), ${u} update(s).`);
         if (Array.isArray(resp.assignment_details) && resp.assignment_details.length) {
           const tbody = document.querySelector('#pco-assignments-table tbody');
+          const headRow = document.querySelector('#pco-assignments-table thead tr');
+          if (headRow && headRow.children.length < 3) {
+            headRow.innerHTML = '<th>ID</th><th>Name</th><th>Note</th>';
+          }
           if (tbody) {
             resp.assignment_details.forEach(item => {
               const tr = document.createElement('tr');
               const td1 = document.createElement('td');
               const td2 = document.createElement('td');
+              const td3 = document.createElement('td');
               td1.textContent = item.id || '';
               td2.textContent = item.name || '';
-              tr.appendChild(td1); tr.appendChild(td2);
+              td3.textContent = item.note || '';
+              tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
               tbody.appendChild(tr);
             });
             if (tbl) tbl.style.display = 'block';
@@ -2728,6 +2880,9 @@ export function bindPcoHandlers() {
     } else if (t.id === 'pco-sync') {
       e.preventDefault();
       handlePcoSync();
+    } else if (t.id === 'pco-note-preview') {
+      e.preventDefault();
+      handleNotePreview();
     } else if (t.id === 'pco-refresh-plans') {
       e.preventDefault();
       refreshPlansList();

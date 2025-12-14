@@ -8,17 +8,21 @@
 - _Nothing yet._
 
 ### Fixed
-- PCO people loader now applies the Team Name Filter when fetching plan people.
+- _Nothing yet._
 
-## [1.3.3] - 2025-12-13
+## [1.3.4] - 2025-12-13
 ### Added
-- _Nothing._
+- PCO Note Category field now has a Fetch Notes preview button that shows the plan’s notes inline and lets you choose People vs Plan notes.
 
 ### Changed
 - Demo PCO config form now displays explicit labels for all fields to improve accessibility and clarity.
 - Switched IBM Plex imports to the compiled CSS to remove Sass @import deprecation warnings and rebuilt frontend bundles.
 
 ### Fixed
+- PCO people loader now applies the Team Name Filter when fetching plan people.
+- PCO sync results now show the note content read from the configured Note Category.
+- TV mode backgrounds now add a dark scrim and label chips so overlay text stays readable on images and videos.
+- PCO sync now preserves device/channel names and only updates extended IDs/labels, preventing PCO data from overwriting device naming.
 - Google Drive OAuth flow now falls back to stored scopes and rejects unexpected credential types when completing authorization.
 - Git ignores Python bytecode caches to keep working trees clean.
 - Upgraded urllib3 to 2.6.1 to address compressed-response decompression DoS (CWE-409).

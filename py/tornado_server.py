@@ -513,6 +513,20 @@ class PcoPeopleHandler(web.RequestHandler):
         self.write(json.dumps(result))
 
 
+class PcoNotesHandler(web.RequestHandler):
+    def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        plan_id = self.get_query_argument('plan', default=None)
+        if not plan_id:
+            self.set_status(400)
+            self.write('{"ok": false, "error": "Missing plan query param"}')
+            return
+        source = self.get_query_argument('source', default=None)
+        result = pco.notes_for_plan(plan_id, source_override=source)
+        self.write(json.dumps(result))
+
+
 class BackgroundDirectoryHandler(web.RequestHandler):
     def _set_headers(self):
         self.set_header('Content-Type', 'application/json')
@@ -781,6 +795,7 @@ def twisted():
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
         (r'/api/pco/people', PcoPeopleHandler),
+        (r'/api/pco/notes', PcoNotesHandler),
         (r'/api/backgrounds', BackgroundDirectoryHandler),
         (r'/api/cloud/google-drive/config', GoogleDriveConfigHandler),
         (r'/api/cloud/google-drive/auth/start', GoogleDriveAuthStartHandler),

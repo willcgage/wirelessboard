@@ -48,6 +48,10 @@ def get_pco_config() -> Dict[str, Any]:
     if strategy not in ['note_or_brackets']:
         raise PcoConfigError('Unsupported mapping.strategy')
 
+    note_source = (mapping.get('note_source') or 'auto')
+    if note_source not in ['person', 'plan', 'auto']:
+        raise PcoConfigError('Unsupported mapping.note_source')
+
     effective_cfg = dict(pco_cfg)
     effective_cfg['auth'] = {
         'token': token,
@@ -74,12 +78,24 @@ def _apply_assignments(assignments: List[Tuple[str, str]]) -> int:
     """
     assignments: list of tuples (extended_id, extended_name)
     Returns count of updated slots.
+
+    Only updates extended_id/extended_name; device names (live or manual)
+    are preserved exactly as-is to avoid PCO overwriting channel labels.
     """
     updated = 0
     for ext_id, ext_name in assignments:
         slot = _find_slot_by_ext_id(ext_id)
         if slot is None:
             continue
+
+        # Preserve any device-level naming fields before we mutate the slot
+        preserved_names = {
+            'name': slot.get('name'),
+            'name_raw': slot.get('name_raw'),
+            'chan_name': slot.get('chan_name'),
+            'chan_name_raw': slot.get('chan_name_raw'),
+        }
+
         changed = False
         if slot.get('extended_id') != ext_id:
             slot['extended_id'] = ext_id
@@ -87,8 +103,17 @@ def _apply_assignments(assignments: List[Tuple[str, str]]) -> int:
         if slot.get('extended_name') != ext_name:
             slot['extended_name'] = ext_name
             changed = True
+
+        # Restore preserved device naming to prevent accidental overwrite
+        for key, value in preserved_names.items():
+            if value is None:
+                slot.pop(key, None)
+            else:
+                slot[key] = value
+
         if changed:
             updated += 1
+
     if updated:
         try:
             config.save_current_config()
@@ -455,6 +480,24 @@ def _get_plan_people(plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str
     return _http_get(url, headers, params)
 
 
+def _get_plan_notes(plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
+    url = f"{BASE_URL}/plans/{plan_id}/notes"
+    params = {
+        "include": "note_category",
+        "per_page": 200
+    }
+    return _http_get(url, headers, params)
+
+
+def _get_plan_notes_with_service(service_type_id: int, plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
+    url = f"{BASE_URL}/service_types/{service_type_id}/plans/{plan_id}/notes"
+    params = {
+        "include": "note_category",
+        "per_page": 200
+    }
+    return _http_get(url, headers, params)
+
+
 def _get_team_members(plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
     url = f"{BASE_URL}/plans/{plan_id}/team_members"
     params = {
@@ -746,7 +789,7 @@ def sync_from_pco(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
 
     included_maps = _build_included_maps(plan_people.get('included') or [])
 
-    assignments: List[Tuple[str, str]] = []
+    assignments: List[Tuple[str, str, Optional[str]]] = []
     for pp in plan_people.get('data') or []:
         rel = pp.get('relationships') or {}
         # team filter
@@ -785,20 +828,196 @@ def sync_from_pco(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
             ext_id = _extract_bracket_id(person_name)
 
         if ext_id:
-            assignments.append((ext_id, person_name))
+            assignments.append((ext_id, person_name, note_text))
 
     # Deduplicate by ext_id, keep last occurrence
-    dedup: Dict[str, str] = {}
-    for ext_id, name in assignments:
-        dedup[ext_id] = name
-    dedup_list = [(k, v) for k, v in dedup.items()]
+    dedup: Dict[str, Tuple[str, Optional[str]]] = {}
+    for ext_id, name, note in assignments:
+        dedup[ext_id] = (name, note)
+    dedup_pairs = [(k, v[0]) for k, v in dedup.items()]
+    dedup_list = [(k, v[0], v[1]) for k, v in dedup.items()]
 
-    updates = _apply_assignments(dedup_list)
+    updates = _apply_assignments(dedup_pairs)
 
     return {
         "ok": True,
         "plan_id": plan_id,
+        "note_category": category,
         "assignments": len(dedup_list),
         "updates": updates,
-        "assignment_details": [{"id": i[0], "name": i[1]} for i in dedup_list]
+        "assignment_details": [{"id": i[0], "name": i[1], "note": i[2] or ''} for i in dedup_list]
+    }
+
+
+def notes_for_plan(plan_id_override: Optional[str] = None, source_override: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Fetch notes for the configured category.
+    source: 'person', 'plan', or 'auto' (try plan notes first, then people notes). Defaults to mapping.note_source or 'auto'.
+    Read-only preview for the UI.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        logger.warning('PCO notes preview aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {
+        'Authorization': _basic_auth_header(auth['token'], auth['secret'])
+    }
+
+    services = pco_cfg.get('services', {})
+    plan_select = (services.get('plan') or {}).get('select', 'next')
+    mapping = pco_cfg.get('mapping', {})
+    category = mapping.get('note_category') or 'Mic / IEM Assignments'
+    team_filters = [t.lower() for t in (mapping.get('team_name_filter') or [])]
+    source_raw = source_override or mapping.get('note_source') or 'auto'
+    source = (source_raw or 'auto').lower()
+    if source not in ['person', 'plan', 'auto']:
+        source = 'auto'
+
+    plan_id = None
+    stid = None
+    if plan_id_override:
+        plan_id = plan_id_override
+    else:
+        if plan_select == 'next':
+            st_raw = services.get('service_type') if 'service_type' in services else services.get('service_type_id')
+            if st_raw:
+                stid = _resolve_service_type_id(st_raw, headers)
+                if not stid:
+                    return {"ok": False, "error": "Unable to resolve Service Type"}
+                plan_id = _get_next_plan_id(stid, headers)
+            else:
+                nxt = _get_next_plan_global(headers)
+                if nxt:
+                    stid, plan_id = nxt[0], nxt[1]
+        else:
+            return {"ok": False, "error": "Unsupported plan selection"}
+
+    if not plan_id:
+        return {"ok": False, "error": "No plan selected or upcoming plan found"}
+
+    def _collect_plan_notes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        plan_notes = _get_plan_notes_with_service(stid, plan_id, headers) if stid else None
+        if not plan_notes:
+            plan_notes = _get_plan_notes(plan_id, headers)
+        if not plan_notes:
+            return ([], "Unable to fetch plan notes")
+
+        included_maps = _build_included_maps(plan_notes.get('included') or [])
+        collected: List[Dict[str, Any]] = []
+        for item in (plan_notes.get('data') or []):
+            attrs = item.get('attributes') or {}
+            rels = item.get('relationships') or {}
+            text = (attrs.get('content') or attrs.get('value') or attrs.get('name') or '').strip()
+            cat_name = ''
+            try:
+                rel_nc = (rels.get('note_category') or {}).get('data') or {}
+                cat_id = rel_nc.get('id')
+                if cat_id:
+                    for t, items in included_maps.items():
+                        if 'note_category' in t:
+                            found = items.get(str(cat_id))
+                            if found:
+                                cat_name = ((found.get('attributes') or {}).get('name') or '').strip()
+                                break
+            except Exception:
+                pass
+            if not cat_name:
+                cat_name = (attrs.get('category_name') or '').strip()
+            if cat_name.lower() != (category or '').lower():
+                continue
+            if text:
+                collected.append({
+                    "person": '',
+                    "team": '',
+                    "note": text,
+                    "ext_id": '',
+                })
+        return (collected, None)
+
+    def _collect_person_notes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
+        if not plan_people:
+            plan_people = _get_plan_people_any(plan_id, headers)
+        if not plan_people:
+            return ([], "Unable to fetch plan people")
+
+        included_maps = _build_included_maps(plan_people.get('included') or [])
+        collected: List[Dict[str, Any]] = []
+        for pp in plan_people.get('data') or []:
+            rel = pp.get('relationships') or {}
+
+            team_name = None
+            team_rel = (rel.get('team') or {}).get('data') or {}
+            if team_rel:
+                team_t = (team_rel.get('type') or '').lower()
+                team_id = team_rel.get('id')
+                team_obj = included_maps.get(team_t, {}).get(str(team_id)) if team_id else None
+                team_name = ((team_obj or {}).get('attributes') or {}).get('name') if team_obj else None
+                if team_filters and (not team_name or team_name.lower() not in team_filters):
+                    continue
+
+            person_rel = (rel.get('person') or {}).get('data') or {}
+            person_obj = None
+            if person_rel:
+                p_t = (person_rel.get('type') or '').lower()
+                p_id = person_rel.get('id')
+                person_obj = included_maps.get(p_t, {}).get(str(p_id)) if p_id else None
+            person_name = _person_display_name(person_obj or {})
+
+            notes_data = (rel.get('notes') or {}).get('data') or []
+            note_objs = []
+            for nd in notes_data:
+                nd_t = (nd.get('type') or '').lower()
+                nd_id = nd.get('id')
+                note_objs.append(included_maps.get(nd_t, {}).get(str(nd_id)) if nd_id else None)
+            note_text = _get_note_text_for_category([n for n in note_objs if n], included_maps, category)
+
+            ext_id = None
+            if note_text:
+                ext_id = note_text.strip()
+            if not ext_id:
+                ext_id = _extract_bracket_id(person_name)
+
+            if note_text or ext_id:
+                collected.append({
+                    "person": person_name,
+                    "team": team_name,
+                    "note": note_text or '',
+                    "ext_id": ext_id or '',
+                })
+        return (collected, None)
+
+    notes_out: List[Dict[str, Any]] = []
+    resolved_source = source
+    last_error: Optional[str] = None
+
+    if source == 'plan':
+        notes_out, last_error = _collect_plan_notes()
+    elif source == 'person':
+        notes_out, last_error = _collect_person_notes()
+    else:  # auto
+        plan_notes_out, err_plan = _collect_plan_notes()
+        if plan_notes_out:
+            notes_out = plan_notes_out
+            resolved_source = 'plan'
+            last_error = err_plan
+        else:
+            person_notes_out, err_person = _collect_person_notes()
+            notes_out = person_notes_out
+            resolved_source = 'person'
+            last_error = err_person if err_person else err_plan
+
+    if last_error and not notes_out:
+        return {"ok": False, "error": last_error}
+
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "note_category": category,
+        "note_source": resolved_source,
+        "notes": notes_out,
+        "count": len(notes_out),
     }
