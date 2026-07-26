@@ -25,12 +25,20 @@ mac:
   extendInfo:
     LSBackgroundOnly: true
     LSUIElement: true
+  # No arch list here on purpose. Each CI job passes --arm64 or --x64 and runs
+  # on a runner of that architecture, because the bundled PyInstaller service is
+  # built natively and is not universal. Building both arches on one runner
+  # shipped an arm64 service inside the Intel app.
   target:
-    - target: dmg
-      arch: [x64, arm64]
-    - target: zip
-      arch: [x64, arm64]
+    - dmg
+    - zip
   artifactName: wirelessboard-server-${version}-mac-${arch}.${ext}
+  # Required for notarization. Entitlements live in resources/ because
+  # electron-builder's default buildResources directory (build/) is gitignored.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
 win:
   target:
     - nsis

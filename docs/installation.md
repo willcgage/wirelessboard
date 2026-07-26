@@ -80,7 +80,39 @@ $ sudo systemctl enable wirelessboard.service
 Check the [configuration](configuration.md) docs for more information on configuring Wirelessboard.
 
 ## macOS - Desktop Application
-The Mac desktop app has been discontinued.
+
+Download the disk image for your Mac from the [latest release](https://github.com/willcgage/wirelessboard/releases/latest):
+
+| Your Mac | File |
+| --- | --- |
+| Apple Silicon (M1/M2/M3/M4) | `wirelessboard-server-<version>-mac-arm64.dmg` |
+| Intel | `wirelessboard-server-<version>-mac-x64.dmg` |
+
+Click the Apple menu > About This Mac to check which you have. Picking the wrong
+one will not work.
+
+Open the disk image and drag **Wirelessboard Server** to your Applications folder.
+
+### "Wirelessboard Server is damaged and can't be opened"
+
+Releases up to and including 1.4.0 are not signed by an Apple Developer ID.
+macOS quarantines anything downloaded from the internet, and shows this
+misleading message when a quarantined app has no signature. The download is not
+actually damaged. Clear the quarantine flag after copying the app to
+Applications:
+
+```
+$ xattr -dr com.apple.quarantine "/Applications/Wirelessboard Server.app"
+```
+
+If it still refuses to launch, add a local ad-hoc signature as well:
+
+```
+$ codesign --force --deep --sign - "/Applications/Wirelessboard Server.app"
+```
+
+Only run these on a build you downloaded from the official releases page.
+
 
 
 ## macOS - From Source

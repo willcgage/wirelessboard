@@ -21,6 +21,8 @@
     "bundle:server:universal": "node scripts/build-universal.js",
     "release:mac": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --publish never",
     "release:mac:ci": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --publish always",
+    "release:mac:ci:arm64": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --arm64 --publish always",
+    "release:mac:ci:x64": "npm run build && npm run bundle:server:universal && npm run release:mac:builder -- --x64 --publish always",
     "release:mac:builder": "electron-builder --mac --config electron-builder.yml",
     "release:win": "npm run build && npm run bundle:server:win && npm run release:win:builder -- --publish never",
     "release:win:ci": "npm run build && npm run bundle:server:win && npm run release:win:builder -- --publish always",

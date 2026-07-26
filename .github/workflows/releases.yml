@@ -55,10 +55,21 @@ jobs:
           # artifact_folder must match electron-builder.yml's `output:
           # release/${platform}`, where ${platform} is Node's process.platform
           # — hence darwin and win32, not mac and win.
+          #
+          # The two macOS entries are deliberate: the bundled PyInstaller
+          # service is built natively and is not universal, so each arch must
+          # be packaged on a runner of that same arch. Building both on one
+          # runner put an arm64 service inside the Intel app.
+          # macos-15-intel is the last x86_64 image GitHub offers (macos-13 was
+          # retired in Dec 2025); it goes away in Aug 2027.
           - runner: macos-latest
-            release_script: npm run release:mac:ci
+            release_script: npm run release:mac:ci:arm64
             artifact_folder: release/darwin
-            artifact_name: wirelessboard-macos
+            artifact_name: wirelessboard-macos-arm64
+          - runner: macos-15-intel
+            release_script: npm run release:mac:ci:x64
+            artifact_folder: release/darwin
+            artifact_name: wirelessboard-macos-x64
           - runner: windows-latest
             release_script: npm run release:win:ci
             artifact_folder: release/win32
@@ -67,6 +78,14 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WIRELESSBOARD_REMOVE_VENV: 'false'
+      # Developer ID signing. Absent secrets mean electron-builder skips
+      # signing and the app ships unsigned, exactly as it did before.
+      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      # Notarization credentials, read by electron-builder when notarize is on.
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -145,9 +164,23 @@ jobs:
           echo "=== Building desktop release for ${{ matrix.runner }} ==="
           echo "Release script: ${{ matrix.release_script }}"
           echo "Expected output: ${{ matrix.artifact_folder }}"
-          
+
+          # Notarization is opt-in on the presence of credentials, so that a
+          # repo without the Apple secrets still produces (unsigned) builds
+          # instead of failing. electron-builder reads APPLE_ID,
+          # APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID from the environment.
+          EXTRA_ARGS=""
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ]; then
+              echo "Apple Developer ID credentials present: signing and notarizing."
+              EXTRA_ARGS="-- --config.mac.notarize=true"
+            else
+              echo "::warning::No Apple credentials configured; this macOS build will be UNSIGNED and will fail Gatekeeper with 'damaged and can't be opened'."
+            fi
+          fi
+
           # Run the release script
-          ${{ matrix.release_script }}
+          ${{ matrix.release_script }} $EXTRA_ARGS
           
           echo "=== Verifying build output ==="
           if [ -d "${{ matrix.artifact_folder }}" ]; then
