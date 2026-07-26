@@ -10,7 +10,14 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.4.2] - 2026-07-26
+### Fixed
+- **macOS builds are now genuinely signed and notarized.** 1.4.1 shipped the configuration for this but not the result: the certificate available to CI held no valid `Developer ID Application` identity, so electron-builder logged a warning, skipped signing, and the job still reported success. The certificate has been reissued and the release workflow now prints the identities it finds before building, so a missing one fails loudly instead of silently.
+- **The Windows installer is back.** 1.4.1 produced none. `CSC_LINK` and `CSC_KEY_PASSWORD` are electron-builder's generic signing variables rather than macOS-specific ones, so setting them for the whole job handed the Apple certificate to `signtool`, which rejected it. They are now scoped to macOS.
+
 ## [1.4.1] - 2026-07-26
+> Never released. The macOS builds from this tag are unsigned despite the entries below, and no Windows installer was produced. Use 1.4.2.
+
 ### Added
 - macOS builds are signed with a Developer ID Application certificate and notarized by Apple. Signing turns on when the Apple credentials are configured, so a fork without them still builds (unsigned) rather than failing.
 - Hardened-runtime entitlements in `resources/`, covering the JIT and unsigned executable memory Electron needs and the library validation the bundled Python service requires.
