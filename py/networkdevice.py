@@ -63,10 +63,6 @@ class ShureNetworkDevice:
 
     def set_rx_com_status(self, status):
         self.rx_com_status = status
-        # if status == 'CONNECTED':
-        #     print("Connected to {} at {}".format(self.ip,datetime.datetime.now()))
-        # elif status == 'DISCONNECTED':
-        #     print("Disconnected from {} at {}".format(self.ip,datetime.datetime.now()))
 
     def add_channel_device(self, cfg):
         if BASE_CONST[self.type]['DEVICE_CLASS'] == 'WirelessMic':

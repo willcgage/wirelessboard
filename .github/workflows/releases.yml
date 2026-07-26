@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   test:
-    name: Lint and Build Assets
+    name: Lint, Test, and Build Assets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,10 +34,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r py/requirements.txt
+          python -m pip install pytest
+      - name: Lint JavaScript
+        run: npm run lint
+        continue-on-error: true
       - name: Build frontend bundle
         run: npm run build
       - name: Check Python sources compile
         run: python -m compileall py
+      - name: Run Python tests
+        run: python -m pytest py/tests -q
 
   package-desktop:
     name: Package desktop apps

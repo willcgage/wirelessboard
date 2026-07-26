@@ -58,7 +58,6 @@ function JsonUpdate() {
 
 
 function updateGroup(data) {
-  console.log('dgroup: ' + data.group + ' mgroup: ' + micboard.group);
   micboard.groups[data.group].title = data.title;
   micboard.groups[data.group].slots = data.slots;
   if (micboard.group === data.group) {

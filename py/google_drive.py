@@ -256,7 +256,7 @@ def clear_credentials(*, persist: bool = True) -> DriveAuthMeta:
     try:
         keyring.delete_password(SERVICE_NAME, credential_id)
     except keyring_errors.PasswordDeleteError:
-        pass
+        LOGGER.debug('No stored Google Drive credentials to delete (id=%s)', credential_id, exc_info=True)
     except keyring_errors.KeyringError as exc:
         raise DriveCredentialError('Unable to clear Google Drive credentials from the keyring.') from exc
 

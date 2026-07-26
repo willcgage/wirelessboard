@@ -1,7 +1,7 @@
 # Extending Wirelessboard
 Wirelessboard provides data from receivers in a machine readable JSON format. This data is easily accessible via HTTP and WebSockets.  In addition to the data that Wirelessboard processes, Wirelessboard also supplies raw receiver data.
 
-This data can be found at `http://your_wirelessboard_ip:8058/data.json` (legacy endpoints such as `/micboard.json` remain available for backwards compatibility).
+This data can be found at `http://your_wirelessboard_ip:8058/data.json`. Only `/data.json` is served; there is no legacy `/micboard.json` endpoint.
 
 This capability lets you do a few extra things with the data
 * Make a 40' high VU meter with LED tape

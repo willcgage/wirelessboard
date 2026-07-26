@@ -6,9 +6,20 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 import config
+import pco_mapping
 from pco_credentials import CredentialError, ensure_credentials
 
 logger = logging.getLogger('micboard.pco')
+
+# Mapping strategies, named for the order in which candidate labels are tried.
+#   position         - only the PCO team position name, e.g. "Vocal 1"
+#   position_or_note - position, then the note category, then an [ID] in the name
+#   note_or_brackets - legacy order: note category, then brackets, then position
+SUPPORTED_STRATEGIES = ('position', 'position_or_note', 'note_or_brackets')
+DEFAULT_STRATEGY = 'position_or_note'
+
+# Slot keys that hold hardware-supplied naming and must never be overwritten.
+DEVICE_NAME_KEYS = ('name', 'name_raw', 'chan_name', 'chan_name_raw')
 
 class PcoConfigError(Exception):
     pass
@@ -44,9 +55,11 @@ def get_pco_config() -> Dict[str, Any]:
         raise PcoConfigError('Unsupported plan selection mode')
 
     mapping = pco_cfg.get('mapping', {})
-    strategy = mapping.get('strategy', 'note_or_brackets')
-    if strategy not in ['note_or_brackets']:
-        raise PcoConfigError('Unsupported mapping.strategy')
+    strategy = mapping.get('strategy') or DEFAULT_STRATEGY
+    if strategy not in SUPPORTED_STRATEGIES:
+        raise PcoConfigError(
+            'Unsupported mapping.strategy: {} (expected one of {})'.format(
+                strategy, ', '.join(SUPPORTED_STRATEGIES)))
 
     note_source = (mapping.get('note_source') or 'auto')
     if note_source not in ['person', 'plan', 'auto']:
@@ -67,52 +80,144 @@ def _basic_auth_header(token: str, secret: str) -> str:
     return 'Basic ' + base64.b64encode(raw).decode('ascii')
 
 
-def _find_slot_by_ext_id(ext_id: str) -> Optional[Dict[str, Any]]:
-    for slot in (config.config_tree or {}).get('slots', []):
-        if slot.get('extended_id') == ext_id:
-            return slot
-    return None
+def _configured_slots() -> List[Dict[str, Any]]:
+    return [s for s in (config.config_tree or {}).get('slots', []) or [] if isinstance(s, dict)]
 
 
-def _apply_assignments(assignments: List[Tuple[str, str]]) -> int:
+def _mapping_options(mapping: Dict[str, Any]) -> Dict[str, Any]:
+    """Read the mapping knobs that drive slot resolution."""
+    return {
+        'strategy': mapping.get('strategy') or DEFAULT_STRATEGY,
+        # Lets PCO position "Vocal 1" line up with slots labelled "Mic 1"/"IEM 1".
+        'number_fallback': mapping.get('position_number_fallback', True) is not False,
+        # Off by default: writing extended_id would relabel slots the operator set up.
+        'seed_extended_id': mapping.get('seed_extended_id', False) is True,
+    }
+
+
+def resolve_assignments(
+    people: List[Dict[str, Any]],
+    options: Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Work out which slots each Planning Center person maps to.
+
+    ``people`` are flattened records with ``name``/``team``/``position``/``note``/
+    ``bracket_id`` keys.  Returns ``(resolved, unmatched)``; a resolved entry can
+    reference several slots, which is how one PCO position fills both a mic
+    channel and its matching IEM channel.
     """
-    assignments: list of tuples (extended_id, extended_name)
-    Returns count of updated slots.
+    slots = _configured_slots()
+    strategy = options.get('strategy') or DEFAULT_STRATEGY
+    number_fallback = options.get('number_fallback', True)
 
-    Only updates extended_id/extended_name; device names (live or manual)
-    are preserved exactly as-is to avoid PCO overwriting channel labels.
-    """
-    updated = 0
-    for ext_id, ext_name in assignments:
-        slot = _find_slot_by_ext_id(ext_id)
-        if slot is None:
+    resolved: List[Dict[str, Any]] = []
+    unmatched: List[Dict[str, Any]] = []
+
+    for person in people:
+        candidates = pco_mapping.plan_person_labels(person, strategy)
+        matches: List[Dict[str, Any]] = []
+        used_source = None
+        used_label = None
+        for source, label in candidates:
+            matches = pco_mapping.match_slots(label, slots, number_fallback)
+            if matches:
+                used_source, used_label = source, label
+                break
+
+        if not matches:
+            unmatched.append({
+                'name': person.get('name') or '',
+                'team': person.get('team') or '',
+                'position': person.get('position') or '',
+                'note': person.get('note') or '',
+                'tried': [label for _source, label in candidates],
+            })
             continue
 
-        # Preserve any device-level naming fields before we mutate the slot
-        preserved_names = {
-            'name': slot.get('name'),
-            'name_raw': slot.get('name_raw'),
-            'chan_name': slot.get('chan_name'),
-            'chan_name_raw': slot.get('chan_name_raw'),
-        }
+        resolved.append({
+            'name': person.get('name') or '',
+            'team': person.get('team') or '',
+            'position': person.get('position') or '',
+            'note': person.get('note') or '',
+            'label': used_label,
+            'matched_via': used_source,
+            'slots': [{
+                'slot': m['slot'].get('slot'),
+                'type': m['slot'].get('type'),
+                'extended_id': m['slot'].get('extended_id'),
+                'kind': pco_mapping.slot_kind(m['slot']),
+                'via': m['via'],
+                'describe': pco_mapping.slot_describe(m['slot']),
+            } for m in matches],
+            '_matches': matches,
+        })
 
-        changed = False
-        if slot.get('extended_id') != ext_id:
-            slot['extended_id'] = ext_id
-            changed = True
-        if slot.get('extended_name') != ext_name:
-            slot['extended_name'] = ext_name
-            changed = True
+    return (resolved, unmatched)
 
-        # Restore preserved device naming to prevent accidental overwrite
-        for key, value in preserved_names.items():
-            if value is None:
-                slot.pop(key, None)
-            else:
-                slot[key] = value
 
-        if changed:
-            updated += 1
+def find_conflicts(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Report slots claimed by more than one person.
+
+    Two people scheduled to the same position -- or two positions that collide via
+    the number fallback -- would otherwise silently overwrite each other, with the
+    last one processed winning.
+    """
+    claims: Dict[Any, List[Dict[str, str]]] = {}
+    for entry in resolved:
+        for slot_info in entry.get('slots') or []:
+            claims.setdefault(slot_info.get('slot'), []).append({
+                'name': entry.get('name') or '',
+                'label': entry.get('label') or '',
+            })
+
+    conflicts: List[Dict[str, Any]] = []
+    for slot_number, claimants in claims.items():
+        distinct = {c['name'] for c in claimants}
+        if len(distinct) > 1:
+            conflicts.append({
+                'slot': slot_number,
+                'claimants': claimants,
+                'winner': claimants[-1]['name'],
+            })
+    return sorted(conflicts, key=lambda c: (c['slot'] is None, c['slot']))
+
+
+def _apply_assignments(resolved: List[Dict[str, Any]], options: Dict[str, Any]) -> int:
+    """Write ``extended_name`` onto every resolved slot. Returns slots changed.
+
+    Device names (live or manually entered) are preserved exactly as-is so PCO
+    can never overwrite a channel label.  ``extended_id`` is left alone unless
+    ``mapping.seed_extended_id`` is enabled and the slot has none yet.
+    """
+    seed_extended_id = options.get('seed_extended_id', False)
+    updated = 0
+
+    for entry in resolved:
+        ext_name = entry.get('name') or ''
+        label = entry.get('label') or ''
+        for match in entry.get('_matches') or []:
+            slot = match['slot']
+
+            # Snapshot hardware naming before mutating the slot.
+            preserved_names = {key: slot.get(key) for key in DEVICE_NAME_KEYS}
+
+            changed = False
+            if seed_extended_id and label and not slot.get('extended_id'):
+                slot['extended_id'] = label
+                changed = True
+            if slot.get('extended_name') != ext_name:
+                slot['extended_name'] = ext_name
+                changed = True
+
+            # Restore preserved device naming to prevent accidental overwrite.
+            for key, value in preserved_names.items():
+                if value is None:
+                    slot.pop(key, None)
+                else:
+                    slot[key] = value
+
+            if changed:
+                updated += 1
 
     if updated:
         try:
@@ -323,6 +428,9 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
     for pp in plan_people.get('data') or []:
         rel = pp.get('relationships') or {}
 
+        # The team position name carries the mic name and number, e.g. "Vocal 1".
+        position = ((pp.get('attributes') or {}).get('team_position_name') or '').strip()
+
         # Resolve team name
         team_rel = (rel.get('team') or {}).get('data') or {}
         team_obj = None
@@ -426,9 +534,25 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
                         continue
                     seen.add(key)
                     merged_notes.append(val)
-                out_people[name] = {"name": name, "team": merged_team, "notes": merged_notes}
+                # One person can hold more than one position across service times.
+                merged_positions = list(existing.get("positions") or [])
+                if position and position not in merged_positions:
+                    merged_positions.append(position)
+                out_people[name] = {
+                    "name": name,
+                    "team": merged_team,
+                    "position": merged_positions[0] if merged_positions else '',
+                    "positions": merged_positions,
+                    "notes": merged_notes,
+                }
             else:
-                out_people[name] = {"name": name, "team": team_name, "notes": notes_list}
+                out_people[name] = {
+                    "name": name,
+                    "team": team_name,
+                    "position": position,
+                    "positions": [position] if position else [],
+                    "notes": notes_list,
+                }
 
     people_list = sorted(out_people.values(), key=lambda x: (x.get('team') or '', x.get('name') or ''))
 
@@ -735,9 +859,141 @@ def _get_plan_people_via_relationship(plan_id: str, headers: Dict[str, str], sti
     return _http_get(link, headers, params)
 
 
-def sync_from_pco(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
+def _team_matches_filters(team_name: Optional[str], team_filters: List[str]) -> bool:
+    """Case-insensitive substring match, as documented for mapping.team_name_filter."""
+    if not team_filters:
+        return True
+    haystack = (team_name or '').lower()
+    return any(f in haystack for f in team_filters if f)
+
+
+def _select_plan(
+    services: Dict[str, Any],
+    headers: Dict[str, str],
+    plan_id_override: Optional[str] = None,
+) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+    """Resolve which plan to read.
+
+    Returns ``(service_type_id, plan_id, error)`` -- exactly one of ``plan_id``
+    or ``error`` is set.
     """
-    Fetch the selected plan, read person notes by configured category, map to (extended_id, extended_name), and apply.
+    if plan_id_override:
+        return (None, plan_id_override, None)
+
+    plan_select = (services.get('plan') or {}).get('select', 'next')
+    if plan_select != 'next':
+        return (None, None, 'Unsupported plan selection')
+
+    # If a service type was configured, use it; otherwise scan for the global next plan.
+    st_raw = services.get('service_type') if 'service_type' in services else services.get('service_type_id')
+    if st_raw:
+        stid = _resolve_service_type_id(st_raw, headers)
+        if not stid:
+            return (None, None, 'Unable to resolve Service Type')
+        return (stid, _get_next_plan_id(stid, headers), None)
+
+    nxt = _get_next_plan_global(headers)
+    if not nxt:
+        return (None, None, 'No plan selected or upcoming plan found')
+    return (nxt[0], nxt[1], None)
+
+
+def _fetch_plan_people(stid: Optional[int], plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
+    """Prefer the service-scoped plan_people path to avoid redirects and 404s."""
+    plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
+    if not plan_people:
+        plan_people = _get_plan_people_any(plan_id, headers)
+    return plan_people
+
+
+def _flatten_plan_people(
+    plan_people: Dict[str, Any],
+    category: str,
+    team_filters: List[str],
+) -> List[Dict[str, Any]]:
+    """Reduce the PCO plan_people payload to the fields mapping cares about.
+
+    Planning Center carries the mic name and number on the team position
+    (``PlanPerson.attributes.team_position_name``), which is why that value is
+    captured here alongside the legacy note/bracket sources.
+    """
+    included_maps = _build_included_maps(plan_people.get('included') or [])
+    people: List[Dict[str, Any]] = []
+
+    for pp in plan_people.get('data') or []:
+        attrs = pp.get('attributes') or {}
+        rel = pp.get('relationships') or {}
+
+        team_rel = (rel.get('team') or {}).get('data') or {}
+        team_name = None
+        if team_rel:
+            team_t = (team_rel.get('type') or '').lower()
+            team_id = team_rel.get('id')
+            team_obj = included_maps.get(team_t, {}).get(str(team_id)) if team_id else None
+            team_name = ((team_obj or {}).get('attributes') or {}).get('name') if team_obj else None
+        if not _team_matches_filters(team_name, team_filters):
+            continue
+
+        person_rel = (rel.get('person') or {}).get('data') or {}
+        person_obj = None
+        if person_rel:
+            p_t = (person_rel.get('type') or '').lower()
+            p_id = person_rel.get('id')
+            person_obj = included_maps.get(p_t, {}).get(str(p_id)) if p_id else None
+        person_name = _person_display_name(person_obj or {})
+        # PlanPerson.name is a usable fallback when the person include is absent.
+        if not person_name:
+            person_name = (attrs.get('name') or '').strip()
+
+        notes_data = (rel.get('notes') or {}).get('data') or []
+        note_objs = []
+        for nd in notes_data:
+            nd_t = (nd.get('type') or '').lower()
+            nd_id = nd.get('id')
+            if nd_id:
+                note_objs.append(included_maps.get(nd_t, {}).get(str(nd_id)))
+        note_text = _get_note_text_for_category(
+            [n for n in note_objs if n], included_maps, category)
+
+        people.append({
+            'name': person_name,
+            'team': team_name or '',
+            'position': (attrs.get('team_position_name') or '').strip(),
+            'note': (note_text or '').strip(),
+            'bracket_id': _extract_bracket_id(person_name) or '',
+        })
+
+    return people
+
+
+def _dedupe_people(people: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Collapse duplicate rows for the same position, keeping the last one.
+
+    A person scheduled to several service times shows up once per time; without
+    this the same slot would be written repeatedly.
+    """
+    deduped: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    for person in people:
+        key = (
+            pco_mapping.normalize_label(person.get('position')),
+            pco_mapping.normalize_label(person.get('note')),
+            pco_mapping.normalize_label(person.get('name')),
+        )
+        deduped[key] = person
+    return list(deduped.values())
+
+
+def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False) -> Dict[str, Any]:
+    """Read the selected plan and map its people onto Wirelessboard slots.
+
+    Each scheduled person is matched by their PCO team position name (for
+    example ``Vocal 1``), falling back to the configured note category and to an
+    ``[ID]`` in the person's name.  One position can resolve to several slots --
+    typically the mic channel and its matching IEM channel -- and every match
+    receives the person's name in ``extended_name``.
+
+    With ``dry_run=True`` nothing is written; the resolved mapping is returned so
+    the UI can show what a real sync would do.
     """
     try:
         pco_cfg = get_pco_config()
@@ -750,103 +1006,72 @@ def sync_from_pco(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
         'Authorization': _basic_auth_header(auth['token'], auth['secret'])
     }
 
-    services = pco_cfg.get('services', {})
-    plan_select = (services.get('plan') or {}).get('select', 'next')
     mapping = pco_cfg.get('mapping', {})
+    options = _mapping_options(mapping)
     category = mapping.get('note_category') or 'Mic / IEM Assignments'
-    team_filters = [t.lower() for t in (mapping.get('team_name_filter') or [])]
+    team_filters = [t.strip().lower() for t in (mapping.get('team_name_filter') or []) if t and t.strip()]
 
-    plan_id = None
-    stid = None
-    if plan_id_override:
-        plan_id = plan_id_override
-    else:
-        if plan_select == 'next':
-            # If service_type was configured, use that; else find global next
-            st_raw = services.get('service_type') if 'service_type' in services else services.get('service_type_id')
-            if st_raw:
-                stid = _resolve_service_type_id(st_raw, headers)
-                if not stid:
-                    return {"ok": False, "error": "Unable to resolve Service Type"}
-                plan_id = _get_next_plan_id(stid, headers)
-            else:
-                nxt = _get_next_plan_global(headers)
-                if nxt:
-                    stid, plan_id = nxt[0], nxt[1]
-        else:
-            return {"ok": False, "error": "Unsupported plan selection"}
-
+    stid, plan_id, error = _select_plan(pco_cfg.get('services', {}), headers, plan_id_override)
+    if error:
+        return {"ok": False, "error": error}
     if not plan_id:
         return {"ok": False, "error": "No plan selected or upcoming plan found"}
 
-    # Prefer service-scoped plan_people path to avoid redirects and 404s. If no stid
-    # is known or that fails, try generic and then scan all services as a fallback.
-    plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
-    if not plan_people:
-        plan_people = _get_plan_people_any(plan_id, headers)
+    plan_people = _fetch_plan_people(stid, plan_id, headers)
     if not plan_people:
         return {"ok": False, "error": "Unable to fetch plan people"}
 
-    included_maps = _build_included_maps(plan_people.get('included') or [])
+    people = _dedupe_people(_flatten_plan_people(plan_people, category, team_filters))
+    resolved, unmatched = resolve_assignments(people, options)
+    conflicts = find_conflicts(resolved)
 
-    assignments: List[Tuple[str, str, Optional[str]]] = []
-    for pp in plan_people.get('data') or []:
-        rel = pp.get('relationships') or {}
-        # team filter
-        team_rel = (rel.get('team') or {}).get('data') or {}
-        if team_rel:
-            team_t = (team_rel.get('type') or '').lower()
-            team_id = team_rel.get('id')
-            team_obj = included_maps.get(team_t, {}).get(str(team_id)) if team_id else None
-            team_name = ((team_obj or {}).get('attributes') or {}).get('name') if team_obj else None
-            if team_filters and (not team_name or team_name.lower() not in team_filters):
-                continue
+    updates = 0 if dry_run else _apply_assignments(resolved, options)
 
-        # person name
-        person_rel = (rel.get('person') or {}).get('data') or {}
-        person_obj = None
-        if person_rel:
-            p_t = (person_rel.get('type') or '').lower()
-            p_id = person_rel.get('id')
-            person_obj = included_maps.get(p_t, {}).get(str(p_id)) if p_id else None
-        person_name = _person_display_name(person_obj or {})
+    for conflict in conflicts:
+        logger.warning(
+            'PCO sync: slot %s claimed by %s -- "%s" wins',
+            conflict['slot'],
+            ', '.join(sorted({c['name'] for c in conflict['claimants']})),
+            conflict['winner'],
+        )
 
-        # notes
-        notes_data = (rel.get('notes') or {}).get('data') or []
-        note_objs = []
-        for nd in notes_data:
-            nd_t = (nd.get('type') or '').lower()
-            nd_id = nd.get('id')
-            note_objs.append(included_maps.get(nd_t, {}).get(str(nd_id)) if nd_id else None)
-        note_text = _get_note_text_for_category([n for n in note_objs if n], included_maps, category)
+    if unmatched:
+        logger.info(
+            'PCO sync left %s scheduled %s unmatched (no slot for %s)',
+            len(unmatched),
+            'person' if len(unmatched) == 1 else 'people',
+            ', '.join(sorted({u.get('position') or u.get('name') or '?' for u in unmatched})),
+        )
 
-        ext_id = None
-        if note_text:
-            ext_id = note_text.strip()
-        if not ext_id:
-            # fallback to bracketed id in person name
-            ext_id = _extract_bracket_id(person_name)
-
-        if ext_id:
-            assignments.append((ext_id, person_name, note_text))
-
-    # Deduplicate by ext_id, keep last occurrence
-    dedup: Dict[str, Tuple[str, Optional[str]]] = {}
-    for ext_id, name, note in assignments:
-        dedup[ext_id] = (name, note)
-    dedup_pairs = [(k, v[0]) for k, v in dedup.items()]
-    dedup_list = [(k, v[0], v[1]) for k, v in dedup.items()]
-
-    updates = _apply_assignments(dedup_pairs)
+    slots_matched = sum(len(entry.get('slots') or []) for entry in resolved)
 
     return {
         "ok": True,
+        "dry_run": dry_run,
         "plan_id": plan_id,
+        "strategy": options['strategy'],
         "note_category": category,
-        "assignments": len(dedup_list),
+        "people": len(people),
+        "assignments": len(resolved),
+        "slots_matched": slots_matched,
         "updates": updates,
-        "assignment_details": [{"id": i[0], "name": i[1], "note": i[2] or ''} for i in dedup_list]
+        "unmatched": unmatched,
+        "conflicts": conflicts,
+        "assignment_details": [{
+            "id": entry.get('label') or '',
+            "name": entry.get('name') or '',
+            "team": entry.get('team') or '',
+            "position": entry.get('position') or '',
+            "note": entry.get('note') or '',
+            "matched_via": entry.get('matched_via') or '',
+            "slots": entry.get('slots') or [],
+        } for entry in resolved],
     }
+
+
+def preview_sync(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
+    """Dry-run of :func:`sync_from_pco` -- resolves the mapping without saving."""
+    return sync_from_pco(plan_id_override, dry_run=True)
 
 
 def notes_for_plan(plan_id_override: Optional[str] = None, source_override: Optional[str] = None) -> Dict[str, Any]:
@@ -866,35 +1091,17 @@ def notes_for_plan(plan_id_override: Optional[str] = None, source_override: Opti
         'Authorization': _basic_auth_header(auth['token'], auth['secret'])
     }
 
-    services = pco_cfg.get('services', {})
-    plan_select = (services.get('plan') or {}).get('select', 'next')
     mapping = pco_cfg.get('mapping', {})
     category = mapping.get('note_category') or 'Mic / IEM Assignments'
-    team_filters = [t.lower() for t in (mapping.get('team_name_filter') or [])]
+    team_filters = [t.strip().lower() for t in (mapping.get('team_name_filter') or []) if t and t.strip()]
     source_raw = source_override or mapping.get('note_source') or 'auto'
     source = (source_raw or 'auto').lower()
     if source not in ['person', 'plan', 'auto']:
         source = 'auto'
 
-    plan_id = None
-    stid = None
-    if plan_id_override:
-        plan_id = plan_id_override
-    else:
-        if plan_select == 'next':
-            st_raw = services.get('service_type') if 'service_type' in services else services.get('service_type_id')
-            if st_raw:
-                stid = _resolve_service_type_id(st_raw, headers)
-                if not stid:
-                    return {"ok": False, "error": "Unable to resolve Service Type"}
-                plan_id = _get_next_plan_id(stid, headers)
-            else:
-                nxt = _get_next_plan_global(headers)
-                if nxt:
-                    stid, plan_id = nxt[0], nxt[1]
-        else:
-            return {"ok": False, "error": "Unsupported plan selection"}
-
+    stid, plan_id, error = _select_plan(pco_cfg.get('services', {}), headers, plan_id_override)
+    if error:
+        return {"ok": False, "error": error}
     if not plan_id:
         return {"ok": False, "error": "No plan selected or upcoming plan found"}
 
@@ -932,62 +1139,31 @@ def notes_for_plan(plan_id_override: Optional[str] = None, source_override: Opti
                 collected.append({
                     "person": '',
                     "team": '',
+                    "position": '',
                     "note": text,
                     "ext_id": '',
                 })
         return (collected, None)
 
     def _collect_person_notes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
-        if not plan_people:
-            plan_people = _get_plan_people_any(plan_id, headers)
+        plan_people = _fetch_plan_people(stid, plan_id, headers)
         if not plan_people:
             return ([], "Unable to fetch plan people")
 
-        included_maps = _build_included_maps(plan_people.get('included') or [])
         collected: List[Dict[str, Any]] = []
-        for pp in plan_people.get('data') or []:
-            rel = pp.get('relationships') or {}
-
-            team_name = None
-            team_rel = (rel.get('team') or {}).get('data') or {}
-            if team_rel:
-                team_t = (team_rel.get('type') or '').lower()
-                team_id = team_rel.get('id')
-                team_obj = included_maps.get(team_t, {}).get(str(team_id)) if team_id else None
-                team_name = ((team_obj or {}).get('attributes') or {}).get('name') if team_obj else None
-                if team_filters and (not team_name or team_name.lower() not in team_filters):
-                    continue
-
-            person_rel = (rel.get('person') or {}).get('data') or {}
-            person_obj = None
-            if person_rel:
-                p_t = (person_rel.get('type') or '').lower()
-                p_id = person_rel.get('id')
-                person_obj = included_maps.get(p_t, {}).get(str(p_id)) if p_id else None
-            person_name = _person_display_name(person_obj or {})
-
-            notes_data = (rel.get('notes') or {}).get('data') or []
-            note_objs = []
-            for nd in notes_data:
-                nd_t = (nd.get('type') or '').lower()
-                nd_id = nd.get('id')
-                note_objs.append(included_maps.get(nd_t, {}).get(str(nd_id)) if nd_id else None)
-            note_text = _get_note_text_for_category([n for n in note_objs if n], included_maps, category)
-
-            ext_id = None
-            if note_text:
-                ext_id = note_text.strip()
-            if not ext_id:
-                ext_id = _extract_bracket_id(person_name)
-
-            if note_text or ext_id:
-                collected.append({
-                    "person": person_name,
-                    "team": team_name,
-                    "note": note_text or '',
-                    "ext_id": ext_id or '',
-                })
+        for person in _flatten_plan_people(plan_people, category, team_filters):
+            # The position name is the primary identifier now, so a row is worth
+            # showing whenever any of the three sources produced something.
+            ext_id = person.get('position') or person.get('note') or person.get('bracket_id')
+            if not (person.get('note') or ext_id):
+                continue
+            collected.append({
+                "person": person.get('name') or '',
+                "team": person.get('team') or '',
+                "position": person.get('position') or '',
+                "note": person.get('note') or '',
+                "ext_id": ext_id or '',
+            })
         return (collected, None)
 
     notes_out: List[Dict[str, Any]] = []

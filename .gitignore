@@ -17,5 +17,16 @@ dist/
 build/
 release/
 
+# Webpack output (built from js/ via `npm run build`; hand-authored assets
+# such as static/*.html, static/*.css, images and fonts are NOT matched here)
+static/*.js
+static/*.js.map
+static/*.LICENSE.txt
+
+# Runtime configuration containing secrets (see config/config.json.example
+# for a sanitized template)
+config/config.json
+
 # macOS metadata
 .DS_Store
+**/.DS_Store

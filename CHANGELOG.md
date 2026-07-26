@@ -2,13 +2,27 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- PCO sync now maps people by their Planning Center **team position name** (for example `Vocal 1`), which is where the mic name and number now live. One position can fill several slots, so a vocalist under `Vocal 1` updates both the mic channel and its matching IEM channel.
+- New `mapping.strategy` values `position_or_note` (default) and `position`; the previous behaviour is still available as `note_or_brackets`.
+- New `mapping.position_number_fallback` option (on by default) lets position `Vocal 1` match slots labelled `Mic 1` and `IEM 1`, with the slot's device type checked so IEM labels only match PSM1000 slots.
+- New `mapping.seed_extended_id` option (off by default) fills empty slot IDs with the position name after a successful match.
+- New `POST /api/pco/preview` endpoint and a **Preview Sync** button that resolve the whole mapping without writing to `config.json`, listing which slots each position matched and which scheduled people matched nothing.
+- Python test suite under `py/tests/` (`npm test`), covering label normalization, slot matching, assignment resolution, and the PCO payload flattening. CI now runs it alongside the build.
+- ESLint configuration and a `npm run lint` script, so the eslint dev dependencies are actually used.
+- `config/config.json.example` as a sanitized configuration template.
 
 ### Changed
-- _Nothing yet._
+- The PCO sync result table now shows position, person, team, matched slots, and which rule matched, plus a separate list of scheduled people that found no slot.
+- `mapping.team_name_filter` is now applied consistently as a case-insensitive substring match everywhere (it previously required an exact match during sync).
+- Plan selection and plan-people fetching are shared between sync and the notes preview instead of being duplicated.
+- `.gitignore` now covers webpack output, `config/config.json`, and nested `.DS_Store` files.
 
 ### Fixed
-- _Nothing yet._
+- Slot resolution no longer stops at the first matching slot, so a person assigned to both a mic and an IEM updates both.
+- Socket, discovery, and Google Drive failures that were silently swallowed are now logged at debug level with a traceback.
+- Removed the unreachable fallback `return` in `localURL()`, the dead `micboard_json()` wrapper, the two unused reload-config handlers, and the unreferenced `py/util.py`.
+- Removed leftover debug `print`/`console.log` statements from request handlers and the frontend.
+- `docs/api.md` no longer claims a `/micboard.json` endpoint exists; only `/data.json` is served.
 
 ## [1.3.4] - 2025-12-13
 ### Added

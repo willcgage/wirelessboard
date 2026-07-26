@@ -301,8 +301,6 @@ export function updateSlot(data) {
 }
 
 export function renderDisplayList(dl) {
-  console.log('DL :');
-  console.log(dl);
   document.getElementById('micboard').innerHTML = '';
 
   if (micboard.url.demo) {

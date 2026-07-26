@@ -24,7 +24,6 @@ function slotOrder() {
     }
   }
 
-  console.log('slotlist:' + slotList);
   return slotList;
 }
 
@@ -74,7 +73,6 @@ function clearAll() {
 
 function onDrop(id, src, dst) {
   const slot = parseInt(id.id.replace(/[^\d.]/g, ''), 10);
-  console.log('DSLOT: ' + slot);
   micboard.displayList = slotOrder();
 
   const eslots = calcEditSlots();
@@ -125,9 +123,6 @@ function GridLayout() {
   });
   renderEditSlots(calcEditSlots());
   swappable.on('sortable:stop', (evt) => {
-    console.log('DROP');
-    console.log(evt.dragEvent);
-
     setTimeout(onDrop, 125, evt.dragEvent.source, evt.oldContainer.id, evt.newContainer.id)
   });
 
@@ -159,7 +154,6 @@ function submitSlotUpdate() {
   };
 
 
-  console.log(update);
   postJSON(url, update);
   groupEditToggle();
 }

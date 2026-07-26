@@ -77,10 +77,10 @@ def SocketService():
         for rx in read_socks:
             try:
                 data = rx.f.recv(1024).decode('UTF-8')
-            except:
+            except Exception:
+                logger.debug('Socket recv failed for %s', rx.ip, exc_info=True)
                 rx.socket_disconnect()
                 break
-            # print("read: {} data: {}".format(rx.ip,data))
 
             d = '>'
             if rx.type == 'uhfr':
@@ -88,7 +88,6 @@ def SocketService():
             data = [e+d for e in data.split(d) if e]
 
             for line in data:
-                # rx.parse_raw_rx(line)
                 DeviceMessageQueue.put((rx, line))
 
             rx.socket_watchdog = int(time.perf_counter())
@@ -103,8 +102,8 @@ def SocketService():
                     rx.f.sendall(bytearray(string, 'UTF-8'))
                 elif rx.type == 'uhfr':
                     rx.f.sendto(bytearray(string, 'UTF-8'), (rx.ip, 2202))
-            except:
-                logger.warning('TX error', extra={'context': {'ip': rx.ip, 'payload': string}})
+            except Exception:
+                logger.warning('TX error', extra={'context': {'ip': rx.ip, 'payload': string}}, exc_info=True)
 
 
         for rx in error_socks:
@@ -118,7 +117,6 @@ def on_exit():
     for rx in connected:
         rx.disable_metering()
     time.sleep(50)
-    print("IT DONE!")
     sys.exit(0)
 
 # atexit.register(on_exit)

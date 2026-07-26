@@ -88,7 +88,6 @@ export function generateQR() {
   const qrCanvas = document.getElementById('qrcode');
   QRCode.toCanvas(qrCanvas, url, qrOptions, (error) => {
     if (error) console.error(error)
-    console.log('success!');
   });
   const verEl = document.getElementById('wirelessboard-version') || document.getElementById('micboard-version');
   if (verEl) verEl.innerHTML = 'Wirelessboard version: ' + VERSION;

@@ -28,7 +28,6 @@ logger = logging.getLogger('micboard.web')
 def file_list(extension):
     files = []
     dir_list = os.listdir(config.get_gif_dir())
-    # print(fileList)
     for file in dir_list:
         if file.lower().endswith(extension):
             files.append(file)
@@ -41,9 +40,9 @@ def localURL():
     try:
         ip = socket.gethostbyname(socket.gethostname())
         return 'http://{}:{}'.format(ip, config.config_tree['port'])
-    except:
+    except OSError:
+        logger.debug('Unable to resolve local IP for the QR code URL', exc_info=True)
         return 'https://github.com/willcgage/wirelessboard'
-    return 'https://github.com/willcgage/wirelessboard'
 
 def wirelessboard_json(network_devices):
     offline_devices = offline.offline_json()
@@ -75,10 +74,6 @@ def wirelessboard_json(network_devices):
         'discovery_status': discover.get_dcid_status(),
     }, sort_keys=True, indent=4)
 
-
-def micboard_json(network_devices):
-    """Legacy alias for compatibility."""
-    return wirelessboard_json(network_devices)
 
 class IndexHandler(web.RequestHandler):
     def get(self):
@@ -168,7 +163,7 @@ class SlotHandler(web.RequestHandler):
         self.write('{}')
         for slot_update in data:
             config.update_slot(slot_update)
-            print(slot_update)
+            logger.debug('Slot update payload: %s', slot_update)
 
 
 class SlotDeviceNamesHandler(web.RequestHandler):
@@ -427,27 +422,30 @@ class GroupUpdateHandler(web.RequestHandler):
     def post(self):
         data = json.loads(self.request.body)
         config.update_group(data)
-        print(data)
+        logger.debug('Group update payload: %s', data)
         self.write(data)
-
-class WirelessboardReloadConfigHandler(web.RequestHandler):
-    def post(self):
-        print("RECONFIG")
-        config.reconfig(config.config_tree.get("slots", []))
-        self.write("restarting")
-
-class MicboardReloadConfigHandler(WirelessboardReloadConfigHandler):
-    """Legacy alias for compatibility with prior imports."""
-    pass
-
 
 class PcoSyncHandler(web.RequestHandler):
     def post(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_override = self.get_query_argument('plan', default=None)
-        result = pco.sync_from_pco(plan_override)
+        dry_run = self.get_query_argument('dry_run', default='').lower() in ('1', 'true', 'yes')
+        result = pco.sync_from_pco(plan_override, dry_run=dry_run)
         self.write(json.dumps(result))
+
+
+class PcoPreviewHandler(web.RequestHandler):
+    """Resolve the PCO mapping without writing anything to config.json."""
+
+    def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        plan_override = self.get_query_argument('plan', default=None)
+        self.write(json.dumps(pco.preview_sync(plan_override)))
+
+    def post(self):
+        self.get()
 
 
 class PcoConfigHandler(web.RequestHandler):
@@ -791,6 +789,7 @@ def twisted():
     (r'/api/logs', LogsHandler),
         (r'/api/config', ConfigHandler),
         (r'/api/pco/sync', PcoSyncHandler),
+        (r'/api/pco/preview', PcoPreviewHandler),
         (r'/api/pco/config', PcoConfigHandler),
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
@@ -803,7 +802,6 @@ def twisted():
         (r'/api/cloud/google-drive/auth/clear', GoogleDriveAuthClearHandler),
         (r'/api/cloud/google-drive/files', GoogleDriveFilesHandler),
         (r'/oauth/google-drive', GoogleDriveAuthLandingHandler),
-    # (r'/restart/', WirelessboardReloadConfigHandler),
         (r'/static/(.*)', web.StaticFileHandler, {'path': config.app_dir('static')}),
         (r'/bg/(.*)', BackgroundAssetHandler, {'path': ''}),
     ])

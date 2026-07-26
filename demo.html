@@ -246,12 +246,41 @@
                 </div>
               <div class="form-group col-md-6 col-12 mt-2 mt-md-0">
                 <label for="pco-team-filter" class="form-label">Team Name Filter</label>
-                <input type="text" class="form-control" id="pco-team-filter" name="pco-team-filter" placeholder="Team Name Filter (comma-separated)" autocomplete="off">
+                <input type="text" class="form-control" id="pco-team-filter" name="pco-team-filter" placeholder="Team Name Filter (comma-separated, e.g. Vocal, Band)" autocomplete="off">
+              </div>
+            </div>
+            <div class="form-row mt-2">
+              <div class="form-group col-md-6 col-12">
+                <label for="pco-strategy" class="form-label">Assignment Source</label>
+                <select id="pco-strategy" class="form-select" aria-label="Assignment source">
+                  <option value="position_or_note">Team position, then note category</option>
+                  <option value="position">Team position only</option>
+                  <option value="note_or_brackets">Note category, then [ID] in name (legacy)</option>
+                </select>
+                <div class="form-text">
+                  Planning Center positions carry the mic name and number &mdash; a person under position
+                  &ldquo;Vocal 1&rdquo; fills the slots labelled for mic 1 and IEM 1.
+                </div>
+              </div>
+              <div class="form-group col-md-6 col-12 mt-2 mt-md-0">
+                <div class="form-check mt-md-4">
+                  <input type="checkbox" class="form-check-input" id="pco-number-fallback" checked>
+                  <label class="form-check-label" for="pco-number-fallback">
+                    Match by trailing number when the label differs
+                  </label>
+                </div>
+                <div class="form-check mt-2">
+                  <input type="checkbox" class="form-check-input" id="pco-seed-extended-id">
+                  <label class="form-check-label" for="pco-seed-extended-id">
+                    Fill empty slot IDs with the position name
+                  </label>
+                </div>
               </div>
             </div>
             <div class="form-row mt-3">
               <div class="col">
                 <button type="submit" id="pco-save" class="btn btn-primary mr-2">Save PCO Settings</button>
+                <button type="button" id="pco-preview-sync" class="btn btn-outline-secondary mr-2">Preview Sync</button>
                 <button type="button" id="pco-sync" class="btn btn-secondary">Sync Now</button>
               </div>
             </div>
@@ -338,11 +367,13 @@
           <div class="table-responsive" id="pco-assignments-table" style="display:none;">
             <table class="table table-sm table-striped">
               <thead>
-                <tr><th>ID</th><th>Name</th><th>Note</th></tr>
+                <tr><th>Position</th><th>Person</th><th>Team</th><th>Slots</th><th>Matched by</th></tr>
               </thead>
               <tbody></tbody>
             </table>
           </div>
+          <div id="pco-conflicts" class="small mt-2"></div>
+          <div id="pco-unmatched" class="small mt-2"></div>
           <pre id="pco-sync-json" class="bg-light p-2" style="max-height: 300px; overflow: auto;"></pre>
         </div>
       </div>

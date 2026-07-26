@@ -38,10 +38,11 @@ Example (`auth` block is generated automatically once credentials are saved):
       }
     },
     "mapping": {
-      "strategy": "note_or_brackets",
+      "strategy": "position_or_note",
       "note_category": "Mic / IEM Assignments",
-      "team_name_filter": ["Band", "Vocals"],
-      "default_group": 1
+      "team_name_filter": ["Vocal", "Band"],
+      "position_number_fallback": true,
+      "seed_extended_id": false
     }
   },
   "groups": [ ... ],
@@ -58,22 +59,72 @@ Field notes:
 - `services.plan.select`:
   - `next`: fetches the next upcoming plan for this service type.
   - You can later support explicit `plan_id` or `date`.
-- `mapping.strategy`: Initial implementation will support two conventions:
-  1. A person’s plan note in category `Mic / IEM Assignments` equals an ID like `H01`, `BP14` (your Wirelessboard `extended_id`).
-  2. If no note exists, parse square brackets from the name, e.g., `"Fatai [H01]"`.
-- `mapping.team_name_filter`: Only use assignments from these teams.
+- `mapping.strategy`: Which identifier to read a person’s mic from, and in what order.
+  - `position_or_note` (default): the PCO **team position name** first, then the note category, then an `[ID]` in the person’s name.
+  - `position`: the team position name only.
+  - `note_or_brackets`: the pre-1.4 order — note category, then brackets, then position.
+- `mapping.team_name_filter`: Only use assignments from these teams. Matched case-insensitively as a substring, so `"Vocal"` also covers a team named `"Vocal Team A"`.
+- `mapping.position_number_fallback` (default `true`): Allows a position to match a slot whose label uses a different word but the same number — position `Vocal 1` matching slots labelled `Mic 1` and `IEM 1`. Set to `false` to require exact label matches.
+- `mapping.seed_extended_id` (default `false`): When a slot has no `extended_id` yet, write the position name into it so later syncs match exactly. Off by default so the integration never relabels slots you set up by hand.
 
 ## How the mapping works
-1. Wirelessboard asks PCO for the selected plan’s team member assignments (limited to `team_name_filter`).
-2. For each person:
-  - If they have a plan note in category `Mic / IEM Assignments`, use that as `extended_id`.
-   - Else, if their display name contains `[ID]`, extract that as `extended_id`.
-   - Set `extended_name` to the person’s first/last name.
-3. For each `extended_id`, find the corresponding Wirelessboard slot by matching the slot’s existing `extended_id` (recommended) or by the short convention you choose. If a slot already has `extended_id`, it’s updated with the latest `extended_name`. If you’re starting fresh, you can pre‑seed slot `extended_id`s to the IDs you use in PCO (e.g., H01…H08, BP11…BP16).
+Planning Center carries the mic name and number on the **team position** a person is
+scheduled to. A vocalist under team `Vocal`, position `Vocal 1`, is mic 1 — and
+usually IEM 1 as well. Wirelessboard reads that position
+(`PlanPerson.attributes.team_position_name`) and resolves it to slots.
 
-This keeps the mapping deterministic and easy to reason about.
+1. Wirelessboard fetches the selected plan’s people, dropping anyone whose team is
+   excluded by `team_name_filter`.
+2. For each person it builds candidate labels in the order set by `mapping.strategy`:
+   the team position name, the plan note in `note_category`, and an `[ID]` in the
+   person’s display name.
+3. Each candidate is matched against the configured slots in three passes, stopping at
+   the first pass that hits anything:
+   1. **Slot `extended_id` equals the label.** The recommended setup — explicit and
+      predictable.
+   2. **A Shure channel name equals the label.** Uses whatever is typed into the
+      receiver.
+   3. **Trailing numbers agree** (only when `position_number_fallback` is on). The slot
+      label’s prefix has to either match the position’s prefix or be a recognised
+      device word (`Mic`, `IEM`, `HH`, `BP`, …), and when it names a device kind the
+      slot’s configured type has to agree. So `Vocal 1` finds `Mic 1` on a ULXD slot
+      and `IEM 1` on a PSM1000 slot, but never `Band 1`.
+4. **Every** slot matched in the winning pass receives the person’s name in
+   `extended_name`. This is what lets one position fill both a mic channel and its
+   matching IEM channel.
+
+Comparisons ignore case, punctuation, spacing, and leading zeros, so `Vocal 1`,
+`vocal-01`, and `VOCAL_1` are the same label.
+
+Device names — live or manually entered — are never touched by a sync. Only
+`extended_name` is written (plus `extended_id` if you opt into `seed_extended_id`).
 
 > The assignment table in the UI expects each slot to expose either a device name (the Shure channel label) or an extended name. If both are blank Wirelessboard highlights those slots with a warning so you can add identifiers in the Config view before mapping people.
+
+### Worked example
+Slots configured in Wirelessboard:
+
+| slot | type | `extended_id` |
+| --- | --- | --- |
+| 1 | `ulxd` | `Mic 1` |
+| 2 | `ulxd` | `Mic 2` |
+| 9 | `p10t` | `IEM 1` |
+
+Plan in Planning Center:
+
+| team | position | person |
+| --- | --- | --- |
+| Vocal | Vocal 1 | Fatai V |
+| Vocal | Vocal 2 | Brooke L |
+
+After a sync, slots 1 and 9 both read `Fatai V` and slot 2 reads `Brooke L`.
+
+### Previewing before you commit
+`POST /api/pco/preview` (or the **Preview Sync** button in the PCO view) runs the whole
+resolution and returns what *would* change without writing to `config.json`. The
+response lists which slots each position matched, which pass matched them, and any
+scheduled people that found no slot at all — the fastest way to confirm your slot
+labels line up with your position names.
 
 ## Using the sync endpoint
 Once configured, trigger a manual sync:
@@ -88,11 +139,38 @@ Response example:
 ```
 {
   "ok": true,
+  "dry_run": false,
   "plan_id": "12345678",
+  "strategy": "position_or_note",
+  "people": 7,
   "assignments": 6,
-  "updates": 4
+  "slots_matched": 11,
+  "updates": 4,
+  "unmatched": [
+    { "name": "Guest Speaker", "team": "Vocal", "position": "Vocal 9", "note": "", "tried": ["Vocal 9"] }
+  ],
+  "assignment_details": [
+    {
+      "id": "Vocal 1",
+      "name": "Fatai V",
+      "team": "Vocal",
+      "position": "Vocal 1",
+      "note": "",
+      "matched_via": "position",
+      "slots": [
+        { "slot": 1, "type": "ulxd", "extended_id": "Mic 1", "kind": "mic", "via": "number:extended_id" },
+        { "slot": 9, "type": "p10t", "extended_id": "IEM 1", "kind": "iem", "via": "number:extended_id" }
+      ]
+    }
+  ]
 }
 ```
+
+`slots_matched` counts slots, `assignments` counts people. Anything in `unmatched`
+needs either a slot label that lines up or `position_number_fallback` enabled.
+
+Add `?dry_run=true` to resolve without saving, or call `POST /api/pco/preview`, which
+does the same thing.
 
 If config is missing, you’ll get a helpful error payload.
 
@@ -108,13 +186,32 @@ POST http://<wirelessboard-host>:<port>/api/pco/sync?plan=<PLAN_ID>
 
 ## Next steps and extensions
 - Support explicit `plan_id` or date window selection.
-- Provide a UI toggle/button in the config/extended names screens to trigger sync.
 - Surface sync status in `/data.json` so front‑end can display last sync time.
 - Adopt a conflict strategy (e.g., don’t override manual `extended_name` edits unless explicitly allowed).
 
+## Troubleshooting
+
+**Everything comes back unmatched.** Run **Preview Sync** and read the `tried` list on
+each unmatched entry — that is the exact label Wirelessboard looked for. Compare it to
+the `extended_id` values in the Config view. If the position is `Vocal 1` and your slots
+are unlabelled, either give them labels or turn on `position_number_fallback` and label
+them `Mic 1` / `IEM 1`.
+
+**The IEM slot never fills in.** Number fallback checks the slot type: a slot labelled
+`IEM 1` only counts as an IEM if its `type` is `p10t`. Confirm the PSM1000 is configured
+with the right type.
+
+**A person lands on the wrong slot.** Two slots probably share a trailing number with a
+device-word prefix. Set explicit `extended_id`s (pass 1 always beats the number
+fallback), or set `position_number_fallback` to `false` to require exact labels.
+
+**Nobody is returned at all.** Check `team_name_filter`. It is a substring match, so
+`"Vocal"` matches `"Vocal Team A"`, but `"Vocals"` will not match a team named
+`"Vocal"`. An empty list means no filtering.
+
 ---
 
-Implementation status: The integration ships with a credential helper (`py/pco_credentials.py`), runtime validation in `py/pco.py`, and a sync endpoint (`/api/pco/sync`). Configure credentials through the UI (or drop them in `config.json` once for migration) and Wirelessboard stores them securely in your operating system keyring.
+Implementation status: The integration ships with a credential helper (`py/pco_credentials.py`), the matching rules in `py/pco_mapping.py` (covered by `py/tests/`), runtime validation in `py/pco.py`, a sync endpoint (`/api/pco/sync`), and a dry-run endpoint (`/api/pco/preview`). Configure credentials through the UI (or drop them in `config.json` once for migration) and Wirelessboard stores them securely in your operating system keyring.
 
 ### Saving credentials in the UI
 

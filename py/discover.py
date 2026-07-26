@@ -180,11 +180,11 @@ def _open_multicast_socket() -> socket.socket:
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     except OSError:
-        pass
+        logger.debug('Unable to set SO_REUSEADDR on discovery socket', exc_info=True)
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     except (AttributeError, OSError):
-        pass
+        logger.debug('Unable to set SO_REUSEPORT on discovery socket (unsupported on this platform)', exc_info=True)
     try:
         sock.bind((MCAST_GRP, MCAST_PORT))
     except OSError:

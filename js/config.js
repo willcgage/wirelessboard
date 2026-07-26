@@ -2181,7 +2181,6 @@ export function initConfigEditor(force = false) {
     micboard.stopLogAutoRefresh = stopLogAutoRefresh;
   }
   if (!force && micboard.settingsMode === 'CONFIG') {
-    console.log('oh that explains it!')
     return;
   }
 
@@ -2370,15 +2369,7 @@ export function initConfigEditor(force = false) {
   const services = pco.services || {};
   const elSt = document.getElementById('pco-service-type');
   if (elSt) elSt.value = (services.service_type || services.service_type_id || '');
-  const mapping = pco.mapping || {};
-  const elCat = document.getElementById('pco-note-category');
-  const elSource = document.getElementById('pco-note-source');
-  if (elCat) elCat.value = mapping.note_category || 'Mic / IEM Assignments';
-  if (elSource) elSource.value = mapping.note_source || 'person';
-  if (Array.isArray(mapping.team_name_filter)) {
-    const elTeam = document.getElementById('pco-team-filter');
-    if (elTeam) elTeam.value = mapping.team_name_filter.join(', ');
-  }
+  applyPcoMappingToForm(pco.mapping);
 
   const addDisc = document.getElementById('add-discovered');
   if (addDisc) addDisc.addEventListener('click', () => {
@@ -2389,7 +2380,6 @@ export function initConfigEditor(force = false) {
   if (saveBtn) saveBtn.addEventListener('click', ()=> {
     const data = generateJSONConfig();
     const url = 'api/config';
-    console.log(data);
     setDiscoveryStatus('Saving discovery settings…', 'info');
     postJSON(url, data, (resp) => {
       if (resp && typeof resp === 'object') {
@@ -2464,9 +2454,6 @@ function populatePCOFormFromServer() {
         const elToken = document.getElementById('pco-token');
         const elSecret = document.getElementById('pco-secret');
         const elStid = document.getElementById('pco-service-type-id');
-        const elCat = document.getElementById('pco-note-category');
-        const elSource = document.getElementById('pco-note-source');
-        const elTeam = document.getElementById('pco-team-filter');
         if (elEnabled) elEnabled.checked = !!p.enabled;
         if (elToken) elToken.value = '';
         if (elSecret) elSecret.value = '';
@@ -2474,10 +2461,7 @@ function populatePCOFormFromServer() {
         if (elStid) elStid.value = s.service_type_id || '';
         const elSt2 = document.getElementById('pco-service-type');
         if (elSt2) elSt2.value = (s.service_type || s.service_type_id || '');
-        const m = p.mapping || {};
-        if (elCat) elCat.value = m.note_category || 'Mic / IEM Assignments';
-        if (elSource) elSource.value = m.note_source || 'person';
-        if (elTeam) elTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
+        applyPcoMappingToForm(p.mapping);
         ensureNotePreviewUI();
         renderPcoCredentialStatus(p.auth || {});
         appendPcoLog('Loaded saved PCO configuration.');
@@ -2510,6 +2494,27 @@ export function bindPcoNav() {
   window.addEventListener('wirelessboard:open-pco', showPCOView);
 }
 
+// Planning Center carries the mic name and number on the team position, so the
+// position is the default source and the note category is only a fallback.
+const DEFAULT_PCO_STRATEGY = 'position_or_note';
+
+function applyPcoMappingToForm(mapping) {
+  const m = mapping || {};
+  const elCat = document.getElementById('pco-note-category');
+  const elSource = document.getElementById('pco-note-source');
+  const elTeam = document.getElementById('pco-team-filter');
+  const elStrategy = document.getElementById('pco-strategy');
+  const elNumberFallback = document.getElementById('pco-number-fallback');
+  const elSeed = document.getElementById('pco-seed-extended-id');
+
+  if (elCat) elCat.value = m.note_category || 'Mic / IEM Assignments';
+  if (elSource) elSource.value = m.note_source || 'person';
+  if (elTeam) elTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
+  if (elStrategy) elStrategy.value = m.strategy || DEFAULT_PCO_STRATEGY;
+  if (elNumberFallback) elNumberFallback.checked = m.position_number_fallback !== false;
+  if (elSeed) elSeed.checked = m.seed_extended_id === true;
+}
+
 function buildPcoPayload() {
   const enabled = document.getElementById('pco-enabled')?.checked || false;
   const token = (document.getElementById('pco-token')?.value || '').trim();
@@ -2519,16 +2524,21 @@ function buildPcoPayload() {
   const noteCategory = (document.getElementById('pco-note-category')?.value || 'Mic / IEM Assignments').trim();
   const noteSource = (document.getElementById('pco-note-source')?.value || 'person').trim() || 'person';
   const teamFilterRaw = (document.getElementById('pco-team-filter')?.value || '');
+  const strategy = (document.getElementById('pco-strategy')?.value || '').trim() || DEFAULT_PCO_STRATEGY;
+  const numberFallbackEl = document.getElementById('pco-number-fallback');
+  const seedExtendedIdEl = document.getElementById('pco-seed-extended-id');
   const payload = {
     enabled,
     services: {
       plan: { select: 'next' },
     },
     mapping: {
-      strategy: 'note_or_brackets',
+      strategy,
       note_category: noteCategory,
       note_source: noteSource,
       team_name_filter: teamFilterRaw.split(',').map(s => s.trim()).filter(s => s),
+      position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : true,
+      seed_extended_id: seedExtendedIdEl ? !!seedExtendedIdEl.checked : false,
     },
   };
   if (serviceType) {
@@ -2614,7 +2624,7 @@ function renderNotePreviewResults(target, notes, planId, catName) {
   table.className = 'table table-sm table-striped mt-1';
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
-  ['Ext ID', 'Person', 'Team', 'Note'].forEach(label => {
+  ['Ext ID', 'Person', 'Team', 'Position', 'Note'].forEach(label => {
     const th = document.createElement('th');
     th.textContent = label;
     headRow.appendChild(th);
@@ -2625,7 +2635,7 @@ function renderNotePreviewResults(target, notes, planId, catName) {
   const tbody = document.createElement('tbody');
   notes.forEach(n => {
     const tr = document.createElement('tr');
-    ['ext_id', 'person', 'team', 'note'].forEach(key => {
+    ['ext_id', 'person', 'team', 'position', 'note'].forEach(key => {
       const td = document.createElement('td');
       td.textContent = (n && n[key]) ? n[key] : '';
       tr.appendChild(td);
@@ -2793,7 +2803,103 @@ function handlePcoSave() {
   });
 }
 
-function handlePcoSync() {
+function describeSlotMatch(slot) {
+  if (!slot) return '';
+  const bits = [`slot ${slot.slot}`];
+  if (slot.kind) bits.push(slot.kind === 'iem' ? 'IEM' : 'mic');
+  else if (slot.type) bits.push(slot.type);
+  if (slot.extended_id) bits.push(`“${slot.extended_id}”`);
+  return bits.join(' · ');
+}
+
+const MATCH_SOURCE_LABELS = {
+  position: 'team position',
+  note: 'note category',
+  bracket: '[ID] in name',
+};
+
+function renderSyncAssignments(details) {
+  const tbl = document.getElementById('pco-assignments-table');
+  const tbody = document.querySelector('#pco-assignments-table tbody');
+  if (!tbl || !tbody) return;
+  tbody.innerHTML = '';
+
+  const headRow = document.querySelector('#pco-assignments-table thead tr');
+  if (headRow) {
+    headRow.innerHTML = '<th>Position</th><th>Person</th><th>Team</th><th>Slots</th><th>Matched by</th>';
+  }
+
+  details.forEach((item) => {
+    const tr = document.createElement('tr');
+    const slots = Array.isArray(item.slots) ? item.slots : [];
+    const cells = [
+      item.position || item.id || '',
+      item.name || '',
+      item.team || '',
+      slots.map(describeSlotMatch).join(', '),
+      MATCH_SOURCE_LABELS[item.matched_via] || item.matched_via || '',
+    ];
+    cells.forEach((text) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  tbl.style.display = details.length ? 'block' : 'none';
+}
+
+function renderSyncConflicts(conflicts) {
+  const target = document.getElementById('pco-conflicts');
+  if (!target) return;
+  target.innerHTML = '';
+  if (!Array.isArray(conflicts) || !conflicts.length) return;
+
+  const heading = document.createElement('div');
+  heading.className = 'text-danger';
+  heading.textContent = `${conflicts.length} slot${conflicts.length === 1 ? '' : 's'} claimed by more than one person:`;
+  target.appendChild(heading);
+
+  const list = document.createElement('ul');
+  list.className = 'mb-0';
+  conflicts.forEach((c) => {
+    const names = (c.claimants || []).map(x => x.name).filter(Boolean);
+    const li = document.createElement('li');
+    li.textContent = `slot ${c.slot}: ${names.join(', ')} — “${c.winner}” wins`;
+    list.appendChild(li);
+  });
+  target.appendChild(list);
+}
+
+function renderSyncUnmatched(unmatched) {
+  const target = document.getElementById('pco-unmatched');
+  if (!target) return;
+  target.innerHTML = '';
+  if (!Array.isArray(unmatched) || !unmatched.length) return;
+
+  const heading = document.createElement('div');
+  heading.className = 'text-warning';
+  heading.textContent = `${unmatched.length} scheduled ${unmatched.length === 1 ? 'person' : 'people'} had no matching slot:`;
+  target.appendChild(heading);
+
+  const list = document.createElement('ul');
+  list.className = 'mb-0';
+  unmatched.forEach((entry) => {
+    const li = document.createElement('li');
+    const label = entry.position || entry.note || entry.name || '?';
+    li.textContent = entry.name ? `${label} — ${entry.name}` : label;
+    list.appendChild(li);
+  });
+  target.appendChild(list);
+
+  const hint = document.createElement('div');
+  hint.className = 'text-muted mt-1';
+  hint.textContent = 'Give those slots a matching Extended ID in the Config view, or enable number matching.';
+  target.appendChild(hint);
+}
+
+function handlePcoSync(dryRun = false) {
   const summaryEl = document.getElementById('pco-sync-summary');
   const jsonEl = document.getElementById('pco-sync-json');
   const tbl = document.getElementById('pco-assignments-table');
@@ -2823,50 +2929,61 @@ function handlePcoSync() {
     const tbody = tbl.querySelector('tbody');
     if (tbody) tbody.innerHTML = '';
   }
+  const unmatchedEl = document.getElementById('pco-unmatched');
+  if (unmatchedEl) unmatchedEl.innerHTML = '';
+  const conflictsEl = document.getElementById('pco-conflicts');
+  if (conflictsEl) conflictsEl.innerHTML = '';
+
   const planSel = document.getElementById('pco-plan-select');
   const selectedPlan = planSel ? (planSel.value || '') : '';
-  const url = selectedPlan ? ('api/pco/sync?plan=' + encodeURIComponent(selectedPlan)) : 'api/pco/sync';
-  appendPcoLog(`Syncing assignments with PCO ${selectedPlan ? `(plan ${selectedPlan})` : '(auto plan)' }...`);
+  const endpoint = dryRun ? 'api/pco/preview' : 'api/pco/sync';
+  const url = selectedPlan ? `${endpoint}?plan=${encodeURIComponent(selectedPlan)}` : endpoint;
+  const verb = dryRun ? 'Previewing' : 'Syncing';
+  appendPcoLog(`${verb} assignments with PCO ${selectedPlan ? `(plan ${selectedPlan})` : '(auto plan)'}...`);
+
   fetch(url, { method: 'POST' })
     .then(r => r.json())
     .then(resp => {
       if (jsonEl) jsonEl.textContent = JSON.stringify(resp, null, 2);
-      if (resp && resp.ok) {
-        const a = resp.assignments || 0;
-        const u = resp.updates || 0;
-        const pid = resp.plan_id || '-';
-        const cat = resp.note_category || 'Mic / IEM Assignments';
-        if (summaryEl) summaryEl.innerHTML = `Plan ${pid}: ${a} assignment(s), ${u} update(s) — Note Category: ${cat}`;
-        appendPcoLog(`Sync complete for plan ${pid} (Note Category: ${cat}): ${a} assignment(s), ${u} update(s).`);
-        if (Array.isArray(resp.assignment_details) && resp.assignment_details.length) {
-          const tbody = document.querySelector('#pco-assignments-table tbody');
-          const headRow = document.querySelector('#pco-assignments-table thead tr');
-          if (headRow && headRow.children.length < 3) {
-            headRow.innerHTML = '<th>ID</th><th>Name</th><th>Note</th>';
-          }
-          if (tbody) {
-            resp.assignment_details.forEach(item => {
-              const tr = document.createElement('tr');
-              const td1 = document.createElement('td');
-              const td2 = document.createElement('td');
-              const td3 = document.createElement('td');
-              td1.textContent = item.id || '';
-              td2.textContent = item.name || '';
-              td3.textContent = item.note || '';
-              tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
-              tbody.appendChild(tr);
-            });
-            if (tbl) tbl.style.display = 'block';
-          }
-        }
-      } else {
-        if (summaryEl) summaryEl.innerHTML = `<span class="text-danger">${(resp && resp.error) || 'Sync failed'}</span>`;
-        appendPcoLog(`PCO sync failed: ${(resp && resp.error) || 'Unknown error'}`, 'error');
+      if (!resp || !resp.ok) {
+        const message = (resp && resp.error) || (dryRun ? 'Preview failed' : 'Sync failed');
+        if (summaryEl) summaryEl.innerHTML = `<span class="text-danger">${message}</span>`;
+        appendPcoLog(`PCO ${dryRun ? 'preview' : 'sync'} failed: ${message}`, 'error');
+        return;
       }
+
+      const details = Array.isArray(resp.assignment_details) ? resp.assignment_details : [];
+      const unmatched = Array.isArray(resp.unmatched) ? resp.unmatched : [];
+      const conflicts = Array.isArray(resp.conflicts) ? resp.conflicts : [];
+      const planId = resp.plan_id || '-';
+      const slotsMatched = resp.slots_matched || 0;
+      const summaryParts = [
+        `Plan ${planId}`,
+        `${details.length} assignment${details.length === 1 ? '' : 's'}`,
+        `${slotsMatched} slot${slotsMatched === 1 ? '' : 's'} matched`,
+      ];
+      if (resp.dry_run) {
+        summaryParts.push('<strong>preview only — nothing saved</strong>');
+      } else {
+        summaryParts.push(`${resp.updates || 0} update${(resp.updates || 0) === 1 ? '' : 's'}`);
+      }
+      if (unmatched.length) summaryParts.push(`${unmatched.length} unmatched`);
+      if (conflicts.length) summaryParts.push(`<span class="text-danger">${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}</span>`);
+      if (summaryEl) summaryEl.innerHTML = summaryParts.join(' — ');
+
+      appendPcoLog(`${resp.dry_run ? 'Preview' : 'Sync'} complete for plan ${planId}: `
+        + `${details.length} assignment(s), ${slotsMatched} slot(s) matched, `
+        + `${resp.dry_run ? 'no changes written' : `${resp.updates || 0} update(s)`}`
+        + `${unmatched.length ? `, ${unmatched.length} unmatched` : ''}.`,
+      unmatched.length ? 'warn' : 'info');
+
+      renderSyncAssignments(details);
+      renderSyncConflicts(conflicts);
+      renderSyncUnmatched(unmatched);
     })
     .catch(err => {
-      if (summaryEl) summaryEl.innerHTML = `<span class="text-danger">${err}</span>`;
-      appendPcoLog(`PCO sync request error: ${formatError(err)}`, 'error');
+      if (summaryEl) summaryEl.innerHTML = `<span class="text-danger">${formatError(err)}</span>`;
+      appendPcoLog(`PCO ${dryRun ? 'preview' : 'sync'} request error: ${formatError(err)}`, 'error');
     });
 }
 
@@ -2879,7 +2996,10 @@ export function bindPcoHandlers() {
       handlePcoSave();
     } else if (t.id === 'pco-sync') {
       e.preventDefault();
-      handlePcoSync();
+      handlePcoSync(false);
+    } else if (t.id === 'pco-preview-sync') {
+      e.preventDefault();
+      handlePcoSync(true);
     } else if (t.id === 'pco-note-preview') {
       e.preventDefault();
       handleNotePreview();
