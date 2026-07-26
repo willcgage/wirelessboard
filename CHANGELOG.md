@@ -10,7 +10,14 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.4.3] - 2026-07-26
+### Fixed
+- **macOS signing works.** The certificate supplied to CI had been exported by OpenSSL 3, which defaults to AES-256 with a SHA-256 MAC. Apple's Security framework reads only the legacy PKCS#12 encoding and rejects anything else as `MAC verification failed during PKCS12 import (wrong password?)` — a misleading message, since the password was correct. Re-exported with `PBE-SHA1-3DES` and a SHA-1 MAC.
+- The certificate diagnostic lists every identity rather than only valid ones. An isolated keychain has no search-list context to chain a leaf through Apple's intermediate to the root, so the previous check reported zero valid identities for a perfectly good certificate.
+
 ## [1.4.2] - 2026-07-26
+> Never released. The Windows installer built, but both macOS jobs failed importing the signing certificate. Use 1.4.3.
+
 ### Fixed
 - **macOS builds are now genuinely signed and notarized.** 1.4.1 shipped the configuration for this but not the result: the certificate available to CI held no valid `Developer ID Application` identity, so electron-builder logged a warning, skipped signing, and the job still reported success. The certificate has been reissued and the release workflow now prints the identities it finds before building, so a missing one fails loudly instead of silently.
 - **The Windows installer is back.** 1.4.1 produced none. `CSC_LINK` and `CSC_KEY_PASSWORD` are electron-builder's generic signing variables rather than macOS-specific ones, so setting them for the whole job handed the Apple certificate to `signtool`, which rejected it. They are now scoped to macOS.
