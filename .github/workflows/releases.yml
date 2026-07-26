@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install Node dependencies
-        run: npm install
+        run: npm ci
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -78,7 +78,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install Node dependencies
-        run: npm install
+        run: npm ci
       - name: Verify pinned electron rebuild
         run: npm ls @electron/rebuild
       - name: Install Python dependencies (handled by npm postinstall)
@@ -189,7 +189,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install Node dependencies
-        run: npm install
+        run: npm ci
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
