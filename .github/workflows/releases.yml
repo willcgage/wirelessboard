@@ -52,13 +52,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # artifact_folder must match electron-builder.yml's `output:
+          # release/${platform}`, where ${platform} is Node's process.platform
+          # — hence darwin and win32, not mac and win.
           - runner: macos-latest
             release_script: npm run release:mac:ci
             artifact_folder: release/darwin
             artifact_name: wirelessboard-macos
           - runner: windows-latest
             release_script: npm run release:win:ci
-            artifact_folder: release/win
+            artifact_folder: release/win32
             artifact_name: wirelessboard-windows
     runs-on: ${{ matrix.runner }}
     env:
@@ -150,7 +153,10 @@ jobs:
           if [ -d "${{ matrix.artifact_folder }}" ]; then
             echo "✓ Output directory exists: ${{ matrix.artifact_folder }}"
             echo "Contents:"
-            find "${{ matrix.artifact_folder }}" -type f | head -10
+            # `|| true` because this step runs under `bash -eo pipefail`: head
+            # closes the pipe after 10 lines, find dies on EPIPE, and the whole
+            # job used to fail here long after the release had been published.
+            find "${{ matrix.artifact_folder }}" -type f | head -10 || true
             echo "Total files: $(find "${{ matrix.artifact_folder }}" -type f | wc -l)"
             echo "Directory size: $(du -sh "${{ matrix.artifact_folder }}" | cut -f1)"
           else
