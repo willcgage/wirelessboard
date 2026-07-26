@@ -10,6 +10,24 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.4.1] - 2026-07-26
+### Added
+- macOS builds are signed with a Developer ID Application certificate and notarized by Apple. Signing turns on when the Apple credentials are configured, so a fork without them still builds (unsigned) rather than failing.
+- Hardened-runtime entitlements in `resources/`, covering the JIT and unsigned executable memory Electron needs and the library validation the bundled Python service requires.
+
+### Changed
+- The macOS installers are built on separate runners per architecture: Apple Silicon on `macos-latest`, Intel on `macos-15-intel`.
+- CI installs with `npm ci` instead of `npm install`, so every build starts from exactly what `package-lock.json` specifies.
+- Lint configuration moved from `.eslintrc.json` to `.eslintrc.cjs` so each deviation from `airbnb-base` records why it exists.
+
+### Fixed
+- **The Intel macOS app shipped an Apple Silicon Python service and could never have run.** The bundled service is built natively and is not universal, but both architectures were packaged on one Apple Silicon runner, so the x64 app received an arm64 binary.
+- **macOS refused to open the app with "damaged and can't be opened".** Nothing in the release was signed, and that is the message macOS shows for an unsigned app carrying a quarantine flag. Users of 1.4.0 and earlier can clear it with `xattr -dr com.apple.quarantine "/Applications/Wirelessboard Server.app"`.
+- `node_modules` was tracked in Git despite being listed in `.gitignore`. Every checkout carried 25,516 stale files, and installing over them left packages whose contents did not match their versions, which is why the CI lint step died on files missing from inside eslint.
+- The release workflow failed after publishing: the Windows job looked for its output in `release/win`, which electron-builder never writes, and the verification step's `find | head` pipeline aborted under `bash -eo pipefail`.
+- `js/demodata.js` assigned to the global `window.name` while collecting transmitter names, and compared display styles with `==` in `js/channelview.js`. Removed dead code and unused imports throughout `js/`.
+- `docs/installation.md` said the macOS desktop app was discontinued. It now documents which disk image to download for which Mac.
+
 ## [1.4.0] - 2026-07-26
 ### Added
 - PCO sync now identifies each scheduled person by their Planning Center **team position name** (for example `Vocal 1`), read from `PlanPerson.attributes.team_position_name`. This is where the mic name and number now live.
