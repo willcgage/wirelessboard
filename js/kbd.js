@@ -1,13 +1,14 @@
-'use strict';
-
-import { Modal } from 'bootstrap'
-import { micboard, updateHash, generateQR, showHudPane } from './app.js';
-import { toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode } from './display';
+import { Modal } from 'bootstrap';
+import {
+  micboard, updateHash, generateQR, showHudPane,
+} from './app.js';
+import {
+  toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
+} from './display.js';
 import { renderGroup } from './channelview.js';
-import { groupEditToggle, initEditor } from './dnd.js';
+import { groupEditToggle } from './dnd.js';
 import { slotEditToggle } from './extended.js';
 import { initConfigEditor } from './config.js';
-
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API
 function toggleFullScreen() {
@@ -18,21 +19,19 @@ function toggleFullScreen() {
   }
 }
 
-
 function activeDiv(querySelector) {
-  const div = document.querySelector(querySelector)
+  const div = document.querySelector(querySelector);
   if (div) {
-    if (window.getComputedStyle(div).getPropertyValue('display') === "block") {
-      return true
+    if (window.getComputedStyle(div).getPropertyValue('display') === 'block') {
+      return true;
     }
   }
-  return false
+  return false;
 }
-
 
 export function keybindings() {
   document.addEventListener('keydown', (e) => {
-    const target = e.target;
+    const { target } = e;
     const tag = target && target.tagName ? target.tagName.toUpperCase() : '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.isContentEditable)) {
       return;
@@ -117,7 +116,7 @@ export function keybindings() {
 
     if (e.key === 'N') {
       slotEditToggle();
-      document.getElementById('paste-box').style.display = "block"
+      document.getElementById('paste-box').style.display = 'block';
     }
 
     if (e.key === 's') {
@@ -126,8 +125,8 @@ export function keybindings() {
 
     if (e.key === 'q') {
       generateQR();
-      const qrMod = Modal.getOrCreateInstance('#qr-modal')
-      qrMod.toggle()
+      const qrMod = Modal.getOrCreateInstance('#qr-modal');
+      qrMod.toggle();
     }
 
     if (e.key === 't') {

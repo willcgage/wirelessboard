@@ -1,5 +1,3 @@
-'use strict';
-
 import { micboard } from './app.js';
 
 const MEDIA_EXTENSIONS = {

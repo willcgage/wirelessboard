@@ -1,25 +1,23 @@
-"use strict";
-
 import { Collapse } from 'bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import QRCode from 'qrcode';
 import 'whatwg-fetch';
 
-import { autoRandom, seedTransmitters } from './demodata.js';
-import { renderGroup, renderDisplayList, updateSlot } from './channelview.js';
+import { renderGroup } from './channelview.js';
 import { initLiveData } from './data.js';
 import { groupEditToggle, initEditor } from './dnd.js';
 import { slotEditToggle } from './extended.js';
 import { keybindings } from './kbd.js';
 import { setBackground, setInfoDrawer } from './display.js';
 import { setTimeMode } from './chart-smoothie.js';
-import { initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule, scheduleBackgroundFilenameGuide } from './config.js';
+import {
+  initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule, scheduleBackgroundFilenameGuide,
+} from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 
 import '../css/colors.scss';
 import '../css/style.scss';
-import '../node_modules/@ibm/plex/css/ibm-plex.css';
-
+import '@ibm/plex/css/ibm-plex.css';
 
 export const dataURL = 'data.json';
 
@@ -61,7 +59,7 @@ export function ActivateMessageBoard(h1, p) {
   }
 
   const mbEl = document.getElementById('micboard');
-  if (mbEl) mbEl.style.display = 'none'
+  if (mbEl) mbEl.style.display = 'none';
   const settingsEl = document.getElementsByClassName('settings')[0];
   if (settingsEl) settingsEl.style.display = 'none';
   const eb = document.getElementsByClassName('message-board')[0];
@@ -70,7 +68,7 @@ export function ActivateMessageBoard(h1, p) {
     if (h1el) h1el.innerHTML = h1;
     const pel = eb.querySelector('p');
     if (pel) pel.innerHTML = p;
-    eb.style.display = 'block'
+    eb.style.display = 'block';
   }
 
   micboard.connectionStatus = 'DISCONNECTED';
@@ -82,15 +80,15 @@ export function generateQR() {
     margin: 0,
   };
 
-  const url = micboard.localURL + location.pathname + location.search;
+  const url = micboard.localURL + window.location.pathname + window.location.search;
   const linkEl = document.getElementById('largelink');
   if (linkEl) { linkEl.href = url; linkEl.innerHTML = url; }
   const qrCanvas = document.getElementById('qrcode');
   QRCode.toCanvas(qrCanvas, url, qrOptions, (error) => {
-    if (error) console.error(error)
+    if (error) console.error(error);
   });
   const verEl = document.getElementById('wirelessboard-version') || document.getElementById('micboard-version');
-  if (verEl) verEl.innerHTML = 'Wirelessboard version: ' + VERSION;
+  if (verEl) verEl.innerHTML = `Wirelessboard version: ${VERSION}`;
 }
 
 function groupTableBuilder(data) {
@@ -358,7 +356,7 @@ function mapGroups() {
         renderGroup(target);
         hideHud();
         resetViews();
-        if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
+        if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (err) {} }
       });
     });
   }
@@ -387,7 +385,6 @@ function getUrlParameter(sParam) {
   return undefined;
 }
 
-
 function readURLParameters() {
   micboard.url.group = getUrlParameter('group');
   micboard.url.demo = getUrlParameter('demo');
@@ -412,28 +409,27 @@ export function updateHash() {
     hash += '&demo=true';
   }
   if (micboard.group !== 0) {
-    hash += '&group=' + micboard.group;
+    hash += `&group=${micboard.group}`;
   }
   if (micboard.displayMode === 'tvmode') {
-    hash += '&tvmode=' + micboard.infoDrawerMode;
+    hash += `&tvmode=${micboard.infoDrawerMode}`;
   }
   if (micboard.backgroundMode !== 'NONE') {
-    hash += '&bgmode=' + micboard.backgroundMode;
+    hash += `&bgmode=${micboard.backgroundMode}`;
   }
   if (micboard.settingsMode === 'CONFIG') {
     if (micboard.configTab === 'logs') {
-      hash = '#settings=logs'
+      hash = '#settings=logs';
     } else {
-      hash = '#settings=true'
+      hash = '#settings=true';
     }
   } else if (micboard.settingsMode === 'PCO') {
-    hash = '#pco=true'
+    hash = '#pco=true';
   } else if (micboard.settingsMode === 'BACKGROUND') {
-    hash = '#background=true'
+    hash = '#background=true';
   }
   hash = hash.replace('&', '');
-  history.replaceState(undefined, undefined, hash);
-
+  window.history.replaceState(undefined, undefined, hash);
 }
 
 configureConfigModule({
@@ -460,7 +456,6 @@ function displayListChooser() {
     renderGroup(0);
   }
 }
-
 
 function ensureHudVersion() {
   const hud = document.getElementById('hud');
@@ -498,10 +493,8 @@ function ensureHudVersion() {
     col.appendChild(versionText);
   }
 
-  versionText.textContent = 'Wirelessboard version ' + VERSION;
+  versionText.textContent = `Wirelessboard version ${VERSION}`;
 }
-
-
 
 function initialMap(callback) {
   fetch(dataURL)
@@ -523,7 +516,7 @@ function initialMap(callback) {
         } else {
           micboard.backgroundDefaultMode = 'NONE';
         }
-  micboard.discovery_status = data.discovery_status || null;
+        micboard.discovery_status = data.discovery_status || null;
         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
           try {
             const eventName = 'wirelessboard:discovery-status';
@@ -536,7 +529,7 @@ function initialMap(callback) {
         mapGroups();
 
         if (micboard.config.slots.length < 1 && micboard.url.pco !== 'true') {
-          setTimeout(function() {
+          setTimeout(() => {
             initConfigEditor();
           }, 125);
         }
@@ -544,7 +537,7 @@ function initialMap(callback) {
         if (micboard.url.demo !== 'true') {
           dataFilterFromList(data);
         }
-  try { displayListChooser(); } catch (e) {}
+        try { displayListChooser(); } catch (e) {}
 
         if (callback) {
           callback();
@@ -569,9 +562,8 @@ function initialMap(callback) {
     });
 }
 
-
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Starting Wirelessboard version: ' + VERSION);
+  console.log(`Starting Wirelessboard version: ${VERSION}`);
   readURLParameters();
   // Early guard: hide secondary views before any rendering
   try {
@@ -611,7 +603,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const pcoView = document.getElementById('pco-settings');
         if (mb) mb.style.display = 'none';
         if (pcoView) pcoView.style.display = 'none';
-        document.querySelector('.settings')?.style && (document.querySelector('.settings').style.display = 'block');
+        const settings = document.querySelector('.settings');
+        if (settings?.style) settings.style.display = 'block';
       } catch (_) {}
     }, 100);
   }
@@ -622,10 +615,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (pcoNav) {
         try { pcoNav.click(); } catch (e) {}
       } else {
-  const ev = new Event('micboard:open-pco');
+        const ev = new Event('micboard:open-pco');
         window.dispatchEvent(ev);
-  const newEv = new Event('wirelessboard:open-pco');
-  window.dispatchEvent(newEv);
+        const newEv = new Event('wirelessboard:open-pco');
+        window.dispatchEvent(newEv);
       }
     }, 100);
   }

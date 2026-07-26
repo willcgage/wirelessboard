@@ -1,5 +1,3 @@
-'use strict';
-
 import { micboard } from './app.js';
 import { updateSlot } from './channelview.js';
 import { updateChart } from './chart-smoothie.js';
@@ -41,7 +39,6 @@ const batterySample = {
 
 const rfSample = ['AX', 'XB', 'XX', 'BRXX', 'XRXB', 'XXBR'];
 
-
 const name_sample = [
   'Fatai', 'Marsh', 'Delwin', 'Tracy', 'Backup', 'Steve', 'J.E.', 'Lonnie',
   'Sharon', 'Del ACU', 'Troy', 'Matt', 'Karl', 'Anders', 'Mikey', 'Dan',
@@ -49,8 +46,6 @@ const name_sample = [
   'Stephen', 'Aaron', 'Tom', 'Nick', 'Eugene', 'Brittani', 'MattW', 'Natrice',
   'Mollie', 'Albert', 'Gillen', 'Steph', '',
 ];
-
-const prefix_sample = ['HH', 'BP'];
 
 const type_sample = ['uhfr', 'qlxd', 'ulxd', 'axtd'];
 
@@ -68,7 +63,7 @@ function randomNameGenerator() {
 }
 
 function randomIPGenerator() {
-  return '192.168.103.' + getRandomInt(50, 150);
+  return `192.168.103.${getRandomInt(50, 150)}`;
 }
 
 function current_names() {
@@ -76,20 +71,19 @@ function current_names() {
 
   micboard.displayList.forEach((e) => {
     if (e !== 0) {
-      name = micboard.transmitters[e].name;
-      const prefix = name.substring(0, 2);
-      const number = name.substring(2, 4);
-      name = name.substring(5);
-      names.push(name);
+      // This used to assign to the bare `name`, i.e. the global window.name,
+      // and computed a prefix and number that were never read.
+      const transmitterName = micboard.transmitters[e].name;
+      names.push(transmitterName.substring(5));
     }
   });
 
   return names;
 }
 
-function uniqueRandomNameGenerator(slot) {
+function uniqueRandomNameGenerator() {
   const used_names = current_names();
-  const namebank = name_sample.filter(el => !used_names.includes(el));
+  const namebank = name_sample.filter((el) => !used_names.includes(el));
 
   const len = namebank.length;
   const index = getRandomInt(0, len - 1);
@@ -134,7 +128,6 @@ function randomRfGenerator() {
   return getRandomInt(0, 50);
 }
 
-
 function randomRuntimeGenerator(battery_minmax) {
   const hours = getRandomInt(battery_minmax[0], battery_minmax[1]);
   const mins = getRandomInt(0, 59).toString().padStart(2, '0');
@@ -174,7 +167,6 @@ function randomDataGenerator() {
   return res;
 }
 
-
 function unixtimestamp() {
   return new Date() / 1000;
 }
@@ -205,12 +197,11 @@ export function seedTransmitters(dl) {
       // const n = 'HH' + slot.toString().padStart(2, '0') + ' ' + names[i];
       const n = names[i];
       r.name = n;
-      r.id = 'HH' + slot.toString().padStart(2, '0');
+      r.id = `HH${slot.toString().padStart(2, '0')}`;
       micboard.transmitters[slot] = r;
     }
   }
 }
-
 
 function meteteredRandomDataGenerator(update) {
   if (micboard.displayList.length === 0) {
@@ -223,7 +214,7 @@ function meteteredRandomDataGenerator(update) {
   }
   const data = JSON.parse(JSON.stringify(micboard.transmitters[slot]));
 
-  data.id = 'HH' + slot.toString().padStart(2, '0');
+  data.id = `HH${slot.toString().padStart(2, '0')}`;
 
   data.timestamp = unixtimestamp();
   switch (update) {
@@ -248,7 +239,6 @@ function meteteredRandomDataGenerator(update) {
   return data;
 }
 
-
 function randomCharts() {
   micboard.displayList.forEach((n) => {
     if (n !== 0) {
@@ -261,13 +251,10 @@ function randomCharts() {
   });
 }
 
-
 export function autoRandom() {
-  for (const key in timers) {
-    if (timers.hasOwnProperty(key)) {
-      clearInterval(timers[key]);
-    }
-  }
+  Object.keys(timers).forEach((key) => {
+    clearInterval(timers[key]);
+  });
 
   timers = {};
 

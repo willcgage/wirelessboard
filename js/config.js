@@ -1,11 +1,16 @@
-'use strict';
-
 import { Collapse } from 'bootstrap';
-import { Sortable, Plugins } from '@shopify/draggable';
 
 import { postJSON } from './data.js';
 
 const noop = () => {};
+
+// Bootstrap text colours for the status lines above the PCO and log panes.
+// Anything unrecognised falls back to text-muted, as the old nested ternaries did.
+const STATUS_CLASSES = {
+  success: 'text-success',
+  error: 'text-danger',
+  warn: 'text-warning',
+};
 
 let resolveMicboard = () => (typeof window !== 'undefined' ? window.micboard : null);
 let pendingMicboard = {};
@@ -326,7 +331,7 @@ function renderDiscoveredDeviceList() {
     const t = template.content.cloneNode(true);
     const row = t.querySelector('.cfg-row');
     if (row) {
-      row.id = 'slot-' + slot.slot;
+      row.id = `slot-${slot.slot}`;
       row.querySelector('.cfg-type').value = slot.type || '';
       row.querySelector('.cfg-ip').value = slot.ip || '';
       row.querySelector('.cfg-channel').value = slot.channel || '';
@@ -348,7 +353,7 @@ function updateSlotID() {
   const rows = document.querySelectorAll('#editor_holder .cfg-row');
   let slot = 1;
   Array.from(rows).forEach((row) => {
-    row.id = 'slot-' + slot;
+    row.id = `slot-${slot}`;
     const label = row.querySelector('.slot-number label');
     if (label) label.textContent = slot;
     slot += 1;
@@ -368,15 +373,6 @@ function hideHUDOverlay() {
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
   } catch (_) {}
 }
-
-function updateEditEntry(slotSelector, data) {
-  if (data.ip) {
-    slotSelector.querySelector('.cfg-ip').value = data.ip;
-  }
-  slotSelector.querySelector('.cfg-type').value = data.type;
-  slotSelector.querySelector('.cfg-channel').value = data.channel;
-}
-
 
 function ensurePcoCredentialStatusElement() {
   let el = document.getElementById('pco-credential-status');
@@ -578,7 +574,7 @@ function bindLogViewerHandlers() {
   const purgeBtn = logEl('logs-purge');
   if (purgeBtn) {
     purgeBtn.addEventListener('click', () => {
-      if (!confirm('Purge all log files? This will clear the current log and any backups.')) return;
+      if (!window.confirm('Purge all log files? This will clear the current log and any backups.')) return;
       setLogsStatus('Purging logs…', 'info');
       fetch('api/logs/purge', {
         method: 'POST',
@@ -586,7 +582,7 @@ function bindLogViewerHandlers() {
         body: '{}',
       })
         .then((response) => {
-          if (!response.ok) throw new Error('Request failed (' + response.status + ')');
+          if (!response.ok) throw new Error(`Request failed (${response.status})`);
           return response.json();
         })
         .then((data) => {
@@ -652,9 +648,9 @@ async function refreshLogMetadata({ initial = false } = {}) {
   const statusLabel = initial ? 'Loading logs…' : 'Refreshing log metadata…';
   setLogsStatus(statusLabel, 'info');
   try {
-    const response = await fetch('api/logs/settings?_=' + Date.now(), { cache: 'no-store' });
+    const response = await fetch(`api/logs/settings?_=${Date.now()}`, { cache: 'no-store' });
     if (!response.ok) {
-      throw new Error('Request failed (' + response.status + ')');
+      throw new Error(`Request failed (${response.status})`);
     }
     const data = await response.json();
     if (data && data.ok === false) {
@@ -668,7 +664,7 @@ async function refreshLogMetadata({ initial = false } = {}) {
       logViewerState.options.sources = data.sources;
     }
 
-    const filters = logViewerState.filters;
+    const { filters } = logViewerState;
     if (filters.level && !logViewerState.options.levels.includes(filters.level)) {
       filters.level = '';
     }
@@ -743,7 +739,7 @@ function renderLogFilters() {
 }
 
 function renderLogSettings() {
-  const settings = Object.assign({}, DEFAULT_LOG_SETTINGS, logViewerState.settings || {});
+  const settings = { ...DEFAULT_LOG_SETTINGS, ...logViewerState.settings || {} };
   if (typeof settings.levels !== 'object' || settings.levels === null) {
     settings.levels = {};
   }
@@ -821,7 +817,7 @@ function getOverrideForSource(source, overrides) {
   if (Object.prototype.hasOwnProperty.call(overrides, source)) {
     return overrides[source];
   }
-  const fullName = 'micboard.' + source;
+  const fullName = `micboard.${source}`;
   if (Object.prototype.hasOwnProperty.call(overrides, fullName)) {
     return overrides[fullName];
   }
@@ -851,7 +847,7 @@ function collectLogSettingsPayload() {
   const overrides = {};
   document.querySelectorAll('.log-level-override').forEach((select) => {
     const source = select.dataset.overrideTarget;
-    const value = select.value;
+    const { value } = select;
     if (source && value) {
       overrides[source] = value;
     }
@@ -870,7 +866,7 @@ async function saveLogSettings() {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      throw new Error('Request failed (' + response.status + ')');
+      throw new Error(`Request failed (${response.status})`);
     }
     const data = await response.json();
     if (!data || data.ok !== true) {
@@ -930,9 +926,9 @@ async function loadLogs({ reset = false, newer = false } = {}) {
       }
     }
 
-    const response = await fetch('api/logs?' + params.toString(), { cache: 'no-store' });
+    const response = await fetch(`api/logs?${params.toString()}`, { cache: 'no-store' });
     if (!response.ok) {
-      throw new Error('Request failed (' + response.status + ')');
+      throw new Error(`Request failed (${response.status})`);
     }
     const data = await response.json();
     if (data && data.ok === false) {
@@ -983,7 +979,7 @@ async function loadLogs({ reset = false, newer = false } = {}) {
     logViewerState.loading = false;
     updateLogControls(false);
     if (logViewerState.pending) {
-      const pending = logViewerState.pending;
+      const { pending } = logViewerState;
       logViewerState.pending = null;
       loadLogs(pending).catch(() => {});
     }
@@ -1025,7 +1021,7 @@ function renderLogEntries() {
     const levelCell = document.createElement('td');
     const badge = document.createElement('span');
     const levelName = (entry.level || 'INFO').toString().toUpperCase();
-    badge.className = 'log-level-badge level-' + levelName.toLowerCase();
+    badge.className = `log-level-badge level-${levelName.toLowerCase()}`;
     badge.textContent = levelName;
     levelCell.appendChild(badge);
     row.appendChild(levelCell);
@@ -1155,14 +1151,14 @@ function downloadLogsAsJson() {
   }
   try {
     const payload = logViewerState.entries.map((entry) => {
-      const copy = Object.assign({}, entry);
+      const copy = { ...entry };
       return copy;
     });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'wirelessboard-logs-' + new Date().toISOString().replace(/[:]/g, '-') + '.json';
+    anchor.download = `wirelessboard-logs-${new Date().toISOString().replace(/[:]/g, '-')}.json`;
     document.body.appendChild(anchor);
     anchor.click();
     setTimeout(() => {
@@ -1187,11 +1183,11 @@ function collectSlotConfiguration() {
       const output = {};
 
       output.slot = slot;
-    const typeVal = (configBoard[i].querySelector('.cfg-type')?.value || '').trim();
-    const ipVal = (configBoard[i].querySelector('.cfg-ip')?.value || '').trim();
-    const chanVal = parseInt(configBoard[i].querySelector('.cfg-channel')?.value, 10);
-    const nameField = configBoard[i].querySelector('.cfg-name');
-    const nameVal = nameField ? String(nameField.value || '').trim() : '';
+      const typeVal = (configBoard[i].querySelector('.cfg-type')?.value || '').trim();
+      const ipVal = (configBoard[i].querySelector('.cfg-ip')?.value || '').trim();
+      const chanVal = parseInt(configBoard[i].querySelector('.cfg-channel')?.value, 10);
+      const nameField = configBoard[i].querySelector('.cfg-name');
+      const nameVal = nameField ? String(nameField.value || '').trim() : '';
 
       // Decide type: if a known network device type, require IP+Channel; otherwise default to offline when any meaningful data exists
       let finalType = typeVal;
@@ -1234,13 +1230,11 @@ function collectSlotConfiguration() {
   return slotList;
 }
 
-
 function generateJSONConfig() {
   const slots = collectSlotConfiguration();
   const discovery = collectDiscoverySettingsFromForm();
   return { slots, discovery };
 }
-
 
 function addAllDiscoveredDevices() {
   const devices = document.querySelectorAll('#discovered_list .cfg-row');
@@ -1325,7 +1319,7 @@ function applyDeviceNameUpdates(devices) {
     const slotNum = parseInt(entry.slot, 10);
     if (!Number.isFinite(slotNum)) return;
     const name = entry.name || '';
-    const row = document.getElementById('slot-' + slotNum);
+    const row = document.getElementById(`slot-${slotNum}`);
     if (row) {
       const input = row.querySelector('.cfg-device-name');
       if (input) input.value = name;
@@ -1377,9 +1371,9 @@ function clearDeviceNameInputs(slots) {
 }
 
 function fetchDeviceNamesSnapshot() {
-  return fetch('api/slot/device-names?_=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.json())
-    .then(resp => {
+  return fetch(`api/slot/device-names?_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
       if (!resp || resp.ok !== true) {
         throw new Error((resp && resp.error) || 'Request failed');
       }
@@ -1407,7 +1401,7 @@ function applyExtendedNameChanges(updates) {
       }
     }
 
-    const cfgRow = document.getElementById('slot-' + slot);
+    const cfgRow = document.getElementById(`slot-${slot}`);
     if (cfgRow) {
       const input = cfgRow.querySelector('.cfg-name');
       if (input) input.value = value;
@@ -1467,14 +1461,7 @@ function setBackgroundDirectoryStatus(message, level = 'info') {
     return;
   }
 
-  const className = level === 'success'
-    ? 'text-success'
-    : level === 'error'
-      ? 'text-danger'
-      : level === 'warn'
-        ? 'text-warning'
-        : 'text-muted';
-  statusEl.classList.add(className);
+  statusEl.classList.add(STATUS_CLASSES[level] || 'text-muted');
 }
 
 function normalizeBackgroundKey(value) {
@@ -1743,9 +1730,9 @@ async function loadBackgroundDirectoryState({ silent = false } = {}) {
   }
 
   try {
-    const response = await fetch('api/backgrounds?_=' + Date.now(), { cache: 'no-store' });
+    const response = await fetch(`api/backgrounds?_=${Date.now()}`, { cache: 'no-store' });
     if (!response.ok) {
-      throw new Error('Request failed (' + response.status + ')');
+      throw new Error(`Request failed (${response.status})`);
     }
     const data = await response.json();
     if (!data || data.ok !== true) {
@@ -1795,7 +1782,7 @@ async function saveBackgroundDirectory(path, { useDefault = false, defaultMode =
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      throw new Error('Request failed (' + response.status + ')');
+      throw new Error(`Request failed (${response.status})`);
     }
     const data = await response.json();
     if (!data || data.ok !== true) {
@@ -1828,14 +1815,7 @@ function setGoogleDriveStatus(message, level = 'info') {
     return;
   }
 
-  const className = level === 'success'
-    ? 'text-success'
-    : level === 'error'
-      ? 'text-danger'
-      : level === 'warn'
-        ? 'text-warning'
-        : 'text-muted';
-  statusEl.classList.add(className);
+  statusEl.classList.add(STATUS_CLASSES[level] || 'text-muted');
 }
 
 function formatGoogleDriveClientSummary(summary = {}) {
@@ -1957,7 +1937,7 @@ async function loadGoogleDriveState({ silent = false } = {}) {
   }
 
   try {
-    const response = await fetch('api/cloud/google-drive/config?_=' + Date.now(), { cache: 'no-store' });
+    const response = await fetch(`api/cloud/google-drive/config?_=${Date.now()}`, { cache: 'no-store' });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data || data.ok === false) {
       const message = data && data.error ? data.error : `Request failed (${response.status})`;
@@ -2037,7 +2017,7 @@ async function startGoogleDriveAuthorization() {
   updateGoogleDriveControlState();
   setGoogleDriveStatus('Starting Google authorization…', 'info');
 
-  const redirectUri = window.location.origin + '/oauth/google-drive';
+  const redirectUri = `${window.location.origin}/oauth/google-drive`;
 
   try {
     const response = await fetch('api/cloud/google-drive/auth/start', {
@@ -2215,12 +2195,12 @@ export function initConfigEditor(force = false) {
     holder.innerHTML = '';
     const slots = (micboard.config && micboard.config.slots) || [];
     if (Array.isArray(slots) && slots.length > 0) {
-      slots.forEach(slot => {
+      slots.forEach((slot) => {
         const t = document.getElementById('config-slot-template').content.cloneNode(true);
         const row = t.querySelector('.cfg-row');
         if (row) {
           // Set slot number as id for later reference
-          row.id = 'slot-' + slot.slot;
+          row.id = `slot-${slot.slot}`;
           // Populate fields
           row.querySelector('.cfg-type').value = slot.type || '';
           row.querySelector('.cfg-ip').value = slot.ip || '';
@@ -2257,7 +2237,6 @@ export function initConfigEditor(force = false) {
   const discoveryConfig = (micboard.config && micboard.config.discovery) || discoveryFormState.settings;
   renderDiscoverySettings(discoveryConfig);
 
-
   updateHiddenSlots();
   setDeviceNameStatus('');
   // Delegate cfg-type change so newly added rows are handled
@@ -2268,20 +2247,22 @@ export function initConfigEditor(force = false) {
   });
 
   const clearIds = document.getElementById('clear-id');
-  if (clearIds) clearIds.addEventListener('click', () => {
-    const rows = document.querySelectorAll('#editor_holder .cfg-row');
-    Array.from(rows).forEach(r => {
-      const idInput = r.querySelector('.cfg-ip');
-      if (idInput) idInput.value = '';
+  if (clearIds) {
+    clearIds.addEventListener('click', () => {
+      const rows = document.querySelectorAll('#editor_holder .cfg-row');
+      Array.from(rows).forEach((r) => {
+        const idInput = r.querySelector('.cfg-ip');
+        if (idInput) idInput.value = '';
+      });
     });
-  });
+  }
 
   const clearNameButtons = document.querySelectorAll('#clear-name');
   if (clearNameButtons && clearNameButtons.length) {
-    clearNameButtons.forEach(btn => {
+    clearNameButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
         const extendedInputs = document.querySelectorAll('#editor_holder .cfg-name');
-        Array.from(extendedInputs).forEach(input => { input.value = ''; });
+        Array.from(extendedInputs).forEach((input) => { input.value = ''; });
       });
     });
   }
@@ -2296,12 +2277,12 @@ export function initConfigEditor(force = false) {
       fetch('api/slot/device-names/clear', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: '{}'
+        body: '{}',
       })
-        .then(r => r.json())
-        .then(resp => {
+        .then((r) => r.json())
+        .then((resp) => {
           if (!resp || resp.ok !== true) {
             throw new Error((resp && resp.error) || 'Request failed');
           }
@@ -2323,7 +2304,7 @@ export function initConfigEditor(force = false) {
             setDeviceNameStatus('No device names to clear.', 'warn');
           }
         })
-        .catch(err => {
+        .catch((err) => {
           setDeviceNameStatus(`Failed to clear device names: ${formatError(err)}`, 'error');
         })
         .then(() => {
@@ -2348,7 +2329,7 @@ export function initConfigEditor(force = false) {
             setDeviceNameStatus(msg, results.named ? 'success' : 'warn');
           }
         })
-        .catch(err => {
+        .catch((err) => {
           setDeviceNameStatus(`Failed to read device names: ${formatError(err)}`, 'error');
         })
         .then(() => {
@@ -2372,37 +2353,41 @@ export function initConfigEditor(force = false) {
   applyPcoMappingToForm(pco.mapping);
 
   const addDisc = document.getElementById('add-discovered');
-  if (addDisc) addDisc.addEventListener('click', () => {
-    addAllDiscoveredDevices();
-  });
+  if (addDisc) {
+    addDisc.addEventListener('click', () => {
+      addAllDiscoveredDevices();
+    });
+  }
 
   const saveBtn = document.getElementById('save');
-  if (saveBtn) saveBtn.addEventListener('click', ()=> {
-    const data = generateJSONConfig();
-    const url = 'api/config';
-    setDiscoveryStatus('Saving discovery settings…', 'info');
-    postJSON(url, data, (resp) => {
-      if (resp && typeof resp === 'object') {
-        if (!micboard.config) micboard.config = {};
-        if (resp.config && typeof resp.config === 'object') {
-          micboard.config = resp.config;
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      const data = generateJSONConfig();
+      const url = 'api/config';
+      setDiscoveryStatus('Saving discovery settings…', 'info');
+      postJSON(url, data, (resp) => {
+        if (resp && typeof resp === 'object') {
+          if (!micboard.config) micboard.config = {};
+          if (resp.config && typeof resp.config === 'object') {
+            micboard.config = resp.config;
+          }
+          if (resp.discovery && typeof resp.discovery === 'object') {
+            micboard.config.discovery = resp.discovery;
+          }
+          if (resp.discovery_status && typeof resp.discovery_status === 'object') {
+            micboard.discovery_status = resp.discovery_status;
+          }
         }
-        if (resp.discovery && typeof resp.discovery === 'object') {
-          micboard.config.discovery = resp.discovery;
-        }
-        if (resp.discovery_status && typeof resp.discovery_status === 'object') {
-          micboard.discovery_status = resp.discovery_status;
-        }
-      }
-      setDiscoveryStatus('Discovery settings saved. Reloading…', 'success');
-      renderDiscoveryEnvironmentStatus(micboard.discovery_status);
-      micboard.settingsMode = 'NONE';
-      invokeUpdateHash();
-      window.location.reload();
-    }, (err) => {
-      setDiscoveryStatus(`Failed to save discovery settings: ${formatError(err)}`, 'error');
+        setDiscoveryStatus('Discovery settings saved. Reloading…', 'success');
+        renderDiscoveryEnvironmentStatus(micboard.discovery_status);
+        micboard.settingsMode = 'NONE';
+        invokeUpdateHash();
+        window.location.reload();
+      }, (err) => {
+        setDiscoveryStatus(`Failed to save discovery settings: ${formatError(err)}`, 'error');
+      });
     });
-  });
+  }
 
   // Delegate delete-row for both initial and newly added rows
   const holderEl = document.getElementById('editor_holder');
@@ -2419,35 +2404,39 @@ export function initConfigEditor(force = false) {
   }
 
   const clearBtn = document.getElementById('clear-config');
-  if (clearBtn) clearBtn.addEventListener('click', () => {
-    const cfg_list = document.querySelectorAll('#editor_holder .cfg-row')
-    Array.from(cfg_list).forEach(e => e.remove())
-    let t;
-    for (let i = 0; i < 4; i += 1) {
-      t = document.getElementById('config-slot-template').content.cloneNode(true);
-      document.getElementById('editor_holder').append(t);
-    }
-    updateSlotID();
-    updateHiddenSlots();
-  renderDiscoveredDeviceList();
-  });
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const cfg_list = document.querySelectorAll('#editor_holder .cfg-row');
+      Array.from(cfg_list).forEach((e) => e.remove());
+      let t;
+      for (let i = 0; i < 4; i += 1) {
+        t = document.getElementById('config-slot-template').content.cloneNode(true);
+        document.getElementById('editor_holder').append(t);
+      }
+      updateSlotID();
+      updateHiddenSlots();
+      renderDiscoveredDeviceList();
+    });
+  }
 
   const addRowBtn = document.getElementById('add-config-row');
-  if (addRowBtn) addRowBtn.addEventListener('click', () => {
-    const t = document.getElementById('config-slot-template').content.cloneNode(true);
-    document.getElementById('editor_holder').append(t);
-    updateSlotID();
-    updateHiddenSlots();
-  });
+  if (addRowBtn) {
+    addRowBtn.addEventListener('click', () => {
+      const t = document.getElementById('config-slot-template').content.cloneNode(true);
+      document.getElementById('editor_holder').append(t);
+      updateSlotID();
+      updateHiddenSlots();
+    });
+  }
 }
 
 // PCO dedicated view helpers and bindings
 function populatePCOFormFromServer() {
   try {
     appendPcoLog('Fetching saved PCO configuration...');
-     fetch('api/pco/config?_=' + Date.now(), { cache: 'no-store' })
-      .then(r => r.json())
-      .then(cfg => {
+    fetch(`api/pco/config?_=${Date.now()}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((cfg) => {
         const p = (cfg && cfg.pco) || {};
         micboard.config.pco = p;
         const elEnabled = document.getElementById('pco-enabled');
@@ -2475,7 +2464,7 @@ function populatePCOFormFromServer() {
       .catch((err) => {
         appendPcoLog(`Failed to load saved PCO configuration: ${formatError(err)}`, 'warn');
       });
-  } catch (e) {/* ignore */}
+  } catch (e) { /* ignore */ }
 }
 
 // (duplicate showPCOView removed)
@@ -2536,7 +2525,7 @@ function buildPcoPayload() {
       strategy,
       note_category: noteCategory,
       note_source: noteSource,
-      team_name_filter: teamFilterRaw.split(',').map(s => s.trim()).filter(s => s),
+      team_name_filter: teamFilterRaw.split(',').map((s) => s.trim()).filter((s) => s),
       position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : true,
       seed_extended_id: seedExtendedIdEl ? !!seedExtendedIdEl.checked : false,
     },
@@ -2562,7 +2551,7 @@ function ensureNotePreviewUI() {
     const select = document.createElement('select');
     select.id = 'pco-note-source';
     select.className = 'form-select form-select-sm mt-2 mt-md-0';
-    ['person', 'plan'].forEach(val => {
+    ['person', 'plan'].forEach((val) => {
       const opt = document.createElement('option');
       opt.value = val;
       opt.textContent = val === 'person' ? 'People notes' : 'Plan notes';
@@ -2624,7 +2613,7 @@ function renderNotePreviewResults(target, notes, planId, catName) {
   table.className = 'table table-sm table-striped mt-1';
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
-  ['Ext ID', 'Person', 'Team', 'Position', 'Note'].forEach(label => {
+  ['Ext ID', 'Person', 'Team', 'Position', 'Note'].forEach((label) => {
     const th = document.createElement('th');
     th.textContent = label;
     headRow.appendChild(th);
@@ -2633,9 +2622,9 @@ function renderNotePreviewResults(target, notes, planId, catName) {
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  notes.forEach(n => {
+  notes.forEach((n) => {
     const tr = document.createElement('tr');
-    ['ext_id', 'person', 'team', 'position', 'note'].forEach(key => {
+    ['ext_id', 'person', 'team', 'position', 'note'].forEach((key) => {
       const td = document.createElement('td');
       td.textContent = (n && n[key]) ? n[key] : '';
       tr.appendChild(td);
@@ -2667,9 +2656,9 @@ function handleNotePreview() {
   if (resultEl) resultEl.innerHTML = '<span class="text-muted">Loading notes...</span>';
   appendPcoLog(`Fetching ${source === 'plan' ? 'plan' : 'people'} notes for "${cat}"...`);
 
-  fetch('api/pco/notes?plan=' + encodeURIComponent(planId) + '&source=' + encodeURIComponent(source) + '&_=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.json())
-    .then(resp => {
+  fetch(`api/pco/notes?plan=${encodeURIComponent(planId)}&source=${encodeURIComponent(source)}&_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
       if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to fetch notes');
       const catName = resp.note_category || cat;
       const respSource = resp.note_source || source;
@@ -2681,7 +2670,7 @@ function handleNotePreview() {
       }
       appendPcoLog(`Fetched ${notes.length} ${respSource === 'plan' ? 'plan' : 'people'} note(s) for "${catName}" (plan ${resp.plan_id || planId}).`);
     })
-    .catch(err => {
+    .catch((err) => {
       if (resultEl) resultEl.innerHTML = `<span class="text-danger">${formatError(err)}</span>`;
       appendPcoLog(`Failed to fetch notes: ${formatError(err)}`, 'error');
     })
@@ -2864,7 +2853,7 @@ function renderSyncConflicts(conflicts) {
   const list = document.createElement('ul');
   list.className = 'mb-0';
   conflicts.forEach((c) => {
-    const names = (c.claimants || []).map(x => x.name).filter(Boolean);
+    const names = (c.claimants || []).map((x) => x.name).filter(Boolean);
     const li = document.createElement('li');
     li.textContent = `slot ${c.slot}: ${names.join(', ')} — “${c.winner}” wins`;
     list.appendChild(li);
@@ -2942,8 +2931,8 @@ function handlePcoSync(dryRun = false) {
   appendPcoLog(`${verb} assignments with PCO ${selectedPlan ? `(plan ${selectedPlan})` : '(auto plan)'}...`);
 
   fetch(url, { method: 'POST' })
-    .then(r => r.json())
-    .then(resp => {
+    .then((r) => r.json())
+    .then((resp) => {
       if (jsonEl) jsonEl.textContent = JSON.stringify(resp, null, 2);
       if (!resp || !resp.ok) {
         const message = (resp && resp.error) || (dryRun ? 'Preview failed' : 'Sync failed');
@@ -2971,17 +2960,19 @@ function handlePcoSync(dryRun = false) {
       if (conflicts.length) summaryParts.push(`<span class="text-danger">${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}</span>`);
       if (summaryEl) summaryEl.innerHTML = summaryParts.join(' — ');
 
-      appendPcoLog(`${resp.dry_run ? 'Preview' : 'Sync'} complete for plan ${planId}: `
+      appendPcoLog(
+        `${resp.dry_run ? 'Preview' : 'Sync'} complete for plan ${planId}: `
         + `${details.length} assignment(s), ${slotsMatched} slot(s) matched, `
         + `${resp.dry_run ? 'no changes written' : `${resp.updates || 0} update(s)`}`
         + `${unmatched.length ? `, ${unmatched.length} unmatched` : ''}.`,
-      unmatched.length ? 'warn' : 'info');
+        unmatched.length ? 'warn' : 'info',
+      );
 
       renderSyncAssignments(details);
       renderSyncConflicts(conflicts);
       renderSyncUnmatched(unmatched);
     })
-    .catch(err => {
+    .catch((err) => {
       if (summaryEl) summaryEl.innerHTML = `<span class="text-danger">${formatError(err)}</span>`;
       appendPcoLog(`PCO ${dryRun ? 'preview' : 'sync'} request error: ${formatError(err)}`, 'error');
     });
@@ -3054,15 +3045,15 @@ function refreshPlansList(options = {}) {
 
   if (sel) sel.innerHTML = '<option value="">Loading…</option>';
   appendPcoLog('Fetching plan list from PCO...');
-  fetch('api/pco/plans?_=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.json())
-    .then(resp => {
+  fetch(`api/pco/plans?_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
       if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load plans');
       const plans = resp.plans || [];
       if (sel) {
         sel.innerHTML = '<option value="">Select a plan…</option>';
-        plans.forEach(p => {
-          const label = `${p.service_type_name ? p.service_type_name + ' — ' : ''}${p.short_dates || p.dates || ''} — ${p.title || ''}`;
+        plans.forEach((p) => {
+          const label = `${p.service_type_name ? `${p.service_type_name} — ` : ''}${p.short_dates || p.dates || ''} — ${p.title || ''}`;
           const opt = document.createElement('option');
           opt.value = p.id || '';
           opt.textContent = label;
@@ -3071,7 +3062,7 @@ function refreshPlansList(options = {}) {
       }
       appendPcoLog(`Fetched ${plans.length} plan(s) from PCO.`);
     })
-    .catch(err => {
+    .catch((err) => {
       if (sel) sel.innerHTML = '<option value="">No plans</option>';
       console.warn('Failed to load plans', err);
       appendPcoLog(`Failed to fetch plans: ${formatError(err)}`, 'error');
@@ -3094,12 +3085,12 @@ function loadPeopleForSelectedService() {
   if (tbody) tbody.innerHTML = '';
   if (tblWrap) tblWrap.style.display = 'none';
   appendPcoLog(`Loading people for plan ${planId}...`);
-  fetch('api/pco/people?plan=' + encodeURIComponent(planId) + '&_=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.json())
-    .then(resp => {
+  fetch(`api/pco/people?plan=${encodeURIComponent(planId)}&_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
       if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load people');
       const ppl = resp.people || [];
-      ppl.forEach(p => {
+      ppl.forEach((p) => {
         const tr = document.createElement('tr');
         const td1 = document.createElement('td');
         const td2 = document.createElement('td');
@@ -3122,7 +3113,7 @@ function loadPeopleForSelectedService() {
         appendPcoLog(`Failed to build assignment list: ${formatError(e)}`, 'error');
       }
     })
-    .catch(err => {
+    .catch((err) => {
       if (summary) summary.innerHTML = `<span class="text-danger">${err}</span>`;
       appendPcoLog(`Failed to load people: ${formatError(err)}`, 'error');
     });
@@ -3142,18 +3133,18 @@ function buildAssignmentTable(ppl) {
   }
   if (assignBody) assignBody.innerHTML = '';
   // Create a sorted copy by slot number
-  const sorted = slots.slice().sort((a,b) => (a.slot||0) - (b.slot||0));
+  const sorted = slots.slice().sort((a, b) => (a.slot || 0) - (b.slot || 0));
   // Create a shared select options fragment from people list
   const optionsHTML = ['<option value="">-- choose --</option>']
-    .concat(ppl.map(p => {
+    .concat(ppl.map((p) => {
       const notesArr = Array.isArray(p.notes) ? p.notes : [];
       const extra = notesArr.length ? notesArr.join(' | ') : '';
-      const label = p.name + (p.team ? ' ['+p.team+']' : '') + (extra ? ' — ' + extra : '');
+      const label = p.name + (p.team ? ` [${p.team}]` : '') + (extra ? ` — ${extra}` : '');
       return `<option value="${encodeURIComponent(p.name)}">${label}</option>`;
     }))
     .join('');
   let slotsMissingLabels = 0;
-  sorted.forEach(s => {
+  sorted.forEach((s) => {
     const tr = document.createElement('tr');
     const tdSlot = document.createElement('td');
     const tdDev = document.createElement('td');
@@ -3162,7 +3153,7 @@ function buildAssignmentTable(ppl) {
     const tdSel = document.createElement('td');
     tr.setAttribute('data-slot', String(s.slot ?? ''));
     tdSlot.textContent = String(s.slot || '');
-    tdDev.textContent = `${s.type || ''}${s.channel ? ' ch'+s.channel : ''}`.trim();
+    tdDev.textContent = `${s.type || ''}${s.channel ? ` ch${s.channel}` : ''}`.trim();
     // Device name: try to pull from live transmitter cache if present
     let devName = s.chan_name_raw || '';
     try {
@@ -3187,7 +3178,7 @@ function buildAssignmentTable(ppl) {
     sel.innerHTML = optionsHTML;
     tdSel.appendChild(sel);
     tr.appendChild(tdSlot); tr.appendChild(tdDev); tr.appendChild(tdDevName); tr.appendChild(tdExtName); tr.appendChild(tdSel);
-    assignBody && assignBody.appendChild(tr);
+    if (assignBody) assignBody.appendChild(tr);
   });
   if (assignTbl) assignTbl.style.display = 'block';
   if (assignSummary) {
@@ -3231,7 +3222,7 @@ document.addEventListener('click', (e) => {
   if (t.id === 'pco-clear-assignment-selects') {
     e.preventDefault();
     const sels = document.querySelectorAll('#pco-assign-table select.pco-person-select');
-    Array.from(sels).forEach(sel => { sel.value = ''; });
+    Array.from(sels).forEach((sel) => { sel.value = ''; });
   }
 }, { passive: false });
 
@@ -3239,7 +3230,7 @@ function applyAssignmentsFromSelects() {
   const summary = document.getElementById('pco-assign-summary');
   const sels = document.querySelectorAll('#pco-assign-table select.pco-person-select');
   const updates = [];
-  Array.from(sels).forEach(sel => {
+  Array.from(sels).forEach((sel) => {
     const slotStr = sel.getAttribute('data-slot') || '';
     const slot = Number.parseInt(slotStr, 10);
     const name = sel.value ? decodeURIComponent(sel.value) : '';
@@ -3273,9 +3264,9 @@ function autoFillAssignmentsFromNotes() {
     return;
   }
   appendPcoLog(`Auto-filling assignments from notes for plan ${planId}...`);
-  fetch('api/pco/people?plan=' + encodeURIComponent(planId) + '&_=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.json())
-    .then(resp => {
+  fetch(`api/pco/people?plan=${encodeURIComponent(planId)}&_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
       const ppl = resp.people || [];
       const existingSelects = document.querySelectorAll('#pco-assign-table select.pco-person-select');
       if (!existingSelects || existingSelects.length === 0) {
@@ -3284,7 +3275,7 @@ function autoFillAssignmentsFromNotes() {
       const normalize = (s) => String(s || '').trim().toLowerCase();
       const byNote = new Map();
       const byExtId = new Map();
-      ppl.forEach(p => {
+      ppl.forEach((p) => {
         const notesArr = Array.isArray(p.notes) ? p.notes : [];
         for (const n of notesArr) {
           const k = normalize(n);
@@ -3305,7 +3296,7 @@ function autoFillAssignmentsFromNotes() {
       });
       const sels = document.querySelectorAll('#pco-assign-table select.pco-person-select');
       let matched = 0;
-      Array.from(sels).forEach(sel => {
+      Array.from(sels).forEach((sel) => {
         const row = sel.closest('tr');
         const currentName = row ? (row.querySelector('td:nth-child(3)')?.textContent || '') : '';
         const k = normalize(currentName);
@@ -3327,7 +3318,7 @@ function autoFillAssignmentsFromNotes() {
       if (assignSummary) assignSummary.textContent = `Auto-filled ${matched} selection(s).`;
       appendPcoLog(`Auto-fill completed: matched ${matched} slot(s).`);
     })
-    .catch(err => {
+    .catch((err) => {
       if (assignSummary) assignSummary.innerHTML = `<span class="text-danger">Auto-fill failed: ${err}</span>`;
       appendPcoLog(`Auto-fill failed: ${formatError(err)}`, 'error');
     });
