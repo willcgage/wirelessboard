@@ -172,7 +172,12 @@ jobs:
           security import "$RUNNER_TEMP/signing.p12" -k "$RUNNER_TEMP/inspect.keychain" \
             -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
           echo "=== Identities in the supplied certificate ==="
-          security find-identity -v "$RUNNER_TEMP/inspect.keychain"
+          # Deliberately not -v. In an isolated keychain there is no search-list
+          # context to chain the leaf through Apple's intermediate to the root,
+          # so -v reports 0 even for a perfectly good certificate. Listing all
+          # identities answers the question that matters: is a Developer ID
+          # Application identity actually in this file?
+          security find-identity -p codesigning "$RUNNER_TEMP/inspect.keychain"
           security delete-keychain "$RUNNER_TEMP/inspect.keychain"
           rm -f "$RUNNER_TEMP/signing.p12"
 
