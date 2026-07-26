@@ -78,14 +78,6 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WIRELESSBOARD_REMOVE_VENV: 'false'
-      # Developer ID signing. Absent secrets mean electron-builder skips
-      # signing and the app ships unsigned, exactly as it did before.
-      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-      # Notarization credentials, read by electron-builder when notarize is on.
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -158,8 +150,45 @@ jobs:
               exit 1
             fi
           fi
+      - name: Inspect signing certificate
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: |
+          # Diagnostic only. 1.4.1 built unsigned because the only identity in
+          # the certificate was an expired "dev_..." one rather than a Developer
+          # ID Application, and that was invisible until electron-builder gave up
+          # mid-build. This reports it up front. Names and dates are not secret;
+          # they appear in the signature of every shipped app.
+          if [ -z "$CSC_LINK" ]; then
+            echo "No MAC_CSC_LINK configured — the build will be unsigned."
+            exit 0
+          fi
+          echo "$CSC_LINK" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p inspect "$RUNNER_TEMP/inspect.keychain"
+          security import "$RUNNER_TEMP/signing.p12" -k "$RUNNER_TEMP/inspect.keychain" \
+            -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          echo "=== Identities in the supplied certificate ==="
+          security find-identity -v "$RUNNER_TEMP/inspect.keychain"
+          security delete-keychain "$RUNNER_TEMP/inspect.keychain"
+          rm -f "$RUNNER_TEMP/signing.p12"
+
       - name: Build desktop release
         shell: bash
+        env:
+          # CSC_LINK and CSC_KEY_PASSWORD are electron-builder's *generic* code
+          # signing variables, not macOS-specific ones. Setting them for the
+          # whole job handed the Apple .p12 to signtool on Windows, which failed
+          # the 1.4.1 build with "No certificates were found that met all the
+          # given criteria". Scope them to macOS; an empty string reads as unset.
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           echo "=== Building desktop release for ${{ matrix.runner }} ==="
           echo "Release script: ${{ matrix.release_script }}"
