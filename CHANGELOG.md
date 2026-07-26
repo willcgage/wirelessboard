@@ -2,27 +2,49 @@
 
 ## [Unreleased]
 ### Added
-- PCO sync now maps people by their Planning Center **team position name** (for example `Vocal 1`), which is where the mic name and number now live. One position can fill several slots, so a vocalist under `Vocal 1` updates both the mic channel and its matching IEM channel.
-- New `mapping.strategy` values `position_or_note` (default) and `position`; the previous behaviour is still available as `note_or_brackets`.
-- New `mapping.position_number_fallback` option (on by default) lets position `Vocal 1` match slots labelled `Mic 1` and `IEM 1`, with the slot's device type checked so IEM labels only match PSM1000 slots.
-- New `mapping.seed_extended_id` option (off by default) fills empty slot IDs with the position name after a successful match.
-- New `POST /api/pco/preview` endpoint and a **Preview Sync** button that resolve the whole mapping without writing to `config.json`, listing which slots each position matched and which scheduled people matched nothing.
-- Python test suite under `py/tests/` (`npm test`), covering label normalization, slot matching, assignment resolution, and the PCO payload flattening. CI now runs it alongside the build.
-- ESLint configuration and a `npm run lint` script, so the eslint dev dependencies are actually used.
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.4.0] - 2026-07-26
+### Added
+- PCO sync now identifies each scheduled person by their Planning Center **team position name** (for example `Vocal 1`), read from `PlanPerson.attributes.team_position_name`. This is where the mic name and number now live.
+- A single position can resolve to several slots, so the person under `Vocal 1` fills both the mic channel and its matching IEM channel in one sync.
+- New `mapping.strategy` values: `position_or_note` (the new default) and `position`. The previous behaviour remains available as `note_or_brackets`.
+- New `mapping.position_number_fallback` option (on by default). Lets position `Vocal 1` match slots labelled `Mic 1` and `IEM 1`, with the slot's configured device type checked so an `IEM` label only matches a PSM1000 (`p10t`) slot.
+- New `mapping.seed_extended_id` option (off by default). Writes the position name into slots that have no `extended_id` yet, so later syncs match exactly.
+- New `POST /api/pco/preview` endpoint and a **Preview Sync** button in the Planning Center view. Both resolve the full mapping without writing to `config.json`, reporting which slots each position matched, which rule matched them, anyone who matched nothing, and any slot claimed by two people.
+- Sync and preview responses now include `slots_matched`, `unmatched`, and `conflicts`, and each assignment reports `position`, `team`, and `matched_via`.
+- Python test suite under `py/tests/` (`npm test`), covering label normalization, the three matching passes, the device-type check, assignment resolution and application, idempotency, device-name preservation, PCO payload flattening, dedupe, and conflict detection. CI runs it alongside the build.
+- ESLint configuration and an `npm run lint` script, so the existing eslint dev dependencies are actually used.
 - `config/config.json.example` as a sanitized configuration template.
 
 ### Changed
-- The PCO sync result table now shows position, person, team, matched slots, and which rule matched, plus a separate list of scheduled people that found no slot.
-- `mapping.team_name_filter` is now applied consistently as a case-insensitive substring match everywhere (it previously required an exact match during sync).
+- The PCO sync result table now shows position, person, team, matched slots, and the matching rule, with separate lists for unmatched people and conflicting slots.
+- `mapping.team_name_filter` is applied consistently as a case-insensitive substring match everywhere. It previously required an exact match during sync while the people list used a substring match.
+- Label comparison ignores case, punctuation, spacing, and leading zeros, so `Vocal 1`, `vocal-01`, and `VOCAL_1` are treated as the same label.
 - Plan selection and plan-people fetching are shared between sync and the notes preview instead of being duplicated.
+- Matching rules moved into a dedicated `py/pco_mapping.py`, free of network and config side effects.
 - `.gitignore` now covers webpack output, `config/config.json`, and nested `.DS_Store` files.
 
 ### Fixed
-- Slot resolution no longer stops at the first matching slot, so a person assigned to both a mic and an IEM updates both.
-- Socket, discovery, and Google Drive failures that were silently swallowed are now logged at debug level with a traceback.
-- Removed the unreachable fallback `return` in `localURL()`, the dead `micboard_json()` wrapper, the two unused reload-config handlers, and the unreferenced `py/util.py`.
-- Removed leftover debug `print`/`console.log` statements from request handlers and the frontend.
+- Slot resolution stopped at the first matching slot, so a person assigned to both a mic and an IEM only ever had one of the two updated.
+- Label parsing stripped spaces before locating the trailing number, so `Vocal 1 2` was read as the number `12` and could cross-match a slot labelled `Mic 12`.
+- Two people resolving to the same slot silently overwrote each other. Conflicts are now logged and reported in the sync and preview responses.
+- Socket, discovery, and Google Drive failures that were silently swallowed now log at debug level with a traceback. Behaviour is unchanged; the failures are simply diagnosable now.
+- Bare `except:` clauses narrowed to `except Exception:` / `except OSError:`.
 - `docs/api.md` no longer claims a `/micboard.json` endpoint exists; only `/data.json` is served.
+- The Docker frontend stage installed with `--omit=dev` and then relied on the committed `node_modules` arriving via `COPY . .` to supply webpack. It now installs devDependencies properly and skips the postinstall virtualenv helper, and a `.dockerignore` keeps the host tree from overwriting the install.
+
+### Removed
+- `py/util.py`, whose only symbol `TVLookup()` was never imported.
+- The dead `micboard_json()` wrapper, the two unused reload-config handler classes, and the unreachable second `return` in `localURL()`.
+- Leftover debug `print` and `console.log` statements from request handlers and the frontend.
+- `node_modules`, `config/config.json`, and `config/wirelessboard.log` are no longer tracked in Git. A fresh clone now requires `npm install`, and `config/config.json` is created at runtime from your own settings (see `config/config.json.example`).
 
 ## [1.3.4] - 2025-12-13
 ### Added

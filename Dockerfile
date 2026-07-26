@@ -1,7 +1,12 @@
 FROM node:20-bookworm-slim AS frontend
 WORKDIR /usr/src/app
 COPY package*.json ./
-RUN npm install --omit=dev
+# devDependencies are required to build: webpack, sass, bootstrap, qrcode and the
+# rest of the frontend stack all live there. This previously said --omit=dev and
+# only worked because the committed node_modules arrived with the COPY below.
+# --ignore-scripts skips the postinstall virtualenv helper, which needs scripts/
+# (not copied yet) and Python (not in this image).
+RUN npm install --ignore-scripts
 COPY . .
 ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN set -ux; \
