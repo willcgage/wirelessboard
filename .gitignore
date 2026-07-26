@@ -30,3 +30,6 @@ config/config.json
 # macOS metadata
 .DS_Store
 **/.DS_Store
+
+# Local scratch area for files staged for deletion — never part of the source tree
+_to_delete/
