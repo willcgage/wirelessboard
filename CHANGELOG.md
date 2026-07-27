@@ -10,7 +10,13 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.4.4] - 2026-07-27
+### Fixed
+- **macOS builds are signed and notarized.** 1.4.3 signed both apps correctly and then failed notarization with `HTTP status code: 401. Invalid credentials`, because the stored app-specific password was not the one Apple expected. The credentials are now verified against Apple with `notarytool` before being stored, rather than discovered to be wrong by a release.
+
 ## [1.4.3] - 2026-07-26
+> Never released. Signing succeeded on both architectures; notarization was rejected with a 401. Use 1.4.4.
+
 ### Fixed
 - **macOS signing works.** The certificate supplied to CI had been exported by OpenSSL 3, which defaults to AES-256 with a SHA-256 MAC. Apple's Security framework reads only the legacy PKCS#12 encoding and rejects anything else as `MAC verification failed during PKCS12 import (wrong password?)` — a misleading message, since the password was correct. Re-exported with `PBE-SHA1-3DES` and a SHA-1 MAC.
 - The certificate diagnostic lists every identity rather than only valid ones. An isolated keychain has no search-list context to chain a leaf through Apple's intermediate to the root, so the previous check reported zero valid identities for a perfectly good certificate.
