@@ -6,4 +6,4 @@ This file is generated from package.json. Do not edit manually; run
 
 __all__ = ("__version__",)
 
-__version__ = "1.4.4"
+__version__ = "1.4.5"
