@@ -994,6 +994,24 @@ def update_pco_config(pco_data: Any) -> Tuple[Dict[str, Any], CredentialMeta]:
     return merged, meta
 
 
+def get_public_config_tree() -> Dict[str, Any]:
+    """Return the configuration as it should be served to clients.
+
+    The stored PCO auth block holds only metadata — credential_id, version, salt
+    and token_digest — and notably no `has_credentials` flag; that flag exists
+    only in the public view. Serving the raw tree therefore did two bad things
+    at once: it published the salt and digest to every client polling
+    /data.json, and it overwrote the browser's cached `has_credentials`, which
+    is what the PCO sync button checks. Credentials would save correctly and
+    then appear unstored on the next poll a second later.
+    """
+
+    tree = dict(config_tree)
+    if isinstance(tree.get('pco'), dict):
+        tree['pco'] = get_public_pco_config()
+    return tree
+
+
 def get_public_pco_config() -> Dict[str, Any]:
     """Return a sanitized snapshot of the PCO configuration for API consumers."""
 

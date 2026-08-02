@@ -69,7 +69,7 @@ def wirelessboard_json(network_devices):
         'jpg': jpgs,
         'mp4': mp4s,
         'background_defaults': config.get_background_defaults(),
-        'config': config.config_tree,
+        'config': config.get_public_config_tree(),
         'discovered': discovered,
         'discovery_status': discover.get_dcid_status(),
     }, sort_keys=True, indent=4)
@@ -382,7 +382,7 @@ class ConfigHandler(web.RequestHandler):
         config.ensure_discovery_defaults()
         response = {
             'ok': True,
-            'config': config.config_tree,
+            'config': config.get_public_config_tree(),
             'discovery': config.get_discovery_settings(),
             'discovery_status': discover.get_dcid_status(),
         }
@@ -409,7 +409,7 @@ class ConfigHandler(web.RequestHandler):
 
         response = {
             'ok': True,
-            'config': config.config_tree,
+            'config': config.get_public_config_tree(),
             'discovery': config.get_discovery_settings(),
             'discovery_status': discover.get_dcid_status(),
         }

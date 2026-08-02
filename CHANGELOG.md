@@ -10,6 +10,13 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.4.7] - 2026-08-02
+### Fixed
+- **Saved Planning Center credentials no longer read as missing a moment later.** `/data.json`, and both `/api/config` responses, served the raw configuration tree. The stored PCO auth block contains only `credential_id`, `version`, `salt` and `token_digest` — it has no `has_credentials` flag, because that exists only in the sanitized view. The browser replaces its cached configuration from `/data.json` on every poll, so the flag the Sync button checks was wiped seconds after each save. Saving logged *"Credentials stored securely in system keyring"* and syncing still reported *"store credentials and save before syncing"*.
+
+### Security
+- The PCO credential salt and token digest are no longer published to every client polling `/data.json`. All configuration payloads now go through a sanitizer that reduces the PCO block to its public view.
+
 ## [1.4.6] - 2026-08-02
 ### Fixed
 - **PCO credentials can be stored from a packaged build.** Credentials live in the operating system keyring, and keyring chooses its backend at runtime through entry points declared in its distribution metadata. PyInstaller does not carry that metadata into the bundle, so the packaged app fell back to `keyring.backends.fail`, whose write raises. Saving credentials therefore never succeeded outside a source checkout, and the interface reported *"Cannot sync with PCO: store credentials and save before syncing."* The bundle now includes keyring's metadata and every backend module.
