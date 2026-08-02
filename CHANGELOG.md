@@ -10,6 +10,10 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.4.5] - 2026-08-02
+### Fixed
+- The macOS app declared both `LSBackgroundOnly` and `LSUIElement`. The first says the process presents no interface at all; the second makes it a menu-bar agent that may show a tray icon and windows, which is what this app actually does. `LSBackgroundOnly` has been dropped. Reported as an immediate crash on an M4 running macOS Tahoe 26.5.
+
 ## [1.4.4] - 2026-07-27
 ### Fixed
 - **macOS builds are signed and notarized.** 1.4.3 signed both apps correctly and then failed notarization with `HTTP status code: 401. Invalid credentials`, because the stored app-specific password was not the one Apple expected. The credentials are now verified against Apple with `notarytool` before being stored, rather than discovered to be wrong by a release.

@@ -23,7 +23,11 @@ mac:
   icon: resources/wirelessboard.icns
   category: public.app-category.utilities
   extendInfo:
-    LSBackgroundOnly: true
+    # LSUIElement alone is what makes this a menu-bar agent: no Dock icon, but
+    # still permitted to show the Tray and the config window that main.js opens.
+    # LSBackgroundOnly used to be set alongside it, which declares the opposite —
+    # that the process presents no UI at all — and the two together ask macOS for
+    # something incoherent. Removed while chasing an immediate crash on macOS 26.
     LSUIElement: true
   # No arch list here on purpose. Each CI job passes --arm64 or --x64 and runs
   # on a runner of that architecture, because the bundled PyInstaller service is
