@@ -686,16 +686,25 @@ def set_background_directory(path: Optional[str], default_mode: Optional[str] = 
     return get_background_directory_state()
 
 def config_file():
-    app_config_path = app_dir(CONFIG_FILE_NAME)
-    if app_config_path is not None and os.path.exists(app_config_path):
-        return app_config_path
-    elif os.path.exists(config_path(CONFIG_FILE_NAME)):
-        return config_path(CONFIG_FILE_NAME)
-    else:
-        demo_config_path = app_dir('democonfig.json')
-        if demo_config_path is not None:
-            copyfile(demo_config_path, config_path(CONFIG_FILE_NAME))
-        return config_path(CONFIG_FILE_NAME)
+    # In a frozen build app_dir() is sys._MEIPASS — a directory *inside* the
+    # application bundle. Configuration must never be read or written there: on
+    # macOS the bundle is code-signed and notarized, so writing into it fails
+    # and would invalidate the signature, and the directory is replaced on every
+    # upgrade. Only a source checkout may keep a config.json beside the project,
+    # which is the portable-install behaviour this branch originally existed for.
+    if not getattr(sys, 'frozen', False):
+        app_config_path = app_dir(CONFIG_FILE_NAME)
+        if app_config_path is not None and os.path.exists(app_config_path):
+            return app_config_path
+
+    user_config = config_path(CONFIG_FILE_NAME)
+    if os.path.exists(user_config):
+        return user_config
+
+    demo_config_path = app_dir('democonfig.json')
+    if demo_config_path is not None and os.path.exists(demo_config_path):
+        copyfile(demo_config_path, user_config)
+    return user_config
 
 def parse_args():
     parser = argparse.ArgumentParser()
