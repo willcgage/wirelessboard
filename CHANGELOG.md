@@ -10,8 +10,9 @@
 ### Fixed
 - _Nothing yet._
 
-## [1.4.7] - 2026-08-02
+## [1.4.8] - 2026-08-02
 ### Fixed
+- **Receivers can be discovered on macOS 15 and later.** Discovery listens for Shure announcements on multicast `239.255.254.253:8427` and probes receivers on TCP 2202. Recent macOS versions gate both behind the Local Network privacy permission, and the application never declared why it needed that access, so the request carried no explanation — and because Wirelessboard runs in the menu bar with no window, there was nothing on screen to associate the prompt with. Denied access produced no devices and no error. The application now declares its local network usage.
 - **Saved Planning Center credentials no longer read as missing a moment later.** `/data.json`, and both `/api/config` responses, served the raw configuration tree. The stored PCO auth block contains only `credential_id`, `version`, `salt` and `token_digest` — it has no `has_credentials` flag, because that exists only in the sanitized view. The browser replaces its cached configuration from `/data.json` on every poll, so the flag the Sync button checks was wiped seconds after each save. Saving logged *"Credentials stored securely in system keyring"* and syncing still reported *"store credentials and save before syncing"*.
 
 ### Security
