@@ -1,6 +1,25 @@
 # -*- mode: python -*-
 
+from PyInstaller.utils.hooks import copy_metadata
+
 block_cipher = None
+
+# keyring selects its backend at runtime through entry points declared in its
+# distribution metadata, which PyInstaller does not carry into the bundle by
+# default. Without this the frozen app falls back to keyring.backends.fail,
+# whose set_password() raises — so PCO credentials could never be stored from a
+# packaged build, only when running from source.
+keyring_metadata = copy_metadata('keyring')
+
+keyring_backends = [
+    'keyring.backends.macOS',
+    'keyring.backends.Windows',
+    'keyring.backends.SecretService',
+    'keyring.backends.libsecret',
+    'keyring.backends.chainer',
+    'keyring.backends.null',
+    'keyring.backends.fail',
+]
 
 
 a = Analysis(['wirelessboard.py'],
@@ -9,7 +28,7 @@ a = Analysis(['wirelessboard.py'],
                     ('../democonfig.json','.'),
                     ('../demo.html','.'),
                     ('../dcid.json','.'),
-                    ('../package.json','.')],
+                    ('../package.json','.')] + keyring_metadata,
                       hiddenimports=[
                              'googleapiclient',
                              'googleapiclient.discovery',
@@ -22,7 +41,7 @@ a = Analysis(['wirelessboard.py'],
                              'google.oauth2.credentials',
                              'google_auth_oauthlib',
                              'google_auth_oauthlib.flow',
-                      ],
+                      ] + keyring_backends,
              hookspath=[],
              runtime_hooks=[],
              excludes=[],

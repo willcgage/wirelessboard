@@ -10,6 +10,12 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.4.6] - 2026-08-02
+### Fixed
+- **PCO credentials can be stored from a packaged build.** Credentials live in the operating system keyring, and keyring chooses its backend at runtime through entry points declared in its distribution metadata. PyInstaller does not carry that metadata into the bundle, so the packaged app fell back to `keyring.backends.fail`, whose write raises. Saving credentials therefore never succeeded outside a source checkout, and the interface reported *"Cannot sync with PCO: store credentials and save before syncing."* The bundle now includes keyring's metadata and every backend module.
+- A missing keyring backend now names itself in the error and the log, instead of surfacing as a generic message with nothing recorded.
+- **Configuration is never read from or written to a frozen bundle.** `config_file()` preferred `app_dir()`, which in a packaged build is `sys._MEIPASS` — a directory inside the application bundle. Any `config.json` there took precedence over the user's real configuration, and on macOS writing inside a signed, notarized bundle both fails and invalidates the signature. That branch now applies only to source checkouts.
+
 ## [1.4.5] - 2026-08-02
 ### Fixed
 - The macOS app declared both `LSBackgroundOnly` and `LSUIElement`. The first says the process presents no interface at all; the second makes it a menu-bar agent that may show a tray icon and windows, which is what this app actually does. `LSBackgroundOnly` has been dropped. Reported as an immediate crash on an M4 running macOS Tahoe 26.5.

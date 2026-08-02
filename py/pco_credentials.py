@@ -79,18 +79,48 @@ def _deserialize_payload(payload: str) -> Tuple[str, str]:
     return str(token), str(secret)
 
 
+def active_backend_name() -> str:
+    """Name the keyring backend currently in use, for diagnostics.
+
+    A packaged build that is missing keyring's backend modules or its entry-point
+    metadata silently selects keyring.backends.fail, which raises on every
+    operation. Naming the backend in the error turns that into a one-line
+    diagnosis instead of an investigation.
+    """
+
+    try:
+        backend = keyring.get_keyring()
+    except Exception as exc:  # noqa: BLE001
+        return f"unavailable ({exc})"
+    return f"{type(backend).__module__}.{type(backend).__name__}"
+
+
 def _persist_in_keyring(credential_id: str, token: str, secret: str) -> None:
     payload = _serialize_payload(token, secret)
     try:
         keyring.set_password(_SERVICE_NAME, credential_id, payload)
+    except keyring_errors.NoKeyringError as exc:
+        LOGGER.error("No usable keyring backend; active backend is %s", active_backend_name())
+        raise CredentialError(
+            "No system keyring is available to store PCO credentials "
+            f"(active backend: {active_backend_name()})."
+        ) from exc
     except keyring_errors.KeyringError as exc:
+        LOGGER.error("Keyring write failed via %s: %s", active_backend_name(), exc)
         raise CredentialError("Unable to write credentials to the system keyring.") from exc
 
 
 def _load_from_keyring(credential_id: str) -> Tuple[str, str]:
     try:
         payload = keyring.get_password(_SERVICE_NAME, credential_id)
+    except keyring_errors.NoKeyringError as exc:
+        LOGGER.error("No usable keyring backend; active backend is %s", active_backend_name())
+        raise CredentialError(
+            "No system keyring is available to read PCO credentials "
+            f"(active backend: {active_backend_name()})."
+        ) from exc
     except keyring_errors.KeyringError as exc:
+        LOGGER.error("Keyring read failed via %s: %s", active_backend_name(), exc)
         raise CredentialError("Unable to access the system keyring.") from exc
 
     if payload is None:
