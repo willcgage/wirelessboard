@@ -29,6 +29,15 @@ mac:
     # that the process presents no UI at all — and the two together ask macOS for
     # something incoherent. Removed while chasing an immediate crash on macOS 26.
     LSUIElement: true
+    # macOS 15 and later gate local-network access behind user consent. Discovery
+    # listens on multicast 239.255.254.253:8427 and probes receivers on TCP 2202,
+    # so without permission the app finds nothing and reports no error. Supplying
+    # a usage string is what makes the prompt appear with an explanation rather
+    # than a bare request — which matters here because a menu-bar agent has no
+    # window for the user to associate the prompt with.
+    NSLocalNetworkUsageDescription: >-
+      Wirelessboard finds your Shure receivers on the local network and reads
+      their channel, battery, and audio levels.
   # No arch list here on purpose. Each CI job passes --arm64 or --x64 and runs
   # on a runner of that architecture, because the bundled PyInstaller service is
   # built natively and is not universal. Building both arches on one runner
