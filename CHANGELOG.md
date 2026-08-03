@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.6.0] - 2026-08-03
+The menu bar stops being silent: it says whether the server is up, and whether a
+newer version exists. Alongside that, the build stops shipping 327 MB of tooling
+it never used, and the release pipeline moves to Node 22 — which is what finally
+cleared a deprecation list open since October.
+
+**Intel Macs:** 1.5.1 was the last release with an `x64` build. See *Removed*.
+
+### Added
 - **The menu bar tells you when a new version is released.** Wirelessboard now asks GitHub for the latest release half a minute after start and every six hours after that, and reports either *Up to date (1.5.1)* or *Update available: 1.6.0* — the latter opening the release page when clicked. It is **notify only**: nothing is downloaded or installed on its own, because this runs during live services and an update that restarts the app mid-service is worse than one that waits. The check uses `/releases/latest`, which excludes drafts, so a version that has been built but not yet published is never announced. A failed check is logged and otherwise ignored rather than interrupting anyone. (#27)
 - **JavaScript tests.** `npm test` now runs the Python suite and a new `npm run test:js` covering main-process logic, using `node:test` from Node 22 — no test framework added, and CI runs it. This is why the update check lives in `electron/update-check.js` with its network call injected: the whole thing is exercisable without a network or a running application.
 - **The menu bar says what the server is doing.** Starting the application showed nothing at all until, five seconds later, a browser window appeared. The tray now reports *Starting the server…*, then *Server running* or *Server failed to start*, in both the tooltip and as the first item of its menu, and **Launch Wirelessboard** / **Edit Configuration** stay disabled until the server actually answers. (#14)
