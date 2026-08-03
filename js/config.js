@@ -3389,8 +3389,8 @@ function applyAssignmentsFromSelects() {
   const summary = document.getElementById('pco-assign-summary');
   const sels = document.querySelectorAll('#pco-assign-table select.pco-person-select');
   const remember = document.getElementById('pco-remember-positions')?.checked !== false;
-  const slotsByNumber = new Map(
-    ((micboard.config && micboard.config.slots) || []).map((s) => [s.slot, s]));
+  const configuredSlots = (micboard.config && micboard.config.slots) || [];
+  const slotsByNumber = new Map(configuredSlots.map((s) => [s.slot, s]));
 
   const updates = [];
   const seeded = [];
@@ -3437,8 +3437,8 @@ function applyAssignmentsFromSelects() {
       if (!u.extended_id) return;
       const target = slotsByNumber.get(u.slot);
       if (target) target.extended_id = u.extended_id;
-      const cell = document.querySelector(
-        `#pco-assign-table tr[data-slot="${u.slot}"] .pco-ext-id`);
+      const cellSelector = `#pco-assign-table tr[data-slot="${u.slot}"] .pco-ext-id`;
+      const cell = document.querySelector(cellSelector);
       if (cell) cell.textContent = u.extended_id;
     });
   }, (err) => {
