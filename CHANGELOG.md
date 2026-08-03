@@ -10,6 +10,15 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.5.1] - 2026-08-02
+### Fixed
+- **Upgrading no longer leaves the browser running the previous version's JavaScript and stylesheet.** Tornado sends no `Cache-Control` for static files, so browsers applied heuristic freshness and reused `app.js` without asking whether it was still current. After upgrading to 1.5.0 the server rendered the new markup while the script and stylesheet came from the 1.4.8 cache, and reloading did not help because the browser never asked. That one stale file produced three separate symptoms: the Teams chooser rendered but stayed permanently empty, plan labels kept their old `Aug 2 — ` format, the Service Type selector did nothing, and the panel wore the pre-1.5.0 colours. `/static/*` is now served with `Cache-Control: no-cache`, which keeps the cached copy and revalidates it — an unchanged bundle still costs only a `304`.
+- The head count beside each team (`— 9 people`) was `#616161`, measuring 3.39:1 against the panel and failing the 4.5:1 AA floor. The team chooser also had no colour of its own, so anything inside it without a class — the empty-state line, the saved-filter list — inherited Bootstrap's near-black at 1.36:1.
+
+### Changed
+- **Notes is its own step.** The Note Category field sat beside the team tick boxes under the heading *Pick the teams that need mics*, which is not what it does. It is now step 4, and *How positions match slots* becomes step 5, review 6 and assign 7. Notes are only consulted when a position does not name a slot on its own, and the step says so.
+- The team chooser is taller and full width, so a typical plan's teams are all visible without scrolling.
+
 ## [1.5.0] - 2026-08-02
 Planning Center mapping, largely rebuilt around one correction: a slot serves a
 *position*, not a team. Found while running three teams — Vocal Team, Band and

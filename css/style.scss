@@ -320,12 +320,22 @@ canvas.slotgraph {
   margin-bottom: 0.75rem;
 }
 
+/* The chooser's own colour, so anything inside it that carries no class of its
+   own -- the empty-state line, the saved-filter list -- inherits something
+   legible instead of Bootstrap's near-black. */
+#pco-team-choices {
+  color: var(--color-white);
+}
+
 #pco-team-choices .pco-team-row + .pco-team-row {
   margin-top: 0.3rem;
 }
 
+/* --color-gray (#616161) measured 3.39:1 against the panel, under the 4.5:1
+   AA floor. This is the head count beside each team, which is the whole reason
+   to look at the list. */
 #pco-team-choices .pco-team-meta {
-  color: var(--color-gray);
+  color: rgba(255, 255, 255, 0.65);
   font-size: 0.85em;
 }
 

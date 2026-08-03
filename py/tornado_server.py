@@ -782,8 +782,32 @@ class NoCacheHandler(web.StaticFileHandler):
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
 
 
-class SourceCheckoutStaticHandler(web.StaticFileHandler):
-    """Static files for a source checkout, where the bundle changes as you work.
+class RevalidatingStaticHandler(web.StaticFileHandler):
+    """Static files the browser always asks about before reusing.
+
+    Tornado sends no ``Cache-Control`` for static files, so browsers fall back
+    to heuristic freshness and may reuse a bundle without asking whether it is
+    still current. Across an application upgrade that is silently wrong: the
+    server renders the new markup while the script and stylesheet come from the
+    previous version's cache, and reloading does not help because the browser
+    never asks.
+
+    Upgrading 1.4.8 to 1.5.0 did exactly that. The new demo.html rendered a team
+    chooser and a service-type selector that the cached script had never heard
+    of, so the chooser stayed permanently empty, plan labels kept their old
+    format, and the panel wore the previous stylesheet -- three separate
+    "1.5.0 is broken" symptoms from one stale file.
+
+    ``no-cache`` is not ``no-store``: the copy is kept and revalidated, so an
+    unchanged bundle still costs only a 304.
+    """
+
+    def set_extra_headers(self, path):
+        self.set_header('Cache-Control', 'no-cache')
+
+
+class SourceCheckoutStaticHandler(RevalidatingStaticHandler):
+    """Also re-hash per request, because in a checkout the bundle changes.
 
     Tornado caches each file's content hash in a class-level dict for the life
     of the process (``StaticFileHandler._static_hashes``) and never invalidates
@@ -816,9 +840,14 @@ class SourceCheckoutStaticHandler(web.StaticFileHandler):
 
 
 def static_file_handler():
-    """StaticFileHandler for a frozen build, the re-hashing one for a checkout."""
+    """Both builds revalidate; only a checkout also needs to re-hash.
+
+    A packaged bundle cannot change while the app runs, so its hash is safe to
+    cache for the process -- but it *does* change when the user upgrades, which
+    is why revalidation is not optional there either.
+    """
     if getattr(sys, 'frozen', False):
-        return web.StaticFileHandler
+        return RevalidatingStaticHandler
     return SourceCheckoutStaticHandler
 
 

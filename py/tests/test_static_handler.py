@@ -26,10 +26,13 @@ class TestStaticFileHandlerChoice:
         assert tornado_server.static_file_handler() is tornado_server.SourceCheckoutStaticHandler
 
     def test_a_frozen_build_keeps_tornados_cache(self, monkeypatch):
-        """A packaged bundle cannot change while it runs; re-hashing is waste."""
+        """A packaged bundle cannot change while it runs; re-hashing is waste.
+
+        It still has to revalidate, though -- the bundle changes on upgrade.
+        """
         monkeypatch.setattr(sys, 'frozen', True, raising=False)
 
-        assert tornado_server.static_file_handler() is web.StaticFileHandler
+        assert tornado_server.static_file_handler() is tornado_server.RevalidatingStaticHandler
 
     def test_the_checkout_handler_is_a_static_file_handler(self):
         assert issubclass(tornado_server.SourceCheckoutStaticHandler, web.StaticFileHandler)
@@ -68,3 +71,40 @@ class TestSourceCheckoutEtag:
 
     def test_no_path_yields_no_etag(self):
         assert self._handler(None).compute_etag() is None
+
+
+class TestRevalidation:
+    """Both builds must let the browser ask before reusing a bundle.
+
+    Tornado sends no Cache-Control for static files, so browsers apply
+    heuristic freshness. Across an upgrade that serves the new markup with the
+    previous version's script and stylesheet, and reloading does not help
+    because the browser never asks.
+    """
+
+    def _headers_set_by(self, cls):
+        captured = {}
+        handler = cls.__new__(cls)
+        handler.set_header = lambda name, value: captured.__setitem__(name, value)
+        handler.set_extra_headers('app.js')
+        return captured
+
+    def test_a_packaged_build_revalidates(self):
+        headers = self._headers_set_by(tornado_server.RevalidatingStaticHandler)
+
+        assert headers.get('Cache-Control') == 'no-cache'
+
+    def test_a_source_checkout_revalidates_too(self):
+        headers = self._headers_set_by(tornado_server.SourceCheckoutStaticHandler)
+
+        assert headers.get('Cache-Control') == 'no-cache'
+
+    def test_it_is_no_cache_not_no_store(self):
+        """no-store would refetch the whole bundle every load; 304s are the point."""
+        headers = self._headers_set_by(tornado_server.RevalidatingStaticHandler)
+
+        assert 'no-store' not in headers.get('Cache-Control', '')
+
+    def test_the_checkout_handler_inherits_revalidation(self):
+        assert issubclass(tornado_server.SourceCheckoutStaticHandler,
+                          tornado_server.RevalidatingStaticHandler)
