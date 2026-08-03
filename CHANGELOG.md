@@ -4,6 +4,10 @@
 ### Added
 - _Nothing yet._
 
+### Security
+- **`urllib3` 2.6.1 → 2.6.3.** The only dependency update here that reaches users: it is pinned in `py/requirements.txt` and ships inside the bundled service.
+- **The application no longer packages 327 MB of build tooling.** `app-builder-lib` — electron-builder's own library — was listed as a runtime dependency, and electron-builder packages runtime dependencies into the app. Nothing in the application imports it; `main.js` requires only `electron`, `path`, `child_process` and `fs`, so there were never any third-party runtime dependencies at all. Moving it to `devDependencies` takes the packaged dependency tree from 309 packages to 2, and the production vulnerability count from 22 (18 high, 1 critical) to zero. Verified by packaging locally: `app-builder-lib` no longer appears anywhere in `app.asar`.
+
 ### Removed
 - **Intel macOS builds.** Releases are Apple Silicon only from here. **1.5.1 is the last release with an `x64` disk image**, and it keeps working — Intel users should download [1.5.1](https://github.com/willcgage/wirelessboard/releases/tag/v1.5.1) rather than the latest release. There is no in-app updater, so nothing will try to move an Intel install onto a build it cannot run.
 
