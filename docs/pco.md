@@ -64,6 +64,8 @@ Field notes:
   - `position`: the team position name only.
   - `note_or_brackets`: the pre-1.4 order — note category, then brackets, then position.
 - `mapping.team_name_filter`: Only use assignments from these teams. Matched case-insensitively as a substring, so `"Vocal"` also covers a team named `"Vocal Team A"`.
+
+  Prefer the tick boxes in the PCO panel over editing this by hand. The match is a plain substring, so a name that is slightly off — `"Speakers and Hosts"` against a team actually called `"Speakers & Hosts"` — matches nobody and reports nothing; the whole team simply vanishes from the sync. The panel reads the names from the selected plan, so they are always exact. An **empty** list means no filtering at all, which lets camera, production and every other scheduled team compete for microphone slots.
 - `mapping.position_number_fallback` (default `false`): Allows a position to match a slot whose label uses a different word but the same number — position `Vocal 1` matching slots labelled `Mic 1` and `IEM 1`.
 
   **Single-team plans only.** It keys on the trailing number alone, and position names are unique within a team rather than across a plan. With Vocal Team, Band and Speakers and Hosts all scheduled, `Vocal 1`, `Guitar 1` and `Host 1` every one of them reduce to `1` and claim the same `Mic 1` slot — you get a three-way conflict and an arbitrary winner. Leave it off unless exactly one team is ever scheduled.
@@ -128,6 +130,31 @@ resolution and returns what *would* change without writing to `config.json`. The
 response lists which slots each position matched, which pass matched them, and any
 scheduled people that found no slot at all — the fastest way to confirm your slot
 labels line up with your position names.
+
+## Listing the teams on a plan
+The team chooser is populated from:
+
+```
+GET http://<wirelessboard-host>:<port>/api/pco/teams?plan=<plan_id>&service=<service_type_id>
+```
+
+```json
+{
+  "ok": true,
+  "plan_id": "89808072",
+  "filter_active": true,
+  "teams": [
+    {"name": "Band", "people": 9, "positions": ["Bass Guitar", "Drums"], "selected": true},
+    {"name": "Camera Operators", "people": 7, "positions": ["Camera 1"], "selected": false}
+  ]
+}
+```
+
+`selected` reflects the saved `mapping.team_name_filter`, but the list itself
+ignores that filter on purpose — an excluded team still has to appear, or there
+would be no way to add it back. `people` counts distinct people, not scheduled
+rows, since one person can hold several positions on a team across service
+times. `service` is optional and only avoids a redirect.
 
 ## Using the sync endpoint
 Once configured, trigger a manual sync:

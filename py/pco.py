@@ -567,6 +567,75 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
     return {"ok": True, "plan_id": plan_id, "people": people_list, "note_categories": sorted(cat_names)}
 
 
+def list_teams_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]:
+    """Return every team scheduled on a plan, with how many people are on each.
+
+    Deliberately ignores ``mapping.team_name_filter``.  This is what populates
+    the team chooser, so it has to report the teams the operator has *not*
+    picked as well -- filtering here would make a team impossible to re-add
+    once it had been excluded.
+
+    Counts distinct people rather than plan_people rows, because one person can
+    hold several positions on the same team across service times.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        logger.warning('PCO team list aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+
+    stid = _resolve_service_type_id(service_type_value, headers) if service_type_value is not None else None
+    plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
+    if not plan_people:
+        plan_people = _get_plan_people_any(plan_id, headers)
+    if not plan_people:
+        return {"ok": False, "error": "Unable to fetch plan people"}
+
+    included_maps = _build_included_maps(plan_people.get('included') or [])
+    members: Dict[str, set] = {}
+    positions: Dict[str, set] = {}
+
+    for pp in plan_people.get('data') or []:
+        rel = pp.get('relationships') or {}
+
+        team_rel = (rel.get('team') or {}).get('data') or {}
+        team_obj = None
+        if team_rel:
+            team_obj = included_maps.get((team_rel.get('type') or '').lower(), {}).get(str(team_rel.get('id')))
+        team_name = (((team_obj or {}).get('attributes') or {}).get('name') or '').strip()
+        if not team_name:
+            continue
+
+        person_rel = (rel.get('person') or {}).get('data') or {}
+        person_obj = None
+        if person_rel:
+            person_obj = included_maps.get((person_rel.get('type') or '').lower(), {}).get(str(person_rel.get('id')))
+        name = _person_display_name(person_obj or {})
+
+        members.setdefault(team_name, set())
+        positions.setdefault(team_name, set())
+        if name:
+            members[team_name].add(name)
+        position = ((pp.get('attributes') or {}).get('team_position_name') or '').strip()
+        if position:
+            positions[team_name].add(position)
+
+    selected = [t.strip().lower() for t in ((pco_cfg.get('mapping') or {}).get('team_name_filter') or []) if t and t.strip()]
+
+    teams = [{
+        "name": team,
+        "people": len(members[team]),
+        "positions": sorted(positions[team]),
+        # Mirrors _team_matches_filters: case-insensitive substring match.
+        "selected": any(f in team.lower() for f in selected),
+    } for team in sorted(members)]
+
+    return {"ok": True, "plan_id": plan_id, "teams": teams, "filter_active": bool(selected)}
+
+
 def _resolve_service_type_id(service_type_value, headers: Dict[str, str]) -> Optional[int]:
     """Resolve a service_type value (name or numeric) to an integer ID.
     - If numeric or numeric string: return as int.

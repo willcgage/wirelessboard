@@ -307,6 +307,28 @@ canvas.slotgraph {
   margin-top: 0.25rem;
 }
 
+/* Numbered steps through the PCO setup: connect, plan, teams, matching. */
+.pco-step-heading {
+  font-family: 'IBM Plex Sans';
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-yellow);
+  border-bottom: 1px solid var(--color-gray);
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+#pco-team-choices .pco-team-row + .pco-team-row {
+  margin-top: 0.3rem;
+}
+
+#pco-team-choices .pco-team-meta {
+  color: var(--color-gray);
+  font-size: 0.85em;
+}
+
 /* mic storage mode */
 .tvmode {
   --tvmode-slot-width: 420px;

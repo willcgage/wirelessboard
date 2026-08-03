@@ -1438,6 +1438,17 @@ function appendPcoLog(message, level = 'info') {
   }
 }
 
+/** Escape text bound for innerHTML. Team and position names come from the
+ *  Planning Center API, so they are not ours to trust as markup. */
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatError(err) {
   if (!err) return 'Unknown error';
   if (typeof err === 'string') return err;
@@ -2502,6 +2513,117 @@ function applyPcoMappingToForm(mapping) {
   if (elStrategy) elStrategy.value = m.strategy || DEFAULT_PCO_STRATEGY;
   if (elNumberFallback) elNumberFallback.checked = m.position_number_fallback === true;
   if (elSeed) elSeed.checked = m.seed_extended_id === true;
+  renderPcoTeamChoices(null);
+}
+
+// -- Team chooser -----------------------------------------------------------
+// The saved filter is a list of names matched case-insensitively as substrings.
+// Typing them by hand meant a team was one "&"-vs-"and" away from silently
+// matching nothing, so the names come from the plan itself and the hidden
+// #pco-team-filter input stays the single source of truth for the payload.
+
+function currentTeamFilter() {
+  const raw = document.getElementById('pco-team-filter')?.value || '';
+  return raw.split(',').map((s) => s.trim()).filter((s) => s);
+}
+
+function syncTeamFilterFromChoices() {
+  const host = document.getElementById('pco-team-choices');
+  const hidden = document.getElementById('pco-team-filter');
+  if (!host || !hidden) return;
+  const boxes = Array.from(host.querySelectorAll('input[type="checkbox"][data-team]'));
+  if (!boxes.length) return;
+  hidden.value = boxes.filter((b) => b.checked).map((b) => b.dataset.team).join(', ');
+}
+
+/**
+ * Render the team list. Pass the /api/pco/teams payload, or null to fall back
+ * to whatever names are already saved -- the panel opens before a plan is
+ * chosen, and an existing filter should still be visible then.
+ */
+function renderPcoTeamChoices(teams) {
+  const host = document.getElementById('pco-team-choices');
+  if (!host) return;
+
+  if (!Array.isArray(teams)) {
+    const saved = currentTeamFilter();
+    host.innerHTML = saved.length
+      ? `<div class="small text-muted mb-1">Saved filter (choose a plan to edit):</div>${
+        saved.map((n) => `<div class="pco-team-row">• ${escapeHtml(n)}</div>`).join('')}`
+      : '<span class="text-muted small">Choose a plan above to list its teams.</span>';
+    return;
+  }
+
+  if (!teams.length) {
+    host.innerHTML = '<span class="text-warning small">This plan has nobody scheduled.</span>';
+    return;
+  }
+
+  host.innerHTML = teams.map((t, i) => {
+    const id = `pco-team-cb-${i}`;
+    const positions = (t.positions || []).join(', ');
+    return `<div class="form-check pco-team-row">
+      <input class="form-check-input" type="checkbox" id="${id}"
+             data-team="${escapeHtml(t.name)}"${t.selected ? ' checked' : ''}>
+      <label class="form-check-label" for="${id}" title="${escapeHtml(positions)}">
+        ${escapeHtml(t.name)}
+        <span class="pco-team-meta">— ${t.people} ${t.people === 1 ? 'person' : 'people'}</span>
+      </label>
+    </div>`;
+  }).join('');
+
+  // No boxes ticked means no filter, which lets every team through -- including
+  // camera and production crew competing for microphone slots. Say so.
+  syncTeamFilterFromChoices();
+}
+
+function loadPcoTeams() {
+  const host = document.getElementById('pco-team-choices');
+  const planId = document.getElementById('pco-plan-select')?.value || '';
+  const serviceId = document.getElementById('pco-service-type-id')?.value || '';
+  if (!host) return;
+  if (!planId) {
+    renderPcoTeamChoices(null);
+    return;
+  }
+
+  host.innerHTML = '<span class="text-muted small">Loading teams…</span>';
+  const q = `plan=${encodeURIComponent(planId)}${serviceId ? `&service=${encodeURIComponent(serviceId)}` : ''}`;
+  fetch(`api/pco/teams?${q}&_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load teams');
+      renderPcoTeamChoices(resp.teams || []);
+      appendPcoLog(`Found ${(resp.teams || []).length} team(s) on the selected plan.`);
+    })
+    .catch((err) => {
+      host.innerHTML = `<span class="text-danger small">${formatError(err)}</span>`;
+      appendPcoLog(`Failed to load teams: ${formatError(err)}`, 'error');
+    });
+}
+
+function loadPcoServiceTypes() {
+  const sel = document.getElementById('pco-service-type-id');
+  if (!sel) return;
+  const saved = sel.value || '';
+  fetch(`api/pco/services?_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load service types');
+      const services = resp.services || [];
+      sel.innerHTML = '<option value="">All service types</option>';
+      services.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s.id || '';
+        opt.textContent = s.name || `Service ${s.id}`;
+        sel.appendChild(opt);
+      });
+      if (saved) sel.value = saved;
+      appendPcoLog(`Fetched ${services.length} service type(s).`);
+    })
+    .catch((err) => {
+      appendPcoLog(`Failed to fetch service types: ${formatError(err)}`, 'error');
+    });
 }
 
 function buildPcoPayload() {
@@ -2743,6 +2865,9 @@ function showPCOView() {
   if (planSel) planSel.innerHTML = '<option value="">Select a plan...</option>';
   const loadBtn = document.getElementById('pco-load-people');
   if (loadBtn) loadBtn.disabled = true;
+  // Step 2 needs the service type list before it is any use.
+  loadPcoServiceTypes();
+  renderPcoTeamChoices(null);
   appendPcoLog('Opened PCO settings view');
 }
 
@@ -3044,8 +3169,12 @@ function refreshPlansList(options = {}) {
   }
 
   if (sel) sel.innerHTML = '<option value="">Loading…</option>';
-  appendPcoLog('Fetching plan list from PCO...');
-  fetch(`api/pco/plans?_=${Date.now()}`, { cache: 'no-store' })
+  // Without a service type the list aggregates every service type in the
+  // account, which on a mid-sized church is dozens of unrelated plans.
+  const serviceId = (document.getElementById('pco-service-type-id')?.value || '').trim();
+  const scope = serviceId ? `service=${encodeURIComponent(serviceId)}&` : '';
+  appendPcoLog(serviceId ? 'Fetching plans for the selected service type...' : 'Fetching plan list from PCO...');
+  fetch(`api/pco/plans?${scope}_=${Date.now()}`, { cache: 'no-store' })
     .then((r) => r.json())
     .then((resp) => {
       if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load plans');
@@ -3053,7 +3182,10 @@ function refreshPlansList(options = {}) {
       if (sel) {
         sel.innerHTML = '<option value="">Select a plan…</option>';
         plans.forEach((p) => {
-          const label = `${p.service_type_name ? `${p.service_type_name} — ` : ''}${p.short_dates || p.dates || ''} — ${p.title || ''}`;
+          // Scoped to one service type the API omits its name, and most plans
+          // carry no title -- joining only the parts present avoids "Aug 2 — ".
+          const label = [p.service_type_name, p.short_dates || p.dates, p.title]
+            .map((part) => (part || '').trim()).filter((part) => part).join(' — ');
           const opt = document.createElement('option');
           opt.value = p.id || '';
           opt.textContent = label;
@@ -3201,6 +3333,17 @@ document.addEventListener('change', (e) => {
   if (t.id === 'pco-plan-select') {
     const loadBtn = document.getElementById('pco-load-people');
     if (loadBtn) loadBtn.disabled = !(t.value);
+    // Teams are a property of the chosen plan, so re-read them whenever it changes.
+    loadPcoTeams();
+  }
+  if (t.id === 'pco-service-type-id') {
+    // Narrowing the service type changes which plans are on offer, and the
+    // previously selected plan may not be among them.
+    refreshPlansList({ auto: true });
+    renderPcoTeamChoices(null);
+  }
+  if (t.matches && t.matches('#pco-team-choices input[type="checkbox"][data-team]')) {
+    syncTeamFilterFromChoices();
   }
 }, { passive: true });
 

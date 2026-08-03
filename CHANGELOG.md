@@ -2,9 +2,12 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **The PCO panel picks teams from the plan instead of asking you to type them.** The team filter was a free-text, comma-separated box matched case-insensitively as a substring, so a team was one `&`-versus-`and` away from silently matching nobody — and nothing on screen showed which teams existed or that a name had failed to match. Choosing a plan now lists its teams as tick boxes with a head count each, taken from a new `GET /api/pco/teams`. That endpoint deliberately ignores `mapping.team_name_filter`, because a filtered-out team still has to be listed for it to be re-addable.
+- **A Service Type selector.** The interface has always read `pco-service-type-id` when building its payload, but the control was never added to the page, so the plan list aggregated every service type in the account — dozens of unrelated plans on a mid-sized church account. Picking a service type now scopes the list.
 
 ### Changed
+- The PCO panel is laid out as numbered steps — connect, choose the plan, pick the teams, then how positions match slots. Mapping options used to be configured above the plan chooser, so they were set before there was any real data to set them against.
+- Plan labels no longer read `Aug 2 — ` when a plan has no title, or when scoping to a single service type drops the service name from the response.
 - **`mapping.position_number_fallback` now defaults to off.** A slot serves a *position*, not a team, so a position only auto-matches a slot whose own label says so. The fallback keys on the trailing number alone, and position names are unique within a Planning Center team rather than across a plan — so with more than one team scheduled, `Vocal 1` (Vocal Team), `Guitar 1` (Band) and `Host 1` (Speakers and Hosts) all reduce to `1` and every one of them claims the same `Mic 1` slot, producing a three-way conflict and an arbitrary winner. Anything the exact-label passes cannot place is now left unmatched for the operator to assign by hand rather than guessed at. Labelling both the mic and the IEM channel with the position name still fills both from one position. The option remains available for single-team plans.
 
   Existing installations are **not** migrated: the interface wrote this key on every save with its checkbox defaulting to checked, so anything that ever saved PCO settings carries an explicit `true`. Clear **Match by trailing number when the label differs** in the PCO panel and save to pick up the new behaviour.
