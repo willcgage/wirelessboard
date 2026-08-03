@@ -24,7 +24,7 @@ jobs:
           lfs: true
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -89,13 +89,18 @@ jobs:
           lfs: true
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install Node dependencies
         run: npm ci
-      - name: Verify pinned electron rebuild
+        # Was "Verify pinned electron rebuild", guarding an overrides entry that
+        # held @electron/rebuild at 3.6.1 after 4.0.1 broke the build on Node 20.
+        # electron-builder now brings 4.x itself and the runners are on Node 22,
+        # so there is nothing pinned -- but reporting what resolved is still the
+        # cheapest way to catch a native-rebuild surprise before packaging.
+      - name: Report resolved electron rebuild
         run: npm ls @electron/rebuild
       - name: Install Python dependencies (handled by npm postinstall)
         shell: bash
@@ -256,7 +261,7 @@ jobs:
           lfs: true
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'

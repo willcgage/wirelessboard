@@ -75,7 +75,6 @@
     "glob": "^7.2.3",
     "rimraf": "^5.0.0",
     "@electron/get": "^3.1.0",
-    "@electron/rebuild": "3.6.1",
     "boolean": "file:vendor/boolean",
     "js-yaml": "^4.1.1"
   },
