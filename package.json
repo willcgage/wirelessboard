@@ -47,11 +47,9 @@
   "devDependencies": {
     "@babel/core": "^7.28.4",
     "@babel/preset-env": "^7.28.3",
-    "@electron/rebuild": "3.6.1",
     "@ibm/plex": "^6.4.1",
     "@popperjs/core": "^2.11.8",
     "@shopify/draggable": "^1.1.4",
-    "app-builder-lib": "^26.0.12",
     "babel-loader": "^9.2.1",
     "baseline-browser-mapping": "^2.9.7",
     "bootstrap": "^5.3.8",
