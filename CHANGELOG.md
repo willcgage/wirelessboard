@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.5.0] - 2026-08-02
+Planning Center mapping, largely rebuilt around one correction: a slot serves a
+*position*, not a team. Found while running three teams — Vocal Team, Band and
+Speakers & Hosts — through a single rack.
+
+### Added
 - **The PCO panel picks teams from the plan instead of asking you to type them.** The team filter was a free-text, comma-separated box matched case-insensitively as a substring, so a team was one `&`-versus-`and` away from silently matching nobody — and nothing on screen showed which teams existed or that a name had failed to match. Choosing a plan now lists its teams as tick boxes with a head count each, taken from a new `GET /api/pco/teams`. That endpoint deliberately ignores `mapping.team_name_filter`, because a filtered-out team still has to be listed for it to be re-addable.
 - **Hand assignments now teach the slot, so the next plan matches on its own.** Applying an assignment only ever wrote the person's name, which is the one part that changes week to week — so a rack whose slots carry no position label stayed manual forever. The assignment step now offers *Remember each person's position on the slot*, which writes the Planning Center position (`Electric Guitar 1`, not `Joe Spring`) into that slot's `extended_id`, and a **Slot ID** column showing what each slot has learned. Verified against a real plan: three slots assigned by hand, and the next resolution matched all three `via position` with no conflicts. Slots that already have an ID are never overwritten, so labels set up by hand still win.
 - **A Service Type selector.** The interface has always read `pco-service-type-id` when building its payload, but the control was never added to the page, so the plan list aggregated every service type in the account — dozens of unrelated plans on a mid-sized church account. Picking a service type now scopes the list.
