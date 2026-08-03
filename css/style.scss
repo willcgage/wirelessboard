@@ -1084,9 +1084,6 @@ canvas.slotgraph {
   margin-bottom: 0;
 }
 
-.log-settings .form-text {
-  color: rgba(255, 255, 255, 0.65);
-}
 
 
 #discovered_list input, #discovered_list select{
@@ -1141,11 +1138,6 @@ canvas.slotgraph {
   border-color: var(--color-blue);
 }
 
-#discovery-settings-panel .form-text,
-#discovery-settings-panel .form-label {
-  color: rgba(255, 255, 255, 0.75);
-}
-
 #discovery-status {
   min-height: 1.25rem;
 }
@@ -1190,12 +1182,45 @@ canvas.slotgraph {
   font-style: italic;
 }
 
-/* Ensure labels are readable on dark rows */
-.cfg-row .form-label,
-.cfg-row .col-form-label,
-.cfg-row .slot-number label {
-  color: var(--color-white) !important;
-  opacity: 0.9;
+/* Labels and helper text on the dark configuration surfaces.
+ *
+ * Bootstrap colours labels with --bs-body-color and muted text with
+ * --bs-secondary-color. Both are near-black, which is invisible against these
+ * panels: an untreated label measured 1.36:1 against the background, where
+ * WCAG AA asks for 4.5:1. Panels had been growing their own override one at a
+ * time, at three different opacities, and #pco-settings and #background-settings
+ * never got one at all — so this is the single place that sets them.
+ *
+ * .text-muted needs !important only because Bootstrap's own utility carries
+ * one; the label rule wins on specificity alone. Colour utilities that say
+ * something specific — .text-success on the credential status, .text-light on
+ * the log — are deliberately left alone.
+ */
+.settings,
+.log-settings,
+.cfg-row,
+#pco-settings,
+#background-settings,
+#discovery-settings-panel {
+  .form-label,
+  .col-form-label,
+  .form-check-label,
+  .slot-number label {
+    color: var(--color-white);
+  }
+
+  /* Helper text sits under the control it explains, so it reads a step back.
+     Deliberately not !important: .form-text is also worn by the credential
+     status, which colours itself .text-success, and an !important here would
+     outrank that and turn the "stored in system keyring" message grey. */
+  .form-text {
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  /* This one does need it -- Bootstrap's muted utility carries its own. */
+  .text-muted {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
 }
 
 
