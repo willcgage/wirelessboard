@@ -14,7 +14,9 @@
   Existing installations are **not** migrated: the interface wrote this key on every save with its checkbox defaulting to checked, so anything that ever saved PCO settings carries an explicit `true`. Clear **Match by trailing number when the label differs** in the PCO panel and save to pick up the new behaviour.
 
 ### Fixed
-- _Nothing yet._
+- **Somebody scheduled to more than one team no longer loses all but one of their assignments.** `/api/pco/people` collapsed rows by person, keeping whichever team came back first, so a vocalist also rostered under Band was reported as a Band member and their vocal position disappeared from the plan entirely — on a real Sunday plan the Vocal Team roster read `Vocal 2`–`Vocal 6` with no `Vocal 1`, and the person holding it could not be given a microphone at all. Filtering to that team dropped them completely, since their row claimed a different one. Rows are now keyed by person *and* team *and* position, and still collapse across service times so a slot is never written twice.
+
+  The sync path was never affected — `_dedupe_people` already keyed on position — which meant the assignment table and a sync disagreed about who was scheduled. They now report the same 20 assignments on the plan this was found on.
 
 ## [1.4.8] - 2026-08-02
 ### Fixed

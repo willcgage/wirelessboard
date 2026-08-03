@@ -401,7 +401,15 @@ def _get_plan_people_with_service(service_type_id: int, plan_id: str, headers: D
 
 
 def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]:
-    """Return people for a specific plan. If service_type is provided, uses scoped URL to avoid redirects."""
+    """Return the scheduled assignments on a plan, one row per person *per position*.
+
+    A row is (name, team, position) rather than one row per person: somebody
+    rostered to Band and to Vocal Team on the same plan holds two assignments
+    and may need a channel for each. Rows are still collapsed across service
+    times, so a person scheduled morning and evening appears once.
+
+    ``service_type`` is optional and only avoids a redirect.
+    """
     try:
         pco_cfg = get_pco_config()
     except PcoConfigError as exc:
@@ -424,7 +432,13 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
         return {"ok": False, "error": "Unable to fetch plan people"}
 
     included_maps = _build_included_maps(plan_people.get('included') or [])
-    out_people: Dict[str, Dict[str, Any]] = {}
+    # Keyed by (name, team, position), not by name. One person can be scheduled
+    # to several teams on the same plan -- a vocalist who also hosts -- and each
+    # of those is a separate assignment that may need its own channel. Keying on
+    # the name alone kept whichever team was seen first and silently discarded
+    # the rest, so a vocalist rostered under Band as well would disappear from
+    # the Vocal Team roster and could not be assigned a microphone at all.
+    out_people: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     cat_names: set = set()
 
     for pp in plan_people.get('data') or []:
@@ -522,41 +536,34 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
                 cat_names.add(cat)
 
         if name:
-            existing = out_people.get(name)
+            entry_key = (name, team_name or '', position)
+            existing = out_people.get(entry_key)
             if existing:
-                merged_team = existing.get("team") or team_name
-                # Union notes arrays, preserve order where possible
+                # Same person, same team, same position: one row scheduled to
+                # several service times. Union the notes and keep a single row,
+                # which is what stops a slot being written twice.
                 seen = set()
                 merged_notes: List[str] = []
                 for val in (existing.get("notes") or []) + (notes_list or []):
                     if not val:
                         continue
-                    key = str(val)
-                    if key in seen:
+                    note_key = str(val)
+                    if note_key in seen:
                         continue
-                    seen.add(key)
+                    seen.add(note_key)
                     merged_notes.append(val)
-                # One person can hold more than one position across service times.
-                merged_positions = list(existing.get("positions") or [])
-                if position and position not in merged_positions:
-                    merged_positions.append(position)
-                out_people[name] = {
-                    "name": name,
-                    "team": merged_team,
-                    "position": merged_positions[0] if merged_positions else '',
-                    "positions": merged_positions,
-                    "notes": merged_notes,
-                }
+                existing["notes"] = merged_notes
             else:
-                out_people[name] = {
+                out_people[entry_key] = {
                     "name": name,
-                    "team": team_name,
+                    "team": team_name or '',
                     "position": position,
-                    "positions": [position] if position else [],
                     "notes": notes_list,
                 }
 
-    people_list = sorted(out_people.values(), key=lambda x: (x.get('team') or '', x.get('name') or ''))
+    people_list = sorted(
+        out_people.values(),
+        key=lambda x: (x.get('team') or '', x.get('name') or '', x.get('position') or ''))
 
     # Apply optional team name filters (case-insensitive substring match)
     mapping = pco_cfg.get('mapping') or {}
