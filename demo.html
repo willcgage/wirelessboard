@@ -360,17 +360,29 @@
     <div class="row mt-4">
       <div class="col-xl-12">
         <div class="config-header">
-          <h4 class="text-center">Assign People to Slots</h4>
+          <h4 class="text-center">6 &middot; Assign People to Slots</h4>
         </div>
         <div class="p-3 border rounded">
           <div id="pco-assign-summary" class="mb-2"></div>
           <div class="table-responsive" id="pco-assign-table" style="display:none;">
             <table class="table table-sm table-striped">
               <thead>
-                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Extended Name</th><th>Select Person</th></tr>
+                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Slot ID</th><th>Extended Name</th><th>Select Person</th></tr>
               </thead>
               <tbody></tbody>
             </table>
+          </div>
+          <div class="form-check mt-3">
+            <input type="checkbox" class="form-check-input" id="pco-remember-positions" checked>
+            <label class="form-check-label" for="pco-remember-positions">
+              Remember each person&rsquo;s position on the slot
+            </label>
+            <div class="form-text">
+              Writes the Planning Center position &mdash; &ldquo;Electric Guitar 3&rdquo;,
+              not the person&rsquo;s name &mdash; into the slot&rsquo;s ID, so next
+              week&rsquo;s plan matches that slot on its own. Slots that already
+              have an ID are left alone.
+            </div>
           </div>
           <div class="d-flex gap-2 mt-2">
             <button type="button" id="pco-autofill-assignments" class="btn btn-success">Auto-Fill From Notes</button>

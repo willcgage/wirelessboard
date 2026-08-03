@@ -131,6 +131,32 @@ response lists which slots each position matched, which pass matched them, and a
 scheduled people that found no slot at all — the fastest way to confirm your slot
 labels line up with your position names.
 
+## Getting from manual to automatic
+
+Strict matching only fills a slot whose label already names a position, so on a
+rack labelled `Mic 1`/`IEM 1` the first sync matches nothing and everyone lands
+in the assignment table. That is expected, and it is a one-time cost — provided
+you let the first pass teach the slots.
+
+1. **Assign by hand once.** In *Assign People to Slots*, choose the person for
+   each slot. The dropdown shows each person's position next to their name,
+   because the position is what matters here.
+2. **Leave "Remember each person's position on the slot" ticked.** Applying then
+   writes the *position* — `Electric Guitar 1`, not `Joe Spring` — into that
+   slot's `extended_id`. The **Slot ID** column shows what each slot has
+   learned; a `—` means it will need assigning by hand again.
+3. **From the next plan on, those slots resolve themselves.** The match is
+   against the position, so it still works when a different person is scheduled
+   to it the following week.
+
+Slots that already carry an `extended_id` are never overwritten, so a label you
+set up by hand always wins, and re-assigning a slot to somebody else changes
+only the name shown on it.
+
+This is the same thing `mapping.seed_extended_id` does during a sync; the tick
+box applies it to hand assignments, which is where the labels are missing in the
+first place.
+
 ## Listing the teams on a plan
 The team chooser is populated from:
 

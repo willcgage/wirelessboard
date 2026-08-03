@@ -3271,8 +3271,14 @@ function buildAssignmentTable(ppl) {
     .concat(ppl.map((p) => {
       const notesArr = Array.isArray(p.notes) ? p.notes : [];
       const extra = notesArr.length ? notesArr.join(' | ') : '';
-      const label = p.name + (p.team ? ` [${p.team}]` : '') + (extra ? ` — ${extra}` : '');
-      return `<option value="${encodeURIComponent(p.name)}">${label}</option>`;
+      const position = (p.position || '').trim();
+      // The position is what makes the assignment repeatable: it is the label a
+      // later sync matches against, where the person's name changes week to week.
+      const label = p.name
+        + (position ? ` — ${position}` : '')
+        + (p.team ? ` [${p.team}]` : '')
+        + (extra ? ` — ${extra}` : '');
+      return `<option value="${encodeURIComponent(p.name)}" data-position="${escapeHtml(position)}">${escapeHtml(label)}</option>`;
     }))
     .join('');
   let slotsMissingLabels = 0;
@@ -3281,6 +3287,7 @@ function buildAssignmentTable(ppl) {
     const tdSlot = document.createElement('td');
     const tdDev = document.createElement('td');
     const tdDevName = document.createElement('td');
+    const tdExtId = document.createElement('td');
     const tdExtName = document.createElement('td');
     const tdSel = document.createElement('td');
     tr.setAttribute('data-slot', String(s.slot ?? ''));
@@ -3298,6 +3305,14 @@ function buildAssignmentTable(ppl) {
       }
     } catch (_) {}
     tdDevName.textContent = devName;
+    // The position this slot already answers to. Filled in, the slot resolves
+    // itself on every future plan; blank, it needs assigning by hand each time.
+    tdExtId.classList.add('pco-ext-id');
+    if (s.extended_id) {
+      tdExtId.textContent = s.extended_id;
+    } else {
+      tdExtId.innerHTML = '<span class="text-muted">—</span>';
+    }
     tdExtName.classList.add('pco-ext-name');
     tdExtName.textContent = s.extended_name || '';
     const hasLabel = Boolean((devName && devName.trim()) || (s.extended_name && String(s.extended_name).trim()));
@@ -3309,7 +3324,8 @@ function buildAssignmentTable(ppl) {
     sel.setAttribute('data-slot', String(s.slot || ''));
     sel.innerHTML = optionsHTML;
     tdSel.appendChild(sel);
-    tr.appendChild(tdSlot); tr.appendChild(tdDev); tr.appendChild(tdDevName); tr.appendChild(tdExtName); tr.appendChild(tdSel);
+    tr.appendChild(tdSlot); tr.appendChild(tdDev); tr.appendChild(tdDevName);
+    tr.appendChild(tdExtId); tr.appendChild(tdExtName); tr.appendChild(tdSel);
     if (assignBody) assignBody.appendChild(tr);
   });
   if (assignTbl) assignTbl.style.display = 'block';
@@ -3372,15 +3388,34 @@ document.addEventListener('click', (e) => {
 function applyAssignmentsFromSelects() {
   const summary = document.getElementById('pco-assign-summary');
   const sels = document.querySelectorAll('#pco-assign-table select.pco-person-select');
+  const remember = document.getElementById('pco-remember-positions')?.checked !== false;
+  const slotsByNumber = new Map(
+    ((micboard.config && micboard.config.slots) || []).map((s) => [s.slot, s]));
+
   const updates = [];
+  const seeded = [];
   Array.from(sels).forEach((sel) => {
     const slotStr = sel.getAttribute('data-slot') || '';
     const slot = Number.parseInt(slotStr, 10);
     const name = sel.value ? decodeURIComponent(sel.value) : '';
-    if (Number.isFinite(slot) && name) {
-      updates.push({ slot, extended_name: name });
+    if (!Number.isFinite(slot) || !name) return;
+
+    const update = { slot, extended_name: name };
+
+    // Record the position, not the person. Names change every week; the
+    // position is what a later sync matches on, which is what turns this
+    // hand assignment into an automatic one next time. Never overwrite an
+    // ID already there -- the operator may have labelled that slot on purpose.
+    const position = (sel.selectedOptions[0]?.dataset.position || '').trim();
+    const existingId = (slotsByNumber.get(slot)?.extended_id || '').trim();
+    if (remember && position && !existingId) {
+      update.extended_id = position;
+      seeded.push(`slot ${slot} → “${position}”`);
     }
+
+    updates.push(update);
   });
+
   if (updates.length === 0) {
     if (summary) summary.innerHTML = '<span class="text-warning">Select at least one person.</span>';
     appendPcoLog('No assignments selected to apply.', 'warn');
@@ -3388,11 +3423,24 @@ function applyAssignmentsFromSelects() {
   }
   appendPcoLog(`Applying ${updates.length} assignment update(s) to slots...`);
   postJSON('api/slot', updates, () => {
-    if (summary) summary.textContent = `Applied ${updates.length} update(s).`;
+    const note = seeded.length
+      ? ` ${seeded.length} slot${seeded.length === 1 ? '' : 's'} will now match automatically.`
+      : '';
+    if (summary) summary.textContent = `Applied ${updates.length} update(s).${note}`;
     appendPcoLog(`Applied ${updates.length} assignment update(s).`);
+    if (seeded.length) appendPcoLog(`Remembered position on ${seeded.join(', ')}.`);
     try { applyExtendedNameChanges(updates); } catch (e) {
       appendPcoLog(`Unable to refresh extended names locally: ${formatError(e)}`, 'warn');
     }
+    // Reflect the newly written IDs without a full reload of the view.
+    updates.forEach((u) => {
+      if (!u.extended_id) return;
+      const target = slotsByNumber.get(u.slot);
+      if (target) target.extended_id = u.extended_id;
+      const cell = document.querySelector(
+        `#pco-assign-table tr[data-slot="${u.slot}"] .pco-ext-id`);
+      if (cell) cell.textContent = u.extended_id;
+    });
   }, (err) => {
     appendPcoLog(`Failed to apply assignments: ${formatError(err)}`, 'error');
   });
