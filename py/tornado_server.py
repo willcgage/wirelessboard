@@ -3,6 +3,7 @@ import os
 import asyncio
 import socket
 import logging
+import sys
 from typing import Any, cast, Iterable
 
 import tornado.websocket as websocket
@@ -781,6 +782,46 @@ class NoCacheHandler(web.StaticFileHandler):
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
 
 
+class SourceCheckoutStaticHandler(web.StaticFileHandler):
+    """Static files for a source checkout, where the bundle changes as you work.
+
+    Tornado caches each file's content hash in a class-level dict for the life
+    of the process (``StaticFileHandler._static_hashes``) and never invalidates
+    it, because a deployed app's static files do not change underneath it. In a
+    checkout they do, on every ``npm run build``.
+
+    A server started before a rebuild therefore keeps answering ``304 Not
+    Modified`` against the hash it captured at startup, and the browser goes on
+    running the bundle it already had -- through a hard reload, and in a new
+    tab, because the validator still matches. ``curl`` sends no validator, so it
+    reads from disk and shows the new bytes: the file, the build and the served
+    response all look correct while the page is stale, which is a slow thing to
+    work out.
+
+    Recomputing per request does not disable caching; it makes the conditional
+    request tell the truth. Packaged builds keep the cached hash -- their bundle
+    cannot change while the app runs, so re-hashing every request would be pure
+    waste.
+    """
+
+    def compute_etag(self):
+        if self.absolute_path is None:
+            return None
+        try:
+            version = self.get_content_version(self.absolute_path)
+        except Exception:  # noqa: BLE001 - matches Tornado's own tolerance here
+            logger.debug('Could not hash static file %s', self.absolute_path)
+            return None
+        return '"{}"'.format(version) if version else None
+
+
+def static_file_handler():
+    """StaticFileHandler for a frozen build, the re-hashing one for a checkout."""
+    if getattr(sys, 'frozen', False):
+        return web.StaticFileHandler
+    return SourceCheckoutStaticHandler
+
+
 class BackgroundAssetHandler(NoCacheHandler):
     @classmethod
     def get_absolute_path(cls, root, path):
@@ -817,7 +858,7 @@ def twisted():
         (r'/api/cloud/google-drive/auth/clear', GoogleDriveAuthClearHandler),
         (r'/api/cloud/google-drive/files', GoogleDriveFilesHandler),
         (r'/oauth/google-drive', GoogleDriveAuthLandingHandler),
-        (r'/static/(.*)', web.StaticFileHandler, {'path': config.app_dir('static')}),
+        (r'/static/(.*)', static_file_handler(), {'path': config.app_dir('static')}),
         (r'/bg/(.*)', BackgroundAssetHandler, {'path': ''}),
     ])
     # https://github.com/tornadoweb/tornado/issues/2308
