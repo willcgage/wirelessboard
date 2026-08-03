@@ -30,12 +30,6 @@
 
   The Intel job cost 200 of the 313 billable minutes a release takes: macOS bills at 10× and the Intel runner took twice as long as arm64 for identical work, making one architecture 64% of every release. It could not be folded into the arm64 job, because the bundled PyInstaller service is built natively and is not universal — packaging both arches on one runner puts an arm64 service inside the Intel app. GitHub also removes the last x86_64 image in Aug 2027. See #30.
 
-### Changed
-- _Nothing yet._
-
-### Fixed
-- _Nothing yet._
-
 ## [1.5.1] - 2026-08-02
 ### Fixed
 - **Upgrading no longer leaves the browser running the previous version's JavaScript and stylesheet.** Tornado sends no `Cache-Control` for static files, so browsers applied heuristic freshness and reused `app.js` without asking whether it was still current. After upgrading to 1.5.0 the server rendered the new markup while the script and stylesheet came from the 1.4.8 cache, and reloading did not help because the browser never asked. That one stale file produced three separate symptoms: the Teams chooser rendered but stayed permanently empty, plan labels kept their old `Aug 2 — ` format, the Service Type selector did nothing, and the panel wore the pre-1.5.0 colours. `/static/*` is now served with `Cache-Control: no-cache`, which keeps the cached copy and revalidates it — an unchanged bundle still costs only a `304`.
