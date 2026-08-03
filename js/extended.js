@@ -80,6 +80,12 @@ function initSlotEdit() {
     }
   });
 
+  // Leaving this editor does not remove the clone, so re-entering would append
+  // a second copy and put duplicate ids back in the document — the very fault
+  // the slot-edit-* names above were introduced to remove.
+  const existing = document.getElementById('save-box');
+  if (existing) existing.remove();
+
   const t = document.getElementById('save-template').content.cloneNode(true);
   document.getElementById('micboard').appendChild(t);
 
@@ -91,14 +97,18 @@ function initSlotEdit() {
     loadBulkNames();
   });
 
-  document.getElementById('clear-id').addEventListener('click', () => {
+  // slot-edit-* rather than clear-id / clear-name: those ids belong to the
+  // settings page, which sits inside #micboard and therefore comes first in
+  // document order. Binding by the shared id attached these handlers to the
+  // settings buttons instead, leaving the ones in this editor inert.
+  document.getElementById('slot-edit-clear-id').addEventListener('click', () => {
     const elements = document.getElementsByClassName('ext-id');
     Array.from(elements).forEach((e) => {
       e.value = '';
     });
   });
 
-  document.getElementById('clear-name').addEventListener('click', () => {
+  document.getElementById('slot-edit-clear-name').addEventListener('click', () => {
     const elements = document.getElementsByClassName('ext-name');
     Array.from(elements).forEach((e) => {
       e.value = '';

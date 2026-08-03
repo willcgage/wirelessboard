@@ -762,11 +762,17 @@
         </div>
 
         <div class="row">
+          <!-- Distinct ids on purpose. This template is cloned into #micboard,
+               which already contains the settings page's own clear-id and
+               clear-name buttons. Sharing the ids put two live elements with
+               the same id in the document, and getElementById returns the first
+               in order — so these buttons got no handler at all, while the
+               settings ones collected a second one on every open. -->
           <div class="col d-grid gap-2">
-            <button type="button" class="btn btn-secondary btn-warning" id="clear-id">Clear IDs</button>
+            <button type="button" class="btn btn-secondary btn-warning" id="slot-edit-clear-id">Clear IDs</button>
           </div>
           <div class="col d-grid gap-2">
-            <button type="button" class="btn btn-secondary btn-warning" id="clear-name">Clear Extended Names</button>
+            <button type="button" class="btn btn-secondary btn-warning" id="slot-edit-clear-name">Clear Extended Names</button>
           </div>
         </div>
       </div>
