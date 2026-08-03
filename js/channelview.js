@@ -34,10 +34,12 @@ function infoToggle() {
     });
   });
 
-  if (micboard.group === 0) {
-    document.getElementById('go-groupedit').style.display = 'none';
-  } else if (micboard.group !== 0) {
-    document.getElementById('go-groupedit').style.display = 'block';
+  // No element carries this id any more, so both branches threw and took
+  // infoToggle -- and every caller of it, including the slot editor -- down
+  // with them. app.js already null-checks the same id before binding to it.
+  const groupEdit = document.getElementById('go-groupedit');
+  if (groupEdit) {
+    groupEdit.style.display = micboard.group === 0 ? 'none' : 'block';
   }
 }
 

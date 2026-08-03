@@ -57,6 +57,13 @@ function initSlotEdit() {
   tx.forEach((t) => {
     const slotSelector = document.getElementById(`slot-${t.slot}`);
 
+    // renderDisplayList skips a slot it has no transmitter for, and a group
+    // can still name a slot the configuration no longer has, so a transmitter
+    // here is not guaranteed a rendered column to write into.
+    if (!slotSelector) {
+      return;
+    }
+
     slotSelector.querySelector('.chartzone').style.display = 'none';
     slotSelector.querySelector('.errorzone').style.display = 'block';
     slotSelector.querySelector('.diversity').style.display = 'none';
@@ -72,11 +79,16 @@ function initSlotEdit() {
     slotSelector.querySelector('.ip').innerHTML = t.ip;
     slotSelector.querySelector('.rxinfo').innerHTML = t.name_raw;
 
-    if (slots[t.slot].extended_id) {
-      slotSelector.querySelector('.ext-id').value = slots[t.slot].extended_id;
+    // Likewise in the other direction: a transmitter can outlive its entry in
+    // the configuration, and indexing the gap threw before either field was
+    // read. An empty object leaves both inputs at their blank defaults.
+    const slotConfig = slots[t.slot] || {};
+
+    if (slotConfig.extended_id) {
+      slotSelector.querySelector('.ext-id').value = slotConfig.extended_id;
     }
-    if (slots[t.slot].extended_name) {
-      slotSelector.querySelector('.ext-name').value = slots[t.slot].extended_name;
+    if (slotConfig.extended_name) {
+      slotSelector.querySelector('.ext-name').value = slotConfig.extended_name;
     }
   });
 

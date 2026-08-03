@@ -31,6 +31,13 @@ function renderEditSlots(dl) {
   dl.forEach((e) => {
     let t;
     if (e !== 0) {
+      // A configured slot has no transmitter until the next data push builds
+      // one, so the two lists disagree for a moment after the configuration is
+      // saved -- reading .slot off the gap threw and took the whole editor with
+      // it. Skip it until it arrives, as renderDisplayList already does.
+      if (typeof tx[e] === 'undefined') {
+        return;
+      }
       t = document.getElementById('column-template').content.cloneNode(true);
       t.querySelector('div.col-sm').id = `slot-${tx[e].slot}`;
       updateViewOnly(t, tx[e]);
@@ -94,7 +101,13 @@ export function updateEditor(group) {
 
   document.getElementById('sidebarTitle').innerHTML = `Group ${group}`;
   document.getElementById('groupTitle').value = title;
-  document.getElementById('chartCheck').checked = chartCheck;
+  // No chartCheck control has ever existed in the markup, so this threw on
+  // every call -- and renderGroup calls updateEditor unconditionally, which is
+  // what left the group and slot editors unopenable.
+  const chartCheckBox = document.getElementById('chartCheck');
+  if (chartCheckBox) {
+    chartCheckBox.checked = chartCheck;
+  }
 }
 
 function GridLayout() {
@@ -139,10 +152,17 @@ export function groupEditToggle() {
 function submitSlotUpdate() {
   const url = 'api/group';
 
+  // With no control to read, fall back to what the group already has rather
+  // than to false, so saving a group does not quietly turn its charts back on.
+  const chartCheckBox = document.getElementById('chartCheck');
+  const currentGroup = micboard.groups[micboard.group];
+
   const update = {
     group: micboard.group,
     title: document.getElementById('groupTitle').value,
-    hide_charts: document.getElementById('chartCheck').checked,
+    hide_charts: chartCheckBox
+      ? chartCheckBox.checked
+      : Boolean(currentGroup && currentGroup.hide_charts),
     slots: slotOrder(),
   };
 
