@@ -327,6 +327,70 @@ def ensure_logging_defaults():
     return normalized
 
 
+APPLIED_MIGRATIONS_KEY = 'migrations'
+PCO_FALLBACK_MIGRATION = 'pco_position_number_fallback_off'
+
+
+def migration_applied(name: str) -> bool:
+    applied = config_tree.get(APPLIED_MIGRATIONS_KEY)
+    return bool(isinstance(applied, dict) and applied.get(name))
+
+
+def mark_migration_applied(name: str) -> None:
+    """Record a migration at the *top level* of the tree, deliberately.
+
+    ``update_pco_config`` replaces whole sub-objects from the interface's
+    payload, so a marker kept inside ``pco.mapping`` would be wiped by the next
+    save and the migration would run again -- undoing a setting the operator had
+    since turned back on.
+    """
+    applied = config_tree.get(APPLIED_MIGRATIONS_KEY)
+    if not isinstance(applied, dict):
+        applied = {}
+        config_tree[APPLIED_MIGRATIONS_KEY] = applied
+    applied[name] = True
+
+
+def migrate_pco_number_fallback() -> bool:
+    """Turn off a ``position_number_fallback`` that nobody chose. Runs once.
+
+    The PCO panel wrote this key on every save with its checkbox defaulting to
+    checked, so installations carry an explicit ``true`` that was never a
+    decision. Left alone it matches positions on their trailing number, and once
+    more than one team is scheduled "Vocal 1", "Guitar 1" and "Host 1" all claim
+    the same slot -- roughly half the automatic assignments land on the wrong
+    channel.
+
+    Because the value is explicit, changing the default could not reach these
+    installations. This clears it exactly once and records that it did, so an
+    operator who deliberately turns it back on -- correct for a single-team
+    plan -- keeps it through every later restart.
+
+    Returns True when the tree changed and needs saving.
+    """
+    if migration_applied(PCO_FALLBACK_MIGRATION):
+        return False
+
+    pco_cfg = config_tree.get('pco')
+    mapping = pco_cfg.get('mapping') if isinstance(pco_cfg, dict) else None
+    if not isinstance(mapping, dict):
+        # Nothing to correct, but record it so an install that adds PCO later
+        # is not retroactively overridden.
+        mark_migration_applied(PCO_FALLBACK_MIGRATION)
+        return True
+
+    mark_migration_applied(PCO_FALLBACK_MIGRATION)
+    if mapping.get('position_number_fallback') is not True:
+        return True
+
+    mapping['position_number_fallback'] = False
+    logger.info(
+        'Turned off pco.mapping.position_number_fallback: it matches on the '
+        'trailing number alone and misassigns whenever more than one team is '
+        'scheduled. Re-enable it in the PCO panel if only one team ever is.')
+    return True
+
+
 def ensure_cloud_defaults() -> Dict[str, Any]:
     cloud_cfg = config_tree.get('cloud')
     if not isinstance(cloud_cfg, dict):
@@ -826,6 +890,14 @@ def read_json_config(file):
     ensure_cloud_defaults()
     ensure_background_defaults()
     ensure_logging_defaults()
+
+    # Corrective migrations have to be written back, or the marker is lost and
+    # they run again on the next start.
+    if migrate_pco_number_fallback():
+        try:
+            save_current_config()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Could not persist configuration migrations: %s', exc)
 
 
 def init_config():
