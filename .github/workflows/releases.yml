@@ -55,6 +55,14 @@ jobs:
     needs: test
     strategy:
       fail-fast: false
+      # One at a time, deliberately. Each job publishes with `--publish always`,
+      # and electron-builder creates the draft release if it cannot find one for
+      # the tag. Run in parallel, both jobs look, both find nothing, and both
+      # create one -- 1.6.0 produced two drafts created in the same second with
+      # the assets split across them, including a Windows blockmap that landed
+      # in the macOS release. Serialising costs wall-clock but not billable
+      # minutes, since the total runner time is unchanged.
+      max-parallel: 1
       matrix:
         include:
           # artifact_folder must match electron-builder.yml's `output:
