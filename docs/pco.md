@@ -259,8 +259,12 @@ with the right type.
 
 **A person lands on the wrong slot.** Almost always `position_number_fallback` left on
 with more than one team scheduled — it keys on the trailing number alone, so every
-position ending in `1` competes for `Mic 1`. Turn it off (the default since 1.4.9) and
-set explicit `extended_id`s; pass 1 always beats the number fallback.
+position ending in `1` competes for `Mic 1`. Turn it off and set explicit
+`extended_id`s; pass 1 always beats the number fallback.
+
+It is off by default, and an installation carrying the old explicit `true` is
+corrected once on start — recorded under a top-level `migrations` key, so if you
+turn it back on for a single-team plan it stays on.
 
 **Nobody is returned at all.** Check `team_name_filter`. It is a substring match, so
 `"Vocal"` matches `"Vocal Team A"`, but `"Vocals"` will not match a team named
