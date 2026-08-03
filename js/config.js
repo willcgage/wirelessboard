@@ -1438,6 +1438,17 @@ function appendPcoLog(message, level = 'info') {
   }
 }
 
+/** Escape text bound for innerHTML. Team and position names come from the
+ *  Planning Center API, so they are not ours to trust as markup. */
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatError(err) {
   if (!err) return 'Unknown error';
   if (typeof err === 'string') return err;
@@ -2500,8 +2511,119 @@ function applyPcoMappingToForm(mapping) {
   if (elSource) elSource.value = m.note_source || 'person';
   if (elTeam) elTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
   if (elStrategy) elStrategy.value = m.strategy || DEFAULT_PCO_STRATEGY;
-  if (elNumberFallback) elNumberFallback.checked = m.position_number_fallback !== false;
+  if (elNumberFallback) elNumberFallback.checked = m.position_number_fallback === true;
   if (elSeed) elSeed.checked = m.seed_extended_id === true;
+  renderPcoTeamChoices(null);
+}
+
+// -- Team chooser -----------------------------------------------------------
+// The saved filter is a list of names matched case-insensitively as substrings.
+// Typing them by hand meant a team was one "&"-vs-"and" away from silently
+// matching nothing, so the names come from the plan itself and the hidden
+// #pco-team-filter input stays the single source of truth for the payload.
+
+function currentTeamFilter() {
+  const raw = document.getElementById('pco-team-filter')?.value || '';
+  return raw.split(',').map((s) => s.trim()).filter((s) => s);
+}
+
+function syncTeamFilterFromChoices() {
+  const host = document.getElementById('pco-team-choices');
+  const hidden = document.getElementById('pco-team-filter');
+  if (!host || !hidden) return;
+  const boxes = Array.from(host.querySelectorAll('input[type="checkbox"][data-team]'));
+  if (!boxes.length) return;
+  hidden.value = boxes.filter((b) => b.checked).map((b) => b.dataset.team).join(', ');
+}
+
+/**
+ * Render the team list. Pass the /api/pco/teams payload, or null to fall back
+ * to whatever names are already saved -- the panel opens before a plan is
+ * chosen, and an existing filter should still be visible then.
+ */
+function renderPcoTeamChoices(teams) {
+  const host = document.getElementById('pco-team-choices');
+  if (!host) return;
+
+  if (!Array.isArray(teams)) {
+    const saved = currentTeamFilter();
+    host.innerHTML = saved.length
+      ? `<div class="small text-muted mb-1">Saved filter (choose a plan to edit):</div>${
+        saved.map((n) => `<div class="pco-team-row">• ${escapeHtml(n)}</div>`).join('')}`
+      : '<span class="text-muted small">Choose a plan above to list its teams.</span>';
+    return;
+  }
+
+  if (!teams.length) {
+    host.innerHTML = '<span class="text-warning small">This plan has nobody scheduled.</span>';
+    return;
+  }
+
+  host.innerHTML = teams.map((t, i) => {
+    const id = `pco-team-cb-${i}`;
+    const positions = (t.positions || []).join(', ');
+    return `<div class="form-check pco-team-row">
+      <input class="form-check-input" type="checkbox" id="${id}"
+             data-team="${escapeHtml(t.name)}"${t.selected ? ' checked' : ''}>
+      <label class="form-check-label" for="${id}" title="${escapeHtml(positions)}">
+        ${escapeHtml(t.name)}
+        <span class="pco-team-meta">— ${t.people} ${t.people === 1 ? 'person' : 'people'}</span>
+      </label>
+    </div>`;
+  }).join('');
+
+  // No boxes ticked means no filter, which lets every team through -- including
+  // camera and production crew competing for microphone slots. Say so.
+  syncTeamFilterFromChoices();
+}
+
+function loadPcoTeams() {
+  const host = document.getElementById('pco-team-choices');
+  const planId = document.getElementById('pco-plan-select')?.value || '';
+  const serviceId = document.getElementById('pco-service-type-id')?.value || '';
+  if (!host) return;
+  if (!planId) {
+    renderPcoTeamChoices(null);
+    return;
+  }
+
+  host.innerHTML = '<span class="text-muted small">Loading teams…</span>';
+  const q = `plan=${encodeURIComponent(planId)}${serviceId ? `&service=${encodeURIComponent(serviceId)}` : ''}`;
+  fetch(`api/pco/teams?${q}&_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load teams');
+      renderPcoTeamChoices(resp.teams || []);
+      appendPcoLog(`Found ${(resp.teams || []).length} team(s) on the selected plan.`);
+    })
+    .catch((err) => {
+      host.innerHTML = `<span class="text-danger small">${formatError(err)}</span>`;
+      appendPcoLog(`Failed to load teams: ${formatError(err)}`, 'error');
+    });
+}
+
+function loadPcoServiceTypes() {
+  const sel = document.getElementById('pco-service-type-id');
+  if (!sel) return;
+  const saved = sel.value || '';
+  fetch(`api/pco/services?_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
+      if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load service types');
+      const services = resp.services || [];
+      sel.innerHTML = '<option value="">All service types</option>';
+      services.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s.id || '';
+        opt.textContent = s.name || `Service ${s.id}`;
+        sel.appendChild(opt);
+      });
+      if (saved) sel.value = saved;
+      appendPcoLog(`Fetched ${services.length} service type(s).`);
+    })
+    .catch((err) => {
+      appendPcoLog(`Failed to fetch service types: ${formatError(err)}`, 'error');
+    });
 }
 
 function buildPcoPayload() {
@@ -2526,7 +2648,7 @@ function buildPcoPayload() {
       note_category: noteCategory,
       note_source: noteSource,
       team_name_filter: teamFilterRaw.split(',').map((s) => s.trim()).filter((s) => s),
-      position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : true,
+      position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : false,
       seed_extended_id: seedExtendedIdEl ? !!seedExtendedIdEl.checked : false,
     },
   };
@@ -2743,6 +2865,9 @@ function showPCOView() {
   if (planSel) planSel.innerHTML = '<option value="">Select a plan...</option>';
   const loadBtn = document.getElementById('pco-load-people');
   if (loadBtn) loadBtn.disabled = true;
+  // Step 2 needs the service type list before it is any use.
+  loadPcoServiceTypes();
+  renderPcoTeamChoices(null);
   appendPcoLog('Opened PCO settings view');
 }
 
@@ -3044,8 +3169,12 @@ function refreshPlansList(options = {}) {
   }
 
   if (sel) sel.innerHTML = '<option value="">Loading…</option>';
-  appendPcoLog('Fetching plan list from PCO...');
-  fetch(`api/pco/plans?_=${Date.now()}`, { cache: 'no-store' })
+  // Without a service type the list aggregates every service type in the
+  // account, which on a mid-sized church is dozens of unrelated plans.
+  const serviceId = (document.getElementById('pco-service-type-id')?.value || '').trim();
+  const scope = serviceId ? `service=${encodeURIComponent(serviceId)}&` : '';
+  appendPcoLog(serviceId ? 'Fetching plans for the selected service type...' : 'Fetching plan list from PCO...');
+  fetch(`api/pco/plans?${scope}_=${Date.now()}`, { cache: 'no-store' })
     .then((r) => r.json())
     .then((resp) => {
       if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load plans');
@@ -3053,7 +3182,10 @@ function refreshPlansList(options = {}) {
       if (sel) {
         sel.innerHTML = '<option value="">Select a plan…</option>';
         plans.forEach((p) => {
-          const label = `${p.service_type_name ? `${p.service_type_name} — ` : ''}${p.short_dates || p.dates || ''} — ${p.title || ''}`;
+          // Scoped to one service type the API omits its name, and most plans
+          // carry no title -- joining only the parts present avoids "Aug 2 — ".
+          const label = [p.service_type_name, p.short_dates || p.dates, p.title]
+            .map((part) => (part || '').trim()).filter((part) => part).join(' — ');
           const opt = document.createElement('option');
           opt.value = p.id || '';
           opt.textContent = label;
@@ -3139,8 +3271,14 @@ function buildAssignmentTable(ppl) {
     .concat(ppl.map((p) => {
       const notesArr = Array.isArray(p.notes) ? p.notes : [];
       const extra = notesArr.length ? notesArr.join(' | ') : '';
-      const label = p.name + (p.team ? ` [${p.team}]` : '') + (extra ? ` — ${extra}` : '');
-      return `<option value="${encodeURIComponent(p.name)}">${label}</option>`;
+      const position = (p.position || '').trim();
+      // The position is what makes the assignment repeatable: it is the label a
+      // later sync matches against, where the person's name changes week to week.
+      const label = p.name
+        + (position ? ` — ${position}` : '')
+        + (p.team ? ` [${p.team}]` : '')
+        + (extra ? ` — ${extra}` : '');
+      return `<option value="${encodeURIComponent(p.name)}" data-position="${escapeHtml(position)}">${escapeHtml(label)}</option>`;
     }))
     .join('');
   let slotsMissingLabels = 0;
@@ -3149,6 +3287,7 @@ function buildAssignmentTable(ppl) {
     const tdSlot = document.createElement('td');
     const tdDev = document.createElement('td');
     const tdDevName = document.createElement('td');
+    const tdExtId = document.createElement('td');
     const tdExtName = document.createElement('td');
     const tdSel = document.createElement('td');
     tr.setAttribute('data-slot', String(s.slot ?? ''));
@@ -3166,6 +3305,14 @@ function buildAssignmentTable(ppl) {
       }
     } catch (_) {}
     tdDevName.textContent = devName;
+    // The position this slot already answers to. Filled in, the slot resolves
+    // itself on every future plan; blank, it needs assigning by hand each time.
+    tdExtId.classList.add('pco-ext-id');
+    if (s.extended_id) {
+      tdExtId.textContent = s.extended_id;
+    } else {
+      tdExtId.innerHTML = '<span class="text-muted">—</span>';
+    }
     tdExtName.classList.add('pco-ext-name');
     tdExtName.textContent = s.extended_name || '';
     const hasLabel = Boolean((devName && devName.trim()) || (s.extended_name && String(s.extended_name).trim()));
@@ -3177,7 +3324,8 @@ function buildAssignmentTable(ppl) {
     sel.setAttribute('data-slot', String(s.slot || ''));
     sel.innerHTML = optionsHTML;
     tdSel.appendChild(sel);
-    tr.appendChild(tdSlot); tr.appendChild(tdDev); tr.appendChild(tdDevName); tr.appendChild(tdExtName); tr.appendChild(tdSel);
+    tr.appendChild(tdSlot); tr.appendChild(tdDev); tr.appendChild(tdDevName);
+    tr.appendChild(tdExtId); tr.appendChild(tdExtName); tr.appendChild(tdSel);
     if (assignBody) assignBody.appendChild(tr);
   });
   if (assignTbl) assignTbl.style.display = 'block';
@@ -3201,6 +3349,17 @@ document.addEventListener('change', (e) => {
   if (t.id === 'pco-plan-select') {
     const loadBtn = document.getElementById('pco-load-people');
     if (loadBtn) loadBtn.disabled = !(t.value);
+    // Teams are a property of the chosen plan, so re-read them whenever it changes.
+    loadPcoTeams();
+  }
+  if (t.id === 'pco-service-type-id') {
+    // Narrowing the service type changes which plans are on offer, and the
+    // previously selected plan may not be among them.
+    refreshPlansList({ auto: true });
+    renderPcoTeamChoices(null);
+  }
+  if (t.matches && t.matches('#pco-team-choices input[type="checkbox"][data-team]')) {
+    syncTeamFilterFromChoices();
   }
 }, { passive: true });
 
@@ -3229,15 +3388,34 @@ document.addEventListener('click', (e) => {
 function applyAssignmentsFromSelects() {
   const summary = document.getElementById('pco-assign-summary');
   const sels = document.querySelectorAll('#pco-assign-table select.pco-person-select');
+  const remember = document.getElementById('pco-remember-positions')?.checked !== false;
+  const slotsByNumber = new Map(
+    ((micboard.config && micboard.config.slots) || []).map((s) => [s.slot, s]));
+
   const updates = [];
+  const seeded = [];
   Array.from(sels).forEach((sel) => {
     const slotStr = sel.getAttribute('data-slot') || '';
     const slot = Number.parseInt(slotStr, 10);
     const name = sel.value ? decodeURIComponent(sel.value) : '';
-    if (Number.isFinite(slot) && name) {
-      updates.push({ slot, extended_name: name });
+    if (!Number.isFinite(slot) || !name) return;
+
+    const update = { slot, extended_name: name };
+
+    // Record the position, not the person. Names change every week; the
+    // position is what a later sync matches on, which is what turns this
+    // hand assignment into an automatic one next time. Never overwrite an
+    // ID already there -- the operator may have labelled that slot on purpose.
+    const position = (sel.selectedOptions[0]?.dataset.position || '').trim();
+    const existingId = (slotsByNumber.get(slot)?.extended_id || '').trim();
+    if (remember && position && !existingId) {
+      update.extended_id = position;
+      seeded.push(`slot ${slot} → “${position}”`);
     }
+
+    updates.push(update);
   });
+
   if (updates.length === 0) {
     if (summary) summary.innerHTML = '<span class="text-warning">Select at least one person.</span>';
     appendPcoLog('No assignments selected to apply.', 'warn');
@@ -3245,11 +3423,24 @@ function applyAssignmentsFromSelects() {
   }
   appendPcoLog(`Applying ${updates.length} assignment update(s) to slots...`);
   postJSON('api/slot', updates, () => {
-    if (summary) summary.textContent = `Applied ${updates.length} update(s).`;
+    const note = seeded.length
+      ? ` ${seeded.length} slot${seeded.length === 1 ? '' : 's'} will now match automatically.`
+      : '';
+    if (summary) summary.textContent = `Applied ${updates.length} update(s).${note}`;
     appendPcoLog(`Applied ${updates.length} assignment update(s).`);
+    if (seeded.length) appendPcoLog(`Remembered position on ${seeded.join(', ')}.`);
     try { applyExtendedNameChanges(updates); } catch (e) {
       appendPcoLog(`Unable to refresh extended names locally: ${formatError(e)}`, 'warn');
     }
+    // Reflect the newly written IDs without a full reload of the view.
+    updates.forEach((u) => {
+      if (!u.extended_id) return;
+      const target = slotsByNumber.get(u.slot);
+      if (target) target.extended_id = u.extended_id;
+      const cell = document.querySelector(
+        `#pco-assign-table tr[data-slot="${u.slot}"] .pco-ext-id`);
+      if (cell) cell.textContent = u.extended_id;
+    });
   }, (err) => {
     appendPcoLog(`Failed to apply assignments: ${formatError(err)}`, 'error');
   });

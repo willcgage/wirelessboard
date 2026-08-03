@@ -41,7 +41,7 @@ Example (`auth` block is generated automatically once credentials are saved):
       "strategy": "position_or_note",
       "note_category": "Mic / IEM Assignments",
       "team_name_filter": ["Vocal", "Band"],
-      "position_number_fallback": true,
+      "position_number_fallback": false,
       "seed_extended_id": false
     }
   },
@@ -64,7 +64,11 @@ Field notes:
   - `position`: the team position name only.
   - `note_or_brackets`: the pre-1.4 order — note category, then brackets, then position.
 - `mapping.team_name_filter`: Only use assignments from these teams. Matched case-insensitively as a substring, so `"Vocal"` also covers a team named `"Vocal Team A"`.
-- `mapping.position_number_fallback` (default `true`): Allows a position to match a slot whose label uses a different word but the same number — position `Vocal 1` matching slots labelled `Mic 1` and `IEM 1`. Set to `false` to require exact label matches.
+
+  Prefer the tick boxes in the PCO panel over editing this by hand. The match is a plain substring, so a name that is slightly off — `"Speakers and Hosts"` against a team actually called `"Speakers & Hosts"` — matches nobody and reports nothing; the whole team simply vanishes from the sync. The panel reads the names from the selected plan, so they are always exact. An **empty** list means no filtering at all, which lets camera, production and every other scheduled team compete for microphone slots.
+- `mapping.position_number_fallback` (default `false`): Allows a position to match a slot whose label uses a different word but the same number — position `Vocal 1` matching slots labelled `Mic 1` and `IEM 1`.
+
+  **Single-team plans only.** It keys on the trailing number alone, and position names are unique within a team rather than across a plan. With Vocal Team, Band and Speakers and Hosts all scheduled, `Vocal 1`, `Guitar 1` and `Host 1` every one of them reduce to `1` and claim the same `Mic 1` slot — you get a three-way conflict and an arbitrary winner. Leave it off unless exactly one team is ever scheduled.
 - `mapping.seed_extended_id` (default `false`): When a slot has no `extended_id` yet, write the position name into it so later syncs match exactly. Off by default so the integration never relabels slots you set up by hand.
 
 ## How the mapping works
@@ -84,7 +88,8 @@ usually IEM 1 as well. Wirelessboard reads that position
       predictable.
    2. **A Shure channel name equals the label.** Uses whatever is typed into the
       receiver.
-   3. **Trailing numbers agree** (only when `position_number_fallback` is on). The slot
+   3. **Trailing numbers agree** (only when `position_number_fallback` is on; off by
+      default, and safe only on single-team plans). The slot
       label’s prefix has to either match the position’s prefix or be a recognised
       device word (`Mic`, `IEM`, `HH`, `BP`, …), and when it names a device kind the
       slot’s configured type has to agree. So `Vocal 1` finds `Mic 1` on a ULXD slot
@@ -125,6 +130,57 @@ resolution and returns what *would* change without writing to `config.json`. The
 response lists which slots each position matched, which pass matched them, and any
 scheduled people that found no slot at all — the fastest way to confirm your slot
 labels line up with your position names.
+
+## Getting from manual to automatic
+
+Strict matching only fills a slot whose label already names a position, so on a
+rack labelled `Mic 1`/`IEM 1` the first sync matches nothing and everyone lands
+in the assignment table. That is expected, and it is a one-time cost — provided
+you let the first pass teach the slots.
+
+1. **Assign by hand once.** In *Assign People to Slots*, choose the person for
+   each slot. The dropdown shows each person's position next to their name,
+   because the position is what matters here.
+2. **Leave "Remember each person's position on the slot" ticked.** Applying then
+   writes the *position* — `Electric Guitar 1`, not `Joe Spring` — into that
+   slot's `extended_id`. The **Slot ID** column shows what each slot has
+   learned; a `—` means it will need assigning by hand again.
+3. **From the next plan on, those slots resolve themselves.** The match is
+   against the position, so it still works when a different person is scheduled
+   to it the following week.
+
+Slots that already carry an `extended_id` are never overwritten, so a label you
+set up by hand always wins, and re-assigning a slot to somebody else changes
+only the name shown on it.
+
+This is the same thing `mapping.seed_extended_id` does during a sync; the tick
+box applies it to hand assignments, which is where the labels are missing in the
+first place.
+
+## Listing the teams on a plan
+The team chooser is populated from:
+
+```
+GET http://<wirelessboard-host>:<port>/api/pco/teams?plan=<plan_id>&service=<service_type_id>
+```
+
+```json
+{
+  "ok": true,
+  "plan_id": "89808072",
+  "filter_active": true,
+  "teams": [
+    {"name": "Band", "people": 9, "positions": ["Bass Guitar", "Drums"], "selected": true},
+    {"name": "Camera Operators", "people": 7, "positions": ["Camera 1"], "selected": false}
+  ]
+}
+```
+
+`selected` reflects the saved `mapping.team_name_filter`, but the list itself
+ignores that filter on purpose — an excluded team still has to appear, or there
+would be no way to add it back. `people` counts distinct people, not scheduled
+rows, since one person can hold several positions on a team across service
+times. `service` is optional and only avoids a redirect.
 
 ## Using the sync endpoint
 Once configured, trigger a manual sync:
@@ -167,7 +223,7 @@ Response example:
 ```
 
 `slots_matched` counts slots, `assignments` counts people. Anything in `unmatched`
-needs either a slot label that lines up or `position_number_fallback` enabled.
+needs a slot label that lines up, or gets assigned by hand in the Assignments table.
 
 Add `?dry_run=true` to resolve without saving, or call `POST /api/pco/preview`, which
 does the same thing.
@@ -194,16 +250,17 @@ POST http://<wirelessboard-host>:<port>/api/pco/sync?plan=<PLAN_ID>
 **Everything comes back unmatched.** Run **Preview Sync** and read the `tried` list on
 each unmatched entry — that is the exact label Wirelessboard looked for. Compare it to
 the `extended_id` values in the Config view. If the position is `Vocal 1` and your slots
-are unlabelled, either give them labels or turn on `position_number_fallback` and label
-them `Mic 1` / `IEM 1`.
+are unlabelled, label them `Vocal 1` — both the mic channel and the IEM channel, since
+every slot in the winning pass is returned. Assign whatever is left by hand.
 
 **The IEM slot never fills in.** Number fallback checks the slot type: a slot labelled
 `IEM 1` only counts as an IEM if its `type` is `p10t`. Confirm the PSM1000 is configured
 with the right type.
 
-**A person lands on the wrong slot.** Two slots probably share a trailing number with a
-device-word prefix. Set explicit `extended_id`s (pass 1 always beats the number
-fallback), or set `position_number_fallback` to `false` to require exact labels.
+**A person lands on the wrong slot.** Almost always `position_number_fallback` left on
+with more than one team scheduled — it keys on the trailing number alone, so every
+position ending in `1` competes for `Mic 1`. Turn it off (the default since 1.4.9) and
+set explicit `extended_id`s; pass 1 always beats the number fallback.
 
 **Nobody is returned at all.** Check `team_name_filter`. It is a substring match, so
 `"Vocal"` matches `"Vocal Team A"`, but `"Vocals"` will not match a team named

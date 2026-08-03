@@ -66,7 +66,7 @@ class TestSplitLabel:
             {'slot': 12, 'type': 'ulxd', 'extended_id': 'Mic 12'},
             {'slot': 2, 'type': 'ulxd', 'extended_id': 'Mic 2'},
         ]
-        matches = pco_mapping.match_slots('Vocal 1 2', slots)
+        matches = pco_mapping.match_slots('Vocal 1 2', slots, allow_number_fallback=True)
         assert [m['slot']['slot'] for m in matches] == [2]
 
     def test_leading_zeros_compare_equal(self):
@@ -120,7 +120,7 @@ class TestMatchSlots:
             slot(2, 'ulxd', extended_id='Mic 2'),
             slot(10, 'p10t', extended_id='IEM 2'),
         ]
-        matches = pco_mapping.match_slots('Vocal 1', slots)
+        matches = pco_mapping.match_slots('Vocal 1', slots, allow_number_fallback=True)
         assert sorted(m['slot']['slot'] for m in matches) == [1, 9]
 
     def test_number_fallback_respects_slot_type(self):
@@ -140,7 +140,7 @@ class TestMatchSlots:
 
     def test_same_prefix_matches_on_number_despite_formatting(self):
         slots = [slot(3, 'ulxd', extended_id='vocal-01')]
-        matches = pco_mapping.match_slots('Vocal 1', slots)
+        matches = pco_mapping.match_slots('Vocal 1', slots, allow_number_fallback=True)
         assert [m['slot']['slot'] for m in matches] == [3]
 
     def test_label_without_number_does_not_use_fallback(self):
@@ -154,7 +154,8 @@ class TestMatchSlots:
 
     def test_untyped_slot_still_matches_device_word(self):
         slots = [slot(1, extended_id='Mic 1')]
-        assert [m['slot']['slot'] for m in pco_mapping.match_slots('Vocal 1', slots)] == [1]
+        matches = pco_mapping.match_slots('Vocal 1', slots, allow_number_fallback=True)
+        assert [m['slot']['slot'] for m in matches] == [1]
 
     def test_ignores_non_dict_entries(self):
         assert pco_mapping.match_slots('Vocal 1', [None, 'nope', 3]) == []

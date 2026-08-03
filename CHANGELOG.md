@@ -2,13 +2,21 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **The PCO panel picks teams from the plan instead of asking you to type them.** The team filter was a free-text, comma-separated box matched case-insensitively as a substring, so a team was one `&`-versus-`and` away from silently matching nobody — and nothing on screen showed which teams existed or that a name had failed to match. Choosing a plan now lists its teams as tick boxes with a head count each, taken from a new `GET /api/pco/teams`. That endpoint deliberately ignores `mapping.team_name_filter`, because a filtered-out team still has to be listed for it to be re-addable.
+- **Hand assignments now teach the slot, so the next plan matches on its own.** Applying an assignment only ever wrote the person's name, which is the one part that changes week to week — so a rack whose slots carry no position label stayed manual forever. The assignment step now offers *Remember each person's position on the slot*, which writes the Planning Center position (`Electric Guitar 1`, not `Joe Spring`) into that slot's `extended_id`, and a **Slot ID** column showing what each slot has learned. Verified against a real plan: three slots assigned by hand, and the next resolution matched all three `via position` with no conflicts. Slots that already have an ID are never overwritten, so labels set up by hand still win.
+- **A Service Type selector.** The interface has always read `pco-service-type-id` when building its payload, but the control was never added to the page, so the plan list aggregated every service type in the account — dozens of unrelated plans on a mid-sized church account. Picking a service type now scopes the list.
 
 ### Changed
-- _Nothing yet._
+- The PCO panel is laid out as numbered steps — connect, choose the plan, pick the teams, then how positions match slots. Mapping options used to be configured above the plan chooser, so they were set before there was any real data to set them against.
+- Plan labels no longer read `Aug 2 — ` when a plan has no title, or when scoping to a single service type drops the service name from the response.
+- **`mapping.position_number_fallback` now defaults to off.** A slot serves a *position*, not a team, so a position only auto-matches a slot whose own label says so. The fallback keys on the trailing number alone, and position names are unique within a Planning Center team rather than across a plan — so with more than one team scheduled, `Vocal 1` (Vocal Team), `Guitar 1` (Band) and `Host 1` (Speakers and Hosts) all reduce to `1` and every one of them claims the same `Mic 1` slot, producing a three-way conflict and an arbitrary winner. Anything the exact-label passes cannot place is now left unmatched for the operator to assign by hand rather than guessed at. Labelling both the mic and the IEM channel with the position name still fills both from one position. The option remains available for single-team plans.
+
+  Existing installations are **not** migrated: the interface wrote this key on every save with its checkbox defaulting to checked, so anything that ever saved PCO settings carries an explicit `true`. Clear **Match by trailing number when the label differs** in the PCO panel and save to pick up the new behaviour.
 
 ### Fixed
-- _Nothing yet._
+- **Somebody scheduled to more than one team no longer loses all but one of their assignments.** `/api/pco/people` collapsed rows by person, keeping whichever team came back first, so a vocalist also rostered under Band was reported as a Band member and their vocal position disappeared from the plan entirely — on a real Sunday plan the Vocal Team roster read `Vocal 2`–`Vocal 6` with no `Vocal 1`, and the person holding it could not be given a microphone at all. Filtering to that team dropped them completely, since their row claimed a different one. Rows are now keyed by person *and* team *and* position, and still collapse across service times so a slot is never written twice.
+
+  The sync path was never affected — `_dedupe_people` already keyed on position — which meant the assignment table and a sync disagreed about who was scheduled. They now report the same 20 assignments on the plan this was found on.
 
 ## [1.4.8] - 2026-08-02
 ### Fixed

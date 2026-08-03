@@ -215,6 +215,7 @@
         </div>
         <div class="p-3 border rounded">
           <form id="pco-form" autocomplete="off" novalidate>
+            <h5 class="pco-step-heading">1 &middot; Connect</h5>
             <div class="form-row">
               <div class="form-group col-md-2 col-6 d-flex align-items-center">
                 <div class="form-check">
@@ -231,6 +232,34 @@
                 <input type="password" class="form-control" id="pco-secret" name="pco-secret" placeholder="PCO Personal Access Secret" autocomplete="off">
               </div>
             </div>
+
+            <h5 class="pco-step-heading mt-4">2 &middot; Choose the plan</h5>
+            <div class="row g-2 align-items-end">
+              <div class="col-md-4 col-12">
+                <label for="pco-service-type-id" class="form-label">Service Type</label>
+                <select class="form-select" id="pco-service-type-id">
+                  <option value="">All service types</option>
+                </select>
+                <div class="form-text">
+                  Narrows the plan list. Left on &ldquo;All&rdquo;, every service
+                  type&rsquo;s plans are mixed together.
+                </div>
+              </div>
+              <div class="col-md-6 col-12">
+                <label for="pco-plan-select" class="form-label">Plan</label>
+                <div class="d-flex gap-2">
+                  <select class="form-select" id="pco-plan-select">
+                    <option value="">Select a plan...</option>
+                  </select>
+                  <button type="button" id="pco-refresh-plans" class="btn btn-outline-secondary">Refresh Plans</button>
+                </div>
+              </div>
+              <div class="col-md-2 col-12 d-grid gap-2">
+                <button type="button" id="pco-load-people" class="btn btn-outline-primary" disabled>Load People</button>
+              </div>
+            </div>
+
+            <h5 class="pco-step-heading mt-4">3 &middot; Pick the teams that need mics</h5>
             <div class="form-row mt-2">
                 <div class="form-group col-md-6 col-12">
                   <label for="pco-note-category" class="form-label">Note Category</label>
@@ -245,10 +274,19 @@
                   <div id="pco-note-preview-results" class="small text-muted mt-2"></div>
                 </div>
               <div class="form-group col-md-6 col-12 mt-2 mt-md-0">
-                <label for="pco-team-filter" class="form-label">Team Name Filter</label>
-                <input type="text" class="form-control" id="pco-team-filter" name="pco-team-filter" placeholder="Team Name Filter (comma-separated, e.g. Vocal, Band)" autocomplete="off">
+                <label class="form-label" id="pco-teams-label">Teams</label>
+                <div id="pco-team-choices" class="border rounded p-2" role="group" aria-labelledby="pco-teams-label" style="max-height: 190px; overflow-y: auto;">
+                  <span class="text-muted small">Choose a plan above to list its teams.</span>
+                </div>
+                <div class="form-text">
+                  Only people on the ticked teams are considered. Read from the
+                  selected plan, so the names always match Planning Center exactly.
+                </div>
+                <!-- Source of truth for the saved config; the boxes above write here. -->
+                <input type="hidden" id="pco-team-filter" name="pco-team-filter">
               </div>
             </div>
+            <h5 class="pco-step-heading mt-4">4 &middot; How positions match slots</h5>
             <div class="form-row mt-2">
               <div class="form-group col-md-6 col-12">
                 <label for="pco-strategy" class="form-label">Assignment Source</label>
@@ -264,10 +302,16 @@
               </div>
               <div class="form-group col-md-6 col-12 mt-2 mt-md-0">
                 <div class="form-check mt-md-4">
-                  <input type="checkbox" class="form-check-input" id="pco-number-fallback" checked>
+                  <input type="checkbox" class="form-check-input" id="pco-number-fallback">
                   <label class="form-check-label" for="pco-number-fallback">
                     Match by trailing number when the label differs
                   </label>
+                  <div class="form-text small text-muted">
+                    Single-team plans only. Keys on the trailing number alone, so
+                    with several teams scheduled &ldquo;Vocal 1&rdquo;,
+                    &ldquo;Guitar 1&rdquo; and &ldquo;Host 1&rdquo; all claim the
+                    same slot.
+                  </div>
                 </div>
                 <div class="form-check mt-2">
                   <input type="checkbox" class="form-check-input" id="pco-seed-extended-id">
@@ -295,30 +339,10 @@
         </div>
       </div>
     </div>
-    <div class="row mt-3">
-      <div class="col-xl-12">
-        <div class="p-3 border rounded">
-          <div class="row g-2 align-items-end">
-            <div class="col-md-10 col-12">
-              <label for="pco-plan-select" class="form-label">Plan</label>
-              <div class="d-flex gap-2">
-                <select class="form-select" id="pco-plan-select">
-                  <option value="">Select a plan...</option>
-                </select>
-                <button type="button" id="pco-refresh-plans" class="btn btn-outline-secondary">Refresh Plans</button>
-              </div>
-            </div>
-            <div class="col-md-2 col-12 d-grid gap-2">
-              <button type="button" id="pco-load-people" class="btn btn-outline-primary" disabled>Load People</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
     <div class="row mt-4">
       <div class="col-xl-12">
         <div class="config-header">
-          <h4 class="text-center">PCO People (Selected Plan)</h4>
+          <h4 class="text-center">5 &middot; Review &mdash; PCO People (Selected Plan)</h4>
         </div>
         <div class="p-3 border rounded">
           <div id="pco-people-summary" class="mb-2"></div>
@@ -336,17 +360,29 @@
     <div class="row mt-4">
       <div class="col-xl-12">
         <div class="config-header">
-          <h4 class="text-center">Assign People to Slots</h4>
+          <h4 class="text-center">6 &middot; Assign People to Slots</h4>
         </div>
         <div class="p-3 border rounded">
           <div id="pco-assign-summary" class="mb-2"></div>
           <div class="table-responsive" id="pco-assign-table" style="display:none;">
             <table class="table table-sm table-striped">
               <thead>
-                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Extended Name</th><th>Select Person</th></tr>
+                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Slot ID</th><th>Extended Name</th><th>Select Person</th></tr>
               </thead>
               <tbody></tbody>
             </table>
+          </div>
+          <div class="form-check mt-3">
+            <input type="checkbox" class="form-check-input" id="pco-remember-positions" checked>
+            <label class="form-check-label" for="pco-remember-positions">
+              Remember each person&rsquo;s position on the slot
+            </label>
+            <div class="form-text">
+              Writes the Planning Center position &mdash; &ldquo;Electric Guitar 3&rdquo;,
+              not the person&rsquo;s name &mdash; into the slot&rsquo;s ID, so next
+              week&rsquo;s plan matches that slot on its own. Slots that already
+              have an ID are left alone.
+            </div>
           </div>
           <div class="d-flex gap-2 mt-2">
             <button type="button" id="pco-autofill-assignments" class="btn btn-success">Auto-Fill From Notes</button>

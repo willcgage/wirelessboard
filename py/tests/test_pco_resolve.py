@@ -236,3 +236,141 @@ class TestFindConflicts:
             person('Brooke', position='Vocal 2'),
         ], DEFAULT_OPTIONS)
         assert pco.find_conflicts(resolved) == []
+
+
+# Slots labelled by the position they serve, which is what strict matching asks
+# for: a mic and an IEM channel each carrying the position's own name.
+@pytest.fixture
+def position_labelled_slots(monkeypatch):
+    tree = {
+        'slots': [
+            {'slot': 1, 'type': 'ulxd', 'extended_id': 'Vocal 1'},
+            {'slot': 2, 'type': 'p10t', 'extended_id': 'Vocal 1'},
+            {'slot': 3, 'type': 'ulxd', 'extended_id': 'Guitar 1'},
+            {'slot': 4, 'type': 'p10t', 'extended_id': 'Guitar 1'},
+            {'slot': 5, 'type': 'ulxd', 'extended_id': 'Host 1'},
+        ]
+    }
+    monkeypatch.setattr(config, 'config_tree', tree)
+    monkeypatch.setattr(config, 'save_current_config', lambda: None)
+    return tree['slots']
+
+
+STRICT_OPTIONS = dict(DEFAULT_OPTIONS, number_fallback=False)
+
+
+class TestSeveralTeamsScheduled:
+    """A slot serves a position, not a team.
+
+    Position labels are unique within a team, not across a plan. The trailing
+    number fallback keys on the number alone, so with Vocal Team, Band and
+    Speakers and Hosts all scheduled, "Vocal 1", "Guitar 1" and "Host 1" every
+    one of them reduce to 1 and claim the same "Mic 1" slot.
+    """
+
+    def test_number_fallback_collides_across_teams(self, slots):
+        # Why the fallback cannot be the default once more than one team is
+        # scheduled: three distinct positions, one slot.
+        resolved, _ = pco.resolve_assignments([
+            person('Alice', position='Vocal 1', team='Vocal Team'),
+            person('Bob', position='Guitar 1', team='Band'),
+            person('Cara', position='Host 1', team='Speakers and Hosts'),
+        ], dict(DEFAULT_OPTIONS, number_fallback=True))
+
+        conflicts = pco.find_conflicts(resolved)
+        assert [c['slot'] for c in conflicts] == [1, 9]
+        assert sorted(c['name'] for c in conflicts[0]['claimants']) == [
+            'Alice', 'Bob', 'Cara']
+
+    def test_strict_matching_keeps_teams_apart(self, position_labelled_slots):
+        resolved, unmatched = pco.resolve_assignments([
+            person('Alice', position='Vocal 1', team='Vocal Team'),
+            person('Bob', position='Guitar 1', team='Band'),
+            person('Cara', position='Host 1', team='Speakers and Hosts'),
+        ], STRICT_OPTIONS)
+
+        assert unmatched == []
+        assert pco.find_conflicts(resolved) == []
+        by_name = {e['name']: sorted(s['slot'] for s in e['slots']) for e in resolved}
+        assert by_name == {'Alice': [1, 2], 'Bob': [3, 4], 'Cara': [5]}
+
+    def test_strict_matching_still_fills_mic_and_iem(self, position_labelled_slots):
+        """Pairing survives: label both channels with the position name."""
+        resolved, _ = pco.resolve_assignments(
+            [person('Alice', position='Vocal 1', team='Vocal Team')], STRICT_OPTIONS)
+
+        assert {s['kind'] for s in resolved[0]['slots']} == {'mic', 'iem'}
+
+    def test_position_with_no_matching_slot_goes_to_manual(self, position_labelled_slots):
+        """Anything strict matching cannot place is left for hand assignment."""
+        resolved, unmatched = pco.resolve_assignments(
+            [person('Dan', position='Bass 2', team='Band')], STRICT_OPTIONS)
+
+        assert resolved == []
+        assert unmatched[0]['name'] == 'Dan'
+        assert unmatched[0]['team'] == 'Band'
+
+
+class TestMappingOptionDefaults:
+    def test_number_fallback_is_off_unless_asked_for(self):
+        assert pco._mapping_options({})['number_fallback'] is False
+
+    def test_number_fallback_can_still_be_enabled(self):
+        opts = pco._mapping_options({'position_number_fallback': True})
+        assert opts['number_fallback'] is True
+
+
+class TestSeededSlotsMatchLaterPlans:
+    """Assign by hand once, record the position, match automatically after.
+
+    Strict matching sends anything it cannot place to manual assignment, which
+    would be every week forever if nothing were learned from it. Writing the
+    *position* onto the slot -- not the person, who changes week to week -- is
+    what closes that loop.
+    """
+
+    @pytest.fixture
+    def seeded_slots(self, monkeypatch):
+        # The state left behind after one hand assignment with "remember
+        # each person's position on the slot" ticked.
+        tree = {
+            'slots': [
+                {'slot': 1, 'type': 'ulxd', 'extended_id': 'Electric Guitar 1',
+                 'extended_name': 'Joe Spring'},
+                {'slot': 2, 'type': 'p10t', 'extended_id': 'Electric Guitar 1',
+                 'extended_name': 'Joe Spring'},
+                {'slot': 3, 'type': 'ulxd'},
+            ]
+        }
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    def test_next_weeks_different_person_still_matches(self, seeded_slots):
+        """The whole point: the slot answers to the position, not the person."""
+        resolved, unmatched = pco.resolve_assignments(
+            [person('Someone Else', position='Electric Guitar 1', team='Band')],
+            STRICT_OPTIONS)
+
+        assert unmatched == []
+        entry = resolved[0]
+        assert entry['matched_via'] == 'position'
+        assert sorted(s['slot'] for s in entry['slots']) == [1, 2]
+        assert {s['kind'] for s in entry['slots']} == {'mic', 'iem'}
+
+    def test_the_slot_takes_the_new_persons_name(self, seeded_slots):
+        resolved, _ = pco.resolve_assignments(
+            [person('Someone Else', position='Electric Guitar 1', team='Band')],
+            STRICT_OPTIONS)
+        pco._apply_assignments(resolved, STRICT_OPTIONS)
+
+        assert seeded_slots[0]['extended_name'] == 'Someone Else'
+        # ...without disturbing the position that made the match possible.
+        assert seeded_slots[0]['extended_id'] == 'Electric Guitar 1'
+
+    def test_an_unseeded_slot_is_still_left_for_manual(self, seeded_slots):
+        resolved, unmatched = pco.resolve_assignments(
+            [person('Nobody', position='Drums', team='Band')], STRICT_OPTIONS)
+
+        assert resolved == []
+        assert unmatched[0]['position'] == 'Drums'

@@ -89,7 +89,9 @@ def _mapping_options(mapping: Dict[str, Any]) -> Dict[str, Any]:
     return {
         'strategy': mapping.get('strategy') or DEFAULT_STRATEGY,
         # Lets PCO position "Vocal 1" line up with slots labelled "Mic 1"/"IEM 1".
-        'number_fallback': mapping.get('position_number_fallback', True) is not False,
+        # Off by default: it keys on the trailing number alone, so with more than
+        # one team scheduled "Vocal 1", "Guitar 1" and "Host 1" all claim "Mic 1".
+        'number_fallback': mapping.get('position_number_fallback', False) is True,
         # Off by default: writing extended_id would relabel slots the operator set up.
         'seed_extended_id': mapping.get('seed_extended_id', False) is True,
     }
@@ -108,7 +110,7 @@ def resolve_assignments(
     """
     slots = _configured_slots()
     strategy = options.get('strategy') or DEFAULT_STRATEGY
-    number_fallback = options.get('number_fallback', True)
+    number_fallback = options.get('number_fallback', False)
 
     resolved: List[Dict[str, Any]] = []
     unmatched: List[Dict[str, Any]] = []
@@ -399,7 +401,15 @@ def _get_plan_people_with_service(service_type_id: int, plan_id: str, headers: D
 
 
 def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]:
-    """Return people for a specific plan. If service_type is provided, uses scoped URL to avoid redirects."""
+    """Return the scheduled assignments on a plan, one row per person *per position*.
+
+    A row is (name, team, position) rather than one row per person: somebody
+    rostered to Band and to Vocal Team on the same plan holds two assignments
+    and may need a channel for each. Rows are still collapsed across service
+    times, so a person scheduled morning and evening appears once.
+
+    ``service_type`` is optional and only avoids a redirect.
+    """
     try:
         pco_cfg = get_pco_config()
     except PcoConfigError as exc:
@@ -422,7 +432,13 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
         return {"ok": False, "error": "Unable to fetch plan people"}
 
     included_maps = _build_included_maps(plan_people.get('included') or [])
-    out_people: Dict[str, Dict[str, Any]] = {}
+    # Keyed by (name, team, position), not by name. One person can be scheduled
+    # to several teams on the same plan -- a vocalist who also hosts -- and each
+    # of those is a separate assignment that may need its own channel. Keying on
+    # the name alone kept whichever team was seen first and silently discarded
+    # the rest, so a vocalist rostered under Band as well would disappear from
+    # the Vocal Team roster and could not be assigned a microphone at all.
+    out_people: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     cat_names: set = set()
 
     for pp in plan_people.get('data') or []:
@@ -520,41 +536,34 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
                 cat_names.add(cat)
 
         if name:
-            existing = out_people.get(name)
+            entry_key = (name, team_name or '', position)
+            existing = out_people.get(entry_key)
             if existing:
-                merged_team = existing.get("team") or team_name
-                # Union notes arrays, preserve order where possible
+                # Same person, same team, same position: one row scheduled to
+                # several service times. Union the notes and keep a single row,
+                # which is what stops a slot being written twice.
                 seen = set()
                 merged_notes: List[str] = []
                 for val in (existing.get("notes") or []) + (notes_list or []):
                     if not val:
                         continue
-                    key = str(val)
-                    if key in seen:
+                    note_key = str(val)
+                    if note_key in seen:
                         continue
-                    seen.add(key)
+                    seen.add(note_key)
                     merged_notes.append(val)
-                # One person can hold more than one position across service times.
-                merged_positions = list(existing.get("positions") or [])
-                if position and position not in merged_positions:
-                    merged_positions.append(position)
-                out_people[name] = {
-                    "name": name,
-                    "team": merged_team,
-                    "position": merged_positions[0] if merged_positions else '',
-                    "positions": merged_positions,
-                    "notes": merged_notes,
-                }
+                existing["notes"] = merged_notes
             else:
-                out_people[name] = {
+                out_people[entry_key] = {
                     "name": name,
-                    "team": team_name,
+                    "team": team_name or '',
                     "position": position,
-                    "positions": [position] if position else [],
                     "notes": notes_list,
                 }
 
-    people_list = sorted(out_people.values(), key=lambda x: (x.get('team') or '', x.get('name') or ''))
+    people_list = sorted(
+        out_people.values(),
+        key=lambda x: (x.get('team') or '', x.get('name') or '', x.get('position') or ''))
 
     # Apply optional team name filters (case-insensitive substring match)
     mapping = pco_cfg.get('mapping') or {}
@@ -563,6 +572,75 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
         people_list = [p for p in people_list if any(f in (p.get('team') or '').lower() for f in filters)]
 
     return {"ok": True, "plan_id": plan_id, "people": people_list, "note_categories": sorted(cat_names)}
+
+
+def list_teams_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]:
+    """Return every team scheduled on a plan, with how many people are on each.
+
+    Deliberately ignores ``mapping.team_name_filter``.  This is what populates
+    the team chooser, so it has to report the teams the operator has *not*
+    picked as well -- filtering here would make a team impossible to re-add
+    once it had been excluded.
+
+    Counts distinct people rather than plan_people rows, because one person can
+    hold several positions on the same team across service times.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        logger.warning('PCO team list aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+
+    stid = _resolve_service_type_id(service_type_value, headers) if service_type_value is not None else None
+    plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
+    if not plan_people:
+        plan_people = _get_plan_people_any(plan_id, headers)
+    if not plan_people:
+        return {"ok": False, "error": "Unable to fetch plan people"}
+
+    included_maps = _build_included_maps(plan_people.get('included') or [])
+    members: Dict[str, set] = {}
+    positions: Dict[str, set] = {}
+
+    for pp in plan_people.get('data') or []:
+        rel = pp.get('relationships') or {}
+
+        team_rel = (rel.get('team') or {}).get('data') or {}
+        team_obj = None
+        if team_rel:
+            team_obj = included_maps.get((team_rel.get('type') or '').lower(), {}).get(str(team_rel.get('id')))
+        team_name = (((team_obj or {}).get('attributes') or {}).get('name') or '').strip()
+        if not team_name:
+            continue
+
+        person_rel = (rel.get('person') or {}).get('data') or {}
+        person_obj = None
+        if person_rel:
+            person_obj = included_maps.get((person_rel.get('type') or '').lower(), {}).get(str(person_rel.get('id')))
+        name = _person_display_name(person_obj or {})
+
+        members.setdefault(team_name, set())
+        positions.setdefault(team_name, set())
+        if name:
+            members[team_name].add(name)
+        position = ((pp.get('attributes') or {}).get('team_position_name') or '').strip()
+        if position:
+            positions[team_name].add(position)
+
+    selected = [t.strip().lower() for t in ((pco_cfg.get('mapping') or {}).get('team_name_filter') or []) if t and t.strip()]
+
+    teams = [{
+        "name": team,
+        "people": len(members[team]),
+        "positions": sorted(positions[team]),
+        # Mirrors _team_matches_filters: case-insensitive substring match.
+        "selected": any(f in team.lower() for f in selected),
+    } for team in sorted(members)]
+
+    return {"ok": True, "plan_id": plan_id, "teams": teams, "filter_active": bool(selected)}
 
 
 def _resolve_service_type_id(service_type_value, headers: Dict[str, str]) -> Optional[int]:
