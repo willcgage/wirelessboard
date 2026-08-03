@@ -13,8 +13,10 @@ The Electron wrapper is written in JavaScript. It provides a menubar app with ac
 Wirelessboard now ships with repeatable release scripts and a GitHub Actions workflow that publish artefacts for macOS, Windows, and Raspberry Pi. The Python backend is bundled with PyInstaller while [`electron-builder`](https://www.electron.build) produces the desktop shells.
 
 ### Prerequisites
-* Node.js 18+ (Node 20 is used in CI)
-* Python 3.9+ with `pip`
+* Node.js 22+ (Node 22 is used in CI). `@electron/rebuild` 4.x, which
+  electron-builder uses to rebuild native modules, requires Node ≥ 22.12.
+* Python 3.10+ with `pip` — `urllib3` 2.7 dropped 3.9. CI builds on 3.11 and
+  `npm run setup:venv` prefers 3.12.
 * Xcode command-line tools (macOS) or Build Tools for Visual Studio (Windows) for native module compilation
 
 Run `npm install` once per machine; the postinstall hook provisions `.venv/` with the Python dependencies listed in `py/requirements.lock` for repeatable installs.
