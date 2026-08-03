@@ -11,7 +11,9 @@ const path = require('path');
 const child = require('child_process');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const servicePaths = require('./electron/service-paths');
+const updateCheck = require('./electron/update-check');
 
 let win;
 let tray;
@@ -21,6 +23,8 @@ let rebuildTrayMenu = () => {};
 // Bumped on every start so a superseded readiness poll cannot report on the
 // attempt that replaced it.
 let startGeneration = 0;
+// What the last successful update check found; null until one completes.
+let updateStatus = null;
 
 const SERVICE_CANDIDATES = [
   ['wirelessboard-service', 'wirelessboard-service'],
@@ -295,6 +299,68 @@ function restartWirelessboardServer() {
 }
 
 
+// -- Update check -----------------------------------------------------------
+// Notify only. This runs during live services, so nothing is downloaded or
+// installed on its own; the tray reports what is available and the operator
+// decides when. The comparison lives in electron/update-check.js so it can be
+// tested without a network or a running app.
+
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const UPDATE_CHECK_DELAY_MS = 30 * 1000;
+
+function getJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, {
+      headers: {
+        // GitHub rejects requests with no user agent.
+        'User-Agent': `wirelessboard/${app.getVersion()}`,
+        Accept: 'application/vnd.github+json',
+      },
+    }, (res) => {
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        res.resume();
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(10000, () => {
+      req.destroy();
+      reject(new Error('timed out'));
+    });
+  });
+}
+
+async function runUpdateCheck() {
+  const result = await updateCheck.checkForUpdate({
+    currentVersion: app.getVersion(),
+    getJson,
+  });
+
+  if (!result.ok) {
+    // A failed check is not worth interrupting anyone over; it is recorded and
+    // the menu keeps whatever it last knew.
+    console.warn(`Update check failed (${result.reason}): ${result.error || ''}`.trim());
+    return;
+  }
+
+  updateStatus = result.updateAvailable
+    ? { label: `Update available: ${result.latestVersion}`, url: result.url }
+    : { label: `Up to date (${result.currentVersion})`, url: null };
+  rebuildTrayMenu();
+}
+
+
 app.on('ready', () => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.wirelessboard.app');
@@ -314,6 +380,13 @@ app.on('ready', () => {
     const ready = serviceState === 'running';
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: STATE_LABELS[serviceState] || 'Wirelessboard', enabled: false },
+      // Only clickable when there is somewhere to go; otherwise it reads as
+      // status, which is all it is until a check has found something.
+      {
+        label: updateStatus ? updateStatus.label : 'Checking for updates…',
+        enabled: Boolean(updateStatus && updateStatus.url),
+        click() { if (updateStatus && updateStatus.url) shell.openExternal(updateStatus.url); },
+      },
       { type: 'separator' },
       { label: 'About', click() { createWindow(`${SERVICE_URL}/about`); } },
       { type: 'separator' },
@@ -329,6 +402,13 @@ app.on('ready', () => {
 
   setServiceState('starting');
   startServiceAndOpen({ openBrowser: true });
+
+  // Deliberately not at launch: startup is the one moment the operator is
+  // waiting on the server, and an update check has no business competing with
+  // it. Six-hourly thereafter keeps this far inside GitHub's unauthenticated
+  // rate limit.
+  setTimeout(runUpdateCheck, UPDATE_CHECK_DELAY_MS);
+  setInterval(runUpdateCheck, UPDATE_CHECK_INTERVAL_MS);
 });
 
 

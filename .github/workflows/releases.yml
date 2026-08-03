@@ -44,6 +44,11 @@ jobs:
         run: python -m compileall py
       - name: Run Python tests
         run: python -m pytest py/tests -q
+        # node:test ships with Node 22, so the main-process logic is covered
+        # without adding a test framework. It is pure by construction -- no
+        # electron import, network injected -- precisely so it can run here.
+      - name: Run JavaScript tests
+        run: npm run test:js
 
   package-desktop:
     name: Package desktop apps
