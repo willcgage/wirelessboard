@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **The menu bar says what the server is doing.** Starting the application showed nothing at all until, five seconds later, a browser window appeared. The tray now reports *Starting the server…*, then *Server running* or *Server failed to start*, in both the tooltip and as the first item of its menu, and **Launch Wirelessboard** / **Edit Configuration** stay disabled until the server actually answers. (#14)
+
+### Fixed
+- **Tray → Open log file opened a stale log on Windows and Linux, not the one the interface shows.** The Electron process located the service's directory with `app.getPath('appData')`, which is not where the service writes on two of three platforms — Windows puts it under `AppData\Local` while `appData` is `AppData\Roaming`, and Linux uses `~/.local/share` against `~/.config`. Finding nothing there, it fell through to whatever pre-rename `micboard` file happened to exist, which looked like current output but was months old. **Open Configuration Directory** was resolved the same way and could land somewhere unrelated. Both now mirror `os_config_path()` in `py/config.py`, verified against it on all three platforms. macOS was always correct, which is why this only ever appeared on Windows. (#14)
+- The last-resort log fallback no longer opens a path that does not exist, or a stale `micboard`-era file. If nothing has been written yet it says so and names the directory it expected.
+- **Startup no longer guesses.** The browser was opened on a flat five-second timer regardless of whether the server was up — too early on a slow start, an unnecessary wait on a fast one. It now opens when the server answers, and reports a failure if it never does.
+- The tray URL honours `WIRELESSBOARD_PORT` / `MICBOARD_PORT`, which the service already respected. A port set only in `config.json` is still not picked up by the tray.
 
 ### Changed
 - **Load People moved into the PCO People section.** It sat in the plan row two steps above the table it fills. It is now at the top of that section with a line saying what it does and why it is disabled. (#31)
