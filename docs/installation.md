@@ -81,15 +81,17 @@ Check the [configuration](configuration.md) docs for more information on configu
 
 ## macOS - Desktop Application
 
-Download the disk image for your Mac from the [latest release](https://github.com/willcgage/wirelessboard/releases/latest):
+Download `wirelessboard-server-<version>-mac-arm64.dmg` from the
+[latest release](https://github.com/willcgage/wirelessboard/releases/latest).
 
-| Your Mac | File |
-| --- | --- |
-| Apple Silicon (M1/M2/M3/M4) | `wirelessboard-server-<version>-mac-arm64.dmg` |
-| Intel | `wirelessboard-server-<version>-mac-x64.dmg` |
+**Apple Silicon only.** Click the Apple menu > About This Mac to check; anything
+listed as M1 or later is Apple Silicon.
 
-Click the Apple menu > About This Mac to check which you have. Picking the wrong
-one will not work.
+Intel Macs are no longer built for. 1.5.1 was the last release with an
+`x64` disk image and it continues to work — download it from the
+[1.5.1 release](https://github.com/willcgage/wirelessboard/releases/tag/v1.5.1)
+rather than the latest one. There is no in-app updater, so nothing will try to
+move an Intel install onto a build it cannot run.
 
 Open the disk image and drag **Wirelessboard Server** to your Applications folder.
 

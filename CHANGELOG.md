@@ -4,6 +4,11 @@
 ### Added
 - _Nothing yet._
 
+### Removed
+- **Intel macOS builds.** Releases are Apple Silicon only from here. **1.5.1 is the last release with an `x64` disk image**, and it keeps working — Intel users should download [1.5.1](https://github.com/willcgage/wirelessboard/releases/tag/v1.5.1) rather than the latest release. There is no in-app updater, so nothing will try to move an Intel install onto a build it cannot run.
+
+  The Intel job cost 200 of the 313 billable minutes a release takes: macOS bills at 10× and the Intel runner took twice as long as arm64 for identical work, making one architecture 64% of every release. It could not be folded into the arm64 job, because the bundled PyInstaller service is built natively and is not universal — packaging both arches on one runner puts an arm64 service inside the Intel app. GitHub also removes the last x86_64 image in Aug 2027. See #30.
+
 ### Changed
 - _Nothing yet._
 

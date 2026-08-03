@@ -38,10 +38,11 @@ mac:
     NSLocalNetworkUsageDescription: >-
       Wirelessboard finds your Shure receivers on the local network and reads
       their channel, battery, and audio levels.
-  # No arch list here on purpose. Each CI job passes --arm64 or --x64 and runs
-  # on a runner of that architecture, because the bundled PyInstaller service is
-  # built natively and is not universal. Building both arches on one runner
-  # shipped an arm64 service inside the Intel app.
+  # No arch list here on purpose. CI passes --arm64 and runs on a runner of that
+  # architecture, because the bundled PyInstaller service is built natively and
+  # is not universal. Building more than one arch on a single runner shipped an
+  # arm64 service inside the Intel app, which is also why x86_64 could not just
+  # be folded into the arm64 job when it was dropped (#30).
   target:
     - dmg
     - zip
