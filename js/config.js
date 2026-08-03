@@ -3224,14 +3224,20 @@ function loadPeopleForSelectedService() {
       const ppl = resp.people || [];
       ppl.forEach((p) => {
         const tr = document.createElement('tr');
-        const td1 = document.createElement('td');
-        const td2 = document.createElement('td');
-        const td3 = document.createElement('td');
-        td1.textContent = p.name || '';
-        td2.textContent = p.team || '';
+        const tdName = document.createElement('td');
+        const tdTeam = document.createElement('td');
+        // A row is one assignment, not one person: somebody can hold two
+        // positions on the same team. Without this column those rows are
+        // identical on screen and read as duplicates.
+        const tdPosition = document.createElement('td');
+        const tdNote = document.createElement('td');
+        tdName.textContent = p.name || '';
+        tdTeam.textContent = p.team || '';
+        tdPosition.textContent = p.position || '';
         const notesArr = Array.isArray(p.notes) ? p.notes : [];
-        td3.textContent = (notesArr.length ? notesArr.join(' | ') : '');
-        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+        tdNote.textContent = (notesArr.length ? notesArr.join(' | ') : '');
+        tr.appendChild(tdName); tr.appendChild(tdTeam);
+        tr.appendChild(tdPosition); tr.appendChild(tdNote);
         if (tbody) tbody.appendChild(tr);
       });
       if (tblWrap) tblWrap.style.display = 'block';

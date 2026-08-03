@@ -245,7 +245,7 @@
                   type&rsquo;s plans are mixed together.
                 </div>
               </div>
-              <div class="col-md-6 col-12">
+              <div class="col-md-8 col-12">
                 <label for="pco-plan-select" class="form-label">Plan</label>
                 <div class="d-flex gap-2">
                   <select class="form-select" id="pco-plan-select">
@@ -253,9 +253,6 @@
                   </select>
                   <button type="button" id="pco-refresh-plans" class="btn btn-outline-secondary">Refresh Plans</button>
                 </div>
-              </div>
-              <div class="col-md-2 col-12 d-grid gap-2">
-                <button type="button" id="pco-load-people" class="btn btn-outline-primary" disabled>Load People</button>
               </div>
             </div>
 
@@ -354,11 +351,18 @@
           <h4 class="text-center">6 &middot; Review &mdash; PCO People (Selected Plan)</h4>
         </div>
         <div class="p-3 border rounded">
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <button type="button" id="pco-load-people" class="btn btn-outline-primary" disabled>Load People</button>
+            <span class="form-text mb-0">
+              Fetches everyone on the selected plan who is on a ticked team.
+              Enabled once a plan is chosen.
+            </span>
+          </div>
           <div id="pco-people-summary" class="mb-2"></div>
           <div class="table-responsive" id="pco-people-table" style="display:none;">
             <table class="table table-sm table-striped">
               <thead>
-                <tr><th>Name</th><th>Team</th><th>Note</th></tr>
+                <tr><th>Name</th><th>Team</th><th>Position</th><th>Note</th></tr>
               </thead>
               <tbody></tbody>
             </table>
