@@ -2500,7 +2500,7 @@ function applyPcoMappingToForm(mapping) {
   if (elSource) elSource.value = m.note_source || 'person';
   if (elTeam) elTeam.value = Array.isArray(m.team_name_filter) ? m.team_name_filter.join(', ') : '';
   if (elStrategy) elStrategy.value = m.strategy || DEFAULT_PCO_STRATEGY;
-  if (elNumberFallback) elNumberFallback.checked = m.position_number_fallback !== false;
+  if (elNumberFallback) elNumberFallback.checked = m.position_number_fallback === true;
   if (elSeed) elSeed.checked = m.seed_extended_id === true;
 }
 
@@ -2526,7 +2526,7 @@ function buildPcoPayload() {
       note_category: noteCategory,
       note_source: noteSource,
       team_name_filter: teamFilterRaw.split(',').map((s) => s.trim()).filter((s) => s),
-      position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : true,
+      position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : false,
       seed_extended_id: seedExtendedIdEl ? !!seedExtendedIdEl.checked : false,
     },
   };

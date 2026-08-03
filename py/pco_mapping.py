@@ -143,23 +143,33 @@ def slot_describe(slot: Dict[str, Any]) -> str:
 def match_slots(
     label: Any,
     slots: Iterable[Dict[str, Any]],
-    allow_number_fallback: bool = True,
+    allow_number_fallback: bool = False,
 ) -> List[Dict[str, Any]]:
     """Find every slot a Planning Center position label refers to.
 
-    Matching runs in three passes and stops at the first pass that produces a
-    hit, so a precise match is never diluted by a fuzzy one:
+    A slot serves a *position*, not a team, so a position only auto-matches a
+    slot whose own label says so.  Matching runs in three passes and stops at
+    the first pass that produces a hit, so a precise match is never diluted by
+    a fuzzy one:
 
     1. ``extended_id`` equals the label (the recommended, explicit setup).
     2. A device/channel name from the receiver equals the label.
-    3. Number fallback: the label's trailing number matches the slot label's
-       trailing number, and the slot's prefix either equals the label's prefix
-       or is a recognised device word ("Mic 1"/"IEM 1" for position
-       "Vocal 1").  When the prefix names a device kind, the slot's configured
-       type has to agree.
+    3. Number fallback, **off by default**: the label's trailing number matches
+       the slot label's trailing number, and the slot's prefix either equals
+       the label's prefix or is a recognised device word ("Mic 1"/"IEM 1" for
+       position "Vocal 1").  When the prefix names a device kind, the slot's
+       configured type has to agree.
+
+    Pass 3 only holds up when a single team is scheduled.  Position labels are
+    unique within a team, not across a plan, so "Vocal 1", "Guitar 1" and
+    "Host 1" from three different teams all reduce to trailing number 1 and
+    claim the same "Mic 1" slot.  It stays available for single-team setups but
+    is no longer the default; anything the first two passes cannot place is
+    left unmatched for the operator to assign by hand.
 
     Every match in the winning pass is returned, which is what lets one PCO
-    position fill both a mic slot and an IEM slot.
+    position fill both a mic slot and an IEM slot -- label both channels with
+    the position name and each gets picked up.
     """
     target = normalize_label(label)
     if not target:

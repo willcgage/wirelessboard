@@ -89,7 +89,9 @@ def _mapping_options(mapping: Dict[str, Any]) -> Dict[str, Any]:
     return {
         'strategy': mapping.get('strategy') or DEFAULT_STRATEGY,
         # Lets PCO position "Vocal 1" line up with slots labelled "Mic 1"/"IEM 1".
-        'number_fallback': mapping.get('position_number_fallback', True) is not False,
+        # Off by default: it keys on the trailing number alone, so with more than
+        # one team scheduled "Vocal 1", "Guitar 1" and "Host 1" all claim "Mic 1".
+        'number_fallback': mapping.get('position_number_fallback', False) is True,
         # Off by default: writing extended_id would relabel slots the operator set up.
         'seed_extended_id': mapping.get('seed_extended_id', False) is True,
     }
@@ -108,7 +110,7 @@ def resolve_assignments(
     """
     slots = _configured_slots()
     strategy = options.get('strategy') or DEFAULT_STRATEGY
-    number_fallback = options.get('number_fallback', True)
+    number_fallback = options.get('number_fallback', False)
 
     resolved: List[Dict[str, Any]] = []
     unmatched: List[Dict[str, Any]] = []

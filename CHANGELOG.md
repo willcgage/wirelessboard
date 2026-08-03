@@ -5,7 +5,9 @@
 - _Nothing yet._
 
 ### Changed
-- _Nothing yet._
+- **`mapping.position_number_fallback` now defaults to off.** A slot serves a *position*, not a team, so a position only auto-matches a slot whose own label says so. The fallback keys on the trailing number alone, and position names are unique within a Planning Center team rather than across a plan — so with more than one team scheduled, `Vocal 1` (Vocal Team), `Guitar 1` (Band) and `Host 1` (Speakers and Hosts) all reduce to `1` and every one of them claims the same `Mic 1` slot, producing a three-way conflict and an arbitrary winner. Anything the exact-label passes cannot place is now left unmatched for the operator to assign by hand rather than guessed at. Labelling both the mic and the IEM channel with the position name still fills both from one position. The option remains available for single-team plans.
+
+  Existing installations are **not** migrated: the interface wrote this key on every save with its checkbox defaulting to checked, so anything that ever saved PCO settings carries an explicit `true`. Clear **Match by trailing number when the label differs** in the PCO panel and save to pick up the new behaviour.
 
 ### Fixed
 - _Nothing yet._
