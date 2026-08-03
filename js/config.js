@@ -1179,7 +1179,9 @@ function collectSlotConfiguration() {
 
   for (let i = 0; i < configBoard.length; i += 1) {
     const slot = parseInt(configBoard[i].id.replace(/[^\d.]/g, ''), 10);
-    if (slot && (slotList.indexOf(slot) === -1)) {
+    // slotList holds objects, so indexOf(slot) — a number — never matched and
+    // this guard did nothing. Compare against the slot numbers already added.
+    if (slot && !slotList.some((entry) => entry.slot === slot)) {
       const output = {};
 
       output.slot = slot;

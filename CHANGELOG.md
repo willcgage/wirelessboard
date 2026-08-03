@@ -8,7 +8,8 @@
 - _Nothing yet._
 
 ### Fixed
-- _Nothing yet._
+- **Discovery reported far more devices than exist.** Three separate routes let something that is not a usable receiver into the list. An active scan reported **any host that accepted a TCP connection on port 2202**, even one that answered nothing at all — the probe returned a device record regardless of what came back. A multicast announcement was added **unconditionally**, with an unrecognised DCID merely logged afterwards. And Shure gear that is not a receiver this build can drive was added as `unknown`: only 274 of the 942 bundled DCIDs resolve to a supported receiver, the rest being transmitters and other models. A device is now reported only when it answers in Shure's framed reply format *and* resolves to a type Wirelessboard can actually drive; everything rejected is logged with the reason. (#21)
+- The duplicate-slot guard when saving the configuration compared a slot number against an array of objects, so it never matched and did nothing.
 
 ## [1.6.0] - 2026-08-03
 The menu bar stops being silent: it says whether the server is up, and whether a

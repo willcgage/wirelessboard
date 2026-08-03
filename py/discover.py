@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import platform
+import re
 import socket
 import struct
 import sys
@@ -206,19 +207,29 @@ def _handle_multicast_packet(raw_payload: bytes, ip: str) -> None:
     lookup = dcid_model_lookup(device['model']) if device else None
     rx_type, channels = lookup if lookup else (None, None)
 
+    # Anything may send to a multicast group. This used to add the sender
+    # regardless and merely log afterwards when the DCID meant nothing, so every
+    # announcement on the network became a device -- including Shure gear that
+    # is not a receiver this build can drive.
+    if device is None:
+        logger.debug('Ignoring announcement from %s: unknown DCID %s', ip, dcid or '(none)')
+        return
+    if not rx_type:
+        logger.debug(
+            'Ignoring announcement from %s: %s is not a receiver this build drives',
+            ip, device.get('model_name') or device.get('model'))
+        return
+
     add_rx_to_dlist(
         ip,
         rx_type=rx_type,
         channels=channels,
-        model=(device.get('model_name') if device else None) or (device.get('model') if device else None),
-        band=device.get('band') if device else None,
+        model=device.get('model_name') or device.get('model'),
+        band=device.get('band'),
         dcid=dcid,
         source='slp',
         reachable=True,
     )
-
-    if device is None:
-        logger.debug('Discovery packet from %s referenced unknown DCID %s', ip, dcid)
 
 
 def _run_active_scan(settings: Dict[str, Any]) -> None:
@@ -347,7 +358,35 @@ def _probe_network(network: ipaddress.IPv4Network, timeout: float) -> None:
         raise
 
 
+# Shure devices answer "< GET 1 DEVICE_ID >" with a framed reply such as
+# "< REP 1 DEVICE_ID {ULXD4} >". UHF-R terminates with * rather than >.
+SHURE_REPLY_VERBS = frozenset({'REP', 'REPLY', 'REPORT', 'SAMPLE'})
+_SHURE_FRAME_RE = re.compile(r'[<*]\s*([^<>*]+)')
+
+
+def looks_like_shure_reply(payload: str) -> bool:
+    """True when the payload is framed the way a Shure device answers.
+
+    Opening a TCP connection proves nothing: plenty of things listen on a port,
+    and anything that merely accepted the connection used to be reported as a
+    receiver.
+    """
+    if not payload:
+        return False
+    for frame in _SHURE_FRAME_RE.findall(payload):
+        tokens = frame.split()
+        if tokens and tokens[0].upper() in SHURE_REPLY_VERBS:
+            return True
+    return False
+
+
 def _probe_ip(ip: str, timeout: float) -> Optional[Dict[str, Any]]:
+    """Identify a receiver at *ip*, or return None with the reason logged.
+
+    Returning None is the common case on any real network. A device is only
+    reported when it answers as a Shure device *and* resolves to a receiver
+    type this application can actually drive -- see _is_supported_receiver.
+    """
     start = time.time()
     try:
         with socket.create_connection((ip, PROBE_PORT), timeout=timeout) as conn:
@@ -362,7 +401,20 @@ def _probe_ip(ip: str, timeout: float) -> Optional[Dict[str, Any]]:
                         break
                 except socket.timeout:
                     continue
+
+            if not looks_like_shure_reply(payload):
+                logger.debug(
+                    'Ignoring %s: accepted a connection on %d but did not answer as a Shure device',
+                    ip, PROBE_PORT)
+                return None
+
             info = _parse_probe_payload(payload)
+            if not _is_supported_receiver(info):
+                logger.debug(
+                    'Ignoring %s: Shure device but not a receiver this build drives (dcid=%s model=%s)',
+                    ip, info.get('dcid'), info.get('model'))
+                return None
+
             info['ip'] = ip
             info['source'] = 'active'
             info['reachable'] = True
@@ -370,6 +422,18 @@ def _probe_ip(ip: str, timeout: float) -> Optional[Dict[str, Any]]:
             return info
     except (socket.timeout, ConnectionError, OSError):
         return None
+
+
+def _is_supported_receiver(info: Dict[str, Any]) -> bool:
+    """Whether the parsed device resolves to a driveable receiver type.
+
+    _parse_probe_payload only sets 'type' via dcid_model_lookup, which returns
+    keys of BASE_CONST -- so a type at all means a supported receiver. Most of
+    the bundled DCID map is transmitters and other models this application
+    cannot talk to; before this check they were all reported as devices with
+    type 'unknown'.
+    """
+    return bool(info.get('type'))
 
 
 def _parse_probe_payload(payload: str) -> Dict[str, Any]:
