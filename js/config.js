@@ -340,6 +340,10 @@ function renderDiscoveredDeviceList() {
         const deviceName = slot.chan_name_raw || slot.name_raw || slot.name || '';
         deviceInput.value = deviceName;
       }
+      const idInput = row.querySelector('.cfg-id');
+      if (idInput && slot.extended_id) {
+        idInput.value = slot.extended_id;
+      }
       const extInput = row.querySelector('.cfg-name');
       if (extInput && slot.extended_name) {
         extInput.value = slot.extended_name;
@@ -1190,6 +1194,8 @@ function collectSlotConfiguration() {
       const chanVal = parseInt(configBoard[i].querySelector('.cfg-channel')?.value, 10);
       const nameField = configBoard[i].querySelector('.cfg-name');
       const nameVal = nameField ? String(nameField.value || '').trim() : '';
+      const idField = configBoard[i].querySelector('.cfg-id');
+      const idVal = idField ? String(idField.value || '').trim() : '';
 
       // Decide type: if a known network device type, require IP+Channel; otherwise default to offline when any meaningful data exists
       let finalType = typeVal;
@@ -1224,6 +1230,13 @@ function collectSlotConfiguration() {
 
       if (nameField) {
         output.extended_name = nameVal;
+      }
+
+      // Only sent when the field is present, because config_mix keeps the
+      // stored extended_id whenever the key is absent — that is what stops a
+      // save from wiping the positions the PCO seed workflow writes.
+      if (idField) {
+        output.extended_id = idVal;
       }
 
       slotList.push(output);
@@ -1263,6 +1276,7 @@ function addAllDiscoveredDevices() {
     copyValue('.cfg-ip');
     copyValue('.cfg-channel');
     copyValue('.cfg-device-name');
+    copyValue('.cfg-id');
     copyValue('.cfg-name');
 
     cfgList.appendChild(fragment);
@@ -2230,6 +2244,8 @@ export function initConfigEditor(force = false) {
             }
             deviceInput.value = deviceName;
           }
+          const idInput = row.querySelector('.cfg-id');
+          if (idInput) idInput.value = slot.extended_id || '';
           const nameInput = row.querySelector('.cfg-name');
           if (nameInput) nameInput.value = slot.extended_name || '';
         }
@@ -2262,9 +2278,11 @@ export function initConfigEditor(force = false) {
   const clearIds = document.getElementById('clear-id');
   if (clearIds) {
     clearIds.addEventListener('click', () => {
+      // Was .cfg-ip — so "Clear IDs" wiped every receiver's IP address. There
+      // was no Slot ID field to clear at the time; there is one now.
       const rows = document.querySelectorAll('#editor_holder .cfg-row');
       Array.from(rows).forEach((r) => {
-        const idInput = r.querySelector('.cfg-ip');
+        const idInput = r.querySelector('.cfg-id');
         if (idInput) idInput.value = '';
       });
     });

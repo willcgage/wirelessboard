@@ -800,7 +800,14 @@ def config_mix(slots):
     for slot in slots:
         current = get_slot_by_number(slot['slot'])
         if current:
-            if 'extended_id' not in slot and 'extended_id' in current:
+            # Absent means "not editing this", so the stored value stands --
+            # which is what keeps a configuration save from wiping the positions
+            # the PCO seed workflow writes. Present but empty means the operator
+            # cleared the field, so drop it rather than storing ''.
+            if 'extended_id' in slot:
+                if not slot['extended_id']:
+                    slot.pop('extended_id', None)
+            elif 'extended_id' in current:
                 slot['extended_id'] = current['extended_id']
 
             if 'extended_name' in slot:

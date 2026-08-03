@@ -2,12 +2,14 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **A Slot ID field on the configuration page.** `extended_id` is the position a slot answers to — `Vocal 1`, `Band 2` — and it is what PCO matches a plan's positions against, but the configuration editor had no field for it: IP, type, channel, device name and extended name, and nothing for the position. Until now it could only be set indirectly, by assigning a person in the slot editor with *Remember each person's position* enabled. It is now editable directly, beside the name it belongs with.
 
 ### Changed
 - _Nothing yet._
 
 ### Fixed
+- **Clear IDs on the configuration page wiped every receiver's IP address.** The button was wired to `.cfg-ip`, so pressing the control labelled *Clear IDs* emptied the address column and disconnected every configured receiver — the field it was meant to clear, the slot's position, had no input on that page at all (see *Added*). It now clears the Slot ID and leaves the addresses untouched.
+- **Saving the configuration could discard the positions PCO had seeded.** `config_mix` treated an absent `extended_id` as an instruction to drop it, so any save from a page that did not send the field erased the positions written by the assign-once workflow. An absent field now means *not editing this* and the stored value stands; only a field that is present and empty clears it, which is what the operator pressing *Clear IDs* actually means.
 - **Discovery reported far more devices than exist.** Three separate routes let something that is not a usable receiver into the list. An active scan reported **any host that accepted a TCP connection on port 2202**, even one that answered nothing at all — the probe returned a device record regardless of what came back. A multicast announcement was added **unconditionally**, with an unrecognised DCID merely logged afterwards. And Shure gear that is not a receiver this build can drive was added as `unknown`: only 274 of the 942 bundled DCIDs resolve to a supported receiver, the rest being transmitters and other models. A device is now reported only when it answers in Shure's framed reply format *and* resolves to a type Wirelessboard can actually drive; everything rejected is logged with the reason. (#21)
 - **Clear IDs and Clear Extended Names did nothing in the slot editor.** Both buttons carried the same `id` as the pair on the settings page, and because the settings page sits inside `#micboard` — where the slot editor's own controls are cloned — it came first in document order. `getElementById` returns the first match, so those handlers attached to the settings buttons instead: the slot editor's own buttons were inert, while the settings ones quietly gained a second handler every time the editor was opened. The cloned controls now have their own ids, and the clone is removed before being re-added so reopening the editor cannot put duplicate ids back into the document.
 - The duplicate-slot guard when saving the configuration compared a slot number against an array of objects, so it never matched and did nothing.

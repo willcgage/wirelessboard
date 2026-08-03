@@ -815,6 +815,12 @@
         <div class="col col-md-3 col-12 cfg-row-form">
           <label class="form-label text-light small">Device Name</label>
           <input type="text" class="form-control cfg-device-name" placeholder="Detected device name" readonly tabindex="-1">
+          <label class="form-label text-light small mt-2">Slot ID</label>
+          <!-- extended_id: the position this slot answers to, e.g. "Vocal 1".
+               PCO matches against it, and the assignment table writes it when
+               "Remember each person's position" is used. It had no field here,
+               which is why Clear IDs was wired to the IP address instead. -->
+          <input type="text" class="form-control cfg-id" placeholder="Position, e.g. Vocal 1">
           <label class="form-label text-light small mt-2">Extended Name</label>
           <input type="text" class="form-control cfg-name" placeholder="Extended name (used by PCO)">
         </div>
