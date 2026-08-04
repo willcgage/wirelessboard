@@ -2,12 +2,28 @@
 
 ## [Unreleased]
 ### Added
-- **The slot and group editors are reachable with a mouse.** Both could only ever be opened from the keyboard, with **n** and **e**. `app.js` has always carried click handlers for `go-extended` and `go-groupedit` — written in the same guarded style as the menu entries that do exist, and doing slightly more than the shortcuts do, closing the HUD and resetting the view — but neither id has ever appeared in the markup, so the handlers were dead and anyone on a touchscreen or without a keyboard was locked out of both editors. They are now **Edit Slot Names** and **Edit This Group** in the Menu. *Edit This Group* is shown only while a group is being viewed, since editing one is meaningless in the combined view.
-- **The Hide inactive charts checkbox is back.** The setting was fully implemented on every side — the sidebar carried its *Hide inactive charts* label, `channelview.js` honoured `hide_charts` when drawing a group, and the group API persisted it — but the `<input type="checkbox" id="chartCheck">` itself was missing, leaving an empty Bootstrap addon where it belonged. The gap dates from the original import, and it was also what made `updateEditor` throw (see *Fixed*). Restoring the one input makes a per-group setting reachable that until now could only be changed by editing `config.json` by hand.
-- **A Slot ID field on the configuration page.** `extended_id` is the position a slot answers to — `Vocal 1`, `Band 2` — and it is what PCO matches a plan's positions against, but the configuration editor had no field for it: IP, type, channel, device name and extended name, and nothing for the position. Until now it could only be set indirectly, by assigning a person in the slot editor with *Remember each person's position* enabled. It is now editable directly, beside the name it belongs with.
+- _Nothing yet._
 
 ### Changed
 - _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.6.1] - 2026-08-04
+A repair release. Two faults in here slowed down or froze every installation,
+not just one machine, and several more were destructive in the configuration
+editor — *Clear IDs* erased every receiver's address. The group editor turns
+out never to have opened at all.
+
+Most of this came from reading a log captured on a Mac that was behaving
+badly, and from going through the configuration UI properly for the first
+time since the application was imported from micboard.
+
+### Added
+- **The slot and group editors are reachable with a mouse.** Both could only ever be opened from the keyboard, with **n** and **e**. `app.js` has always carried click handlers for `go-extended` and `go-groupedit` — written in the same guarded style as the menu entries that do exist, and doing slightly more than the shortcuts do, closing the HUD and resetting the view — but neither id has ever appeared in the markup, so the handlers were dead and anyone on a touchscreen or without a keyboard was locked out of both editors. They are now **Edit Slot Names** and **Edit This Group** in the Menu. *Edit This Group* is shown only while a group is being viewed, since editing one is meaningless in the combined view.
+- **The Hide inactive charts checkbox is back.** The setting was fully implemented on every side — the sidebar carried its *Hide inactive charts* label, `channelview.js` honoured `hide_charts` when drawing a group, and the group API persisted it — but the `<input type="checkbox" id="chartCheck">` itself was missing, leaving an empty Bootstrap addon where it belonged. The gap dates from the original import, and it was also what made `updateEditor` throw (see *Fixed*). Restoring the one input makes a per-group setting reachable that until now could only be changed by editing `config.json` by hand.
+- **A Slot ID field on the configuration page.** `extended_id` is the position a slot answers to — `Vocal 1`, `Band 2` — and it is what PCO matches a plan's positions against, but the configuration editor had no field for it: IP, type, channel, device name and extended name, and nothing for the position. Until now it could only be set indirectly, by assigning a person in the slot editor with *Remember each person's position* enabled. It is now editable directly, beside the name it belongs with.
 
 ### Fixed
 - **Saving the configuration froze the whole application until it finished.** Applying a configuration tears every receiver down, waits for the old connections to go, then reconnects — seconds of unavoidable waiting, and all of it ran on the event loop, so every other request queued behind it. Measured before: a save took 2.2 s and the worst concurrent `/data.json` also took 2.2 s, having waited out the entire save. After: the same save, and the worst concurrent request took 6 ms. On the machine that prompted this the save took **12 seconds**, and the board was frozen for all twelve. The waiting itself is deliberate and has been left alone — the old sockets are dropped rather than closed, so the pause is what lets them go away before the same receivers are dialled again, and removing it risks a save that leaves receivers unreachable.
