@@ -425,7 +425,7 @@ class ConfigHandler(web.RequestHandler):
         }
         self.write(json.dumps(response))
 
-    def post(self):
+    async def post(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
 
@@ -436,8 +436,17 @@ class ConfigHandler(web.RequestHandler):
             self.write(json.dumps({'ok': False, 'error': 'Invalid JSON payload'}))
             return
 
+        # Closing the sockets touches Tornado's own objects, so it stays on the
+        # IOLoop; reconfig must not do it from the worker thread.
+        SocketHandler.close_all_ws()
+
         try:
-            config.reconfig(payload)
+            # reconfig tears every receiver down, waits for the old connections
+            # to go away, then reconnects -- seconds of unavoidable waiting, and
+            # on the IOLoop it froze the whole server for all of it (12s in one
+            # captured log). Nothing in it touches Tornado state once the
+            # websockets are closed above, so it belongs on a worker thread.
+            await ioloop.IOLoop.current().run_in_executor(None, config.reconfig, payload)
         except Exception as exc:
             logger.exception('Failed to apply configuration update')
             self.set_status(500)

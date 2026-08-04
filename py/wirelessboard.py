@@ -30,6 +30,17 @@ def main():
     discover_t.start()
     rxparse_t.start()
 
+    # Wait here rather than returning. The threads above are non-daemon, so the
+    # process stayed alive either way -- but a main thread that finishes runs
+    # the handlers registered with threading._register_atexit, one of which is
+    # concurrent.futures' own. That sets a module-global shutdown flag, and
+    # every thread pool in the process refuses work from then on with
+    # "cannot schedule new futures after interpreter shutdown" -- including the
+    # executor the config save now hands its slow work to. Signals are also
+    # delivered to the main thread, so keeping it alive is what lets Ctrl-C be
+    # noticed at all.
+    web_t.join()
+
 
 if __name__ == '__main__':
     main()

@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import shure
 import offline
-import tornado_server
 
 from logging_utils import (
     LOG_FILENAME,
@@ -825,14 +824,19 @@ def config_mix(slots):
 
 
 def reconfig(payload):
+    """Apply a configuration change and rebuild every device.
+
+    Runs on a worker thread, not the IOLoop -- it sleeps, and it opens a socket
+    per receiver, so on the loop it froze every other request for as long as
+    that took. The caller closes the websockets beforehand, because that
+    touches Tornado's own objects and has to happen on the loop.
+    """
     if isinstance(payload, dict):
         slots = payload.get('slots', [])
         discovery_payload = payload.get('discovery')
     else:
         slots = payload
         discovery_payload = None
-
-    tornado_server.SocketHandler.close_all_ws()
 
     if discovery_payload is not None:
         normalized = normalize_discovery_settings(discovery_payload)
@@ -857,6 +861,13 @@ def reconfig(payload):
     del shure.NetworkDevices[:]
     del offline.OfflineDevices[:]
 
+    # Deliberate, and not safe to simply delete. socket_disconnect is commented
+    # out above, so the old sockets are dropped rather than closed; this gives
+    # the reader thread its ~0.2s select cycles to stop touching them and the OS
+    # time to tear the connections down before the loop below dials the same
+    # receivers again. Removing it risks a save that leaves receivers
+    # unreachable -- during a service, which is when saves happen. Now that this
+    # runs off the IOLoop the wait costs only this thread.
     time.sleep(2)
 
     config()
