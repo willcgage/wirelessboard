@@ -218,6 +218,27 @@ function setDiscoveryStatus(message, level = 'info') {
   statusEl.classList.add(cls);
 }
 
+// The discovery status line sits with the discovery settings, well above the
+// Save button and easily off screen. Anything about the save itself belongs
+// next to the button that caused it.
+function setConfigSaveStatus(message, level = 'info') {
+  const statusEl = document.getElementById('config-save-status');
+  if (!statusEl) return;
+
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('text-muted', 'text-success', 'text-danger', 'text-warning', 'text-info');
+
+  if (level === 'success') {
+    statusEl.classList.add('text-success');
+  } else if (level === 'error') {
+    statusEl.classList.add('text-danger');
+  } else if (level === 'warn') {
+    statusEl.classList.add('text-warning');
+  } else {
+    statusEl.classList.add('text-muted');
+  }
+}
+
 function renderDiscoveryEnvironmentStatus(status) {
   const alert = document.getElementById('dcid-warning');
   if (!alert) return;
@@ -1175,10 +1196,15 @@ function downloadLogsAsJson() {
   }
 }
 
+// Returns the slots to save alongside the rows that could not be saved, so the
+// caller can say so. Dropping them quietly behind a "saved" message meant an
+// operator could fill in a receiver, press Save, and watch the row disappear
+// having been told it worked.
 function collectSlotConfiguration() {
   const slotList = [];
+  const incomplete = [];
   const holder = document.getElementById('editor_holder');
-  if (!holder) return slotList;
+  if (!holder) return { slots: slotList, incomplete };
   const configBoard = holder.getElementsByClassName('cfg-row');
 
   for (let i = 0; i < configBoard.length; i += 1) {
@@ -1216,7 +1242,14 @@ function collectSlotConfiguration() {
       }
 
       if (!finalType) {
-        // Skip rows that still lack a resolvable type
+        // A row with nothing in it is just an unused blank from Add Row, so it
+        // is dropped without comment. One the operator actually typed into is
+        // reported instead -- that is data about to go missing.
+        if (ipVal || nameVal || idVal) {
+          incomplete.push({
+            slot, ip: ipVal, name: nameVal, id: idVal,
+          });
+        }
         continue;
       }
 
@@ -1242,13 +1275,13 @@ function collectSlotConfiguration() {
       slotList.push(output);
     }
   }
-  return slotList;
+  return { slots: slotList, incomplete };
 }
 
 function generateJSONConfig() {
-  const slots = collectSlotConfiguration();
+  const { slots, incomplete } = collectSlotConfiguration();
   const discovery = collectDiscoverySettingsFromForm();
-  return { slots, discovery };
+  return { slots, discovery, incomplete };
 }
 
 function addAllDiscoveredDevices() {
@@ -2393,8 +2426,25 @@ export function initConfigEditor(force = false) {
   const saveBtn = document.getElementById('save');
   if (saveBtn) {
     saveBtn.addEventListener('click', () => {
-      const data = generateJSONConfig();
+      const { incomplete, ...data } = generateJSONConfig();
+
+      // Saving reloads the page, so a warning afterwards would be wiped along
+      // with the rows it was about. Stop here instead and let the operator
+      // finish them -- nothing is written, so nothing is lost either way.
+      if (incomplete.length) {
+        const described = incomplete.map((row) => {
+          const detail = row.ip || row.name || row.id;
+          return detail ? `slot ${row.slot} (${detail})` : `slot ${row.slot}`;
+        }).join(', ');
+        setConfigSaveStatus(
+          `Nothing was saved. Choose a device type for ${described}, or clear the row to discard it.`,
+          'error',
+        );
+        return;
+      }
+
       const url = 'api/config';
+      setConfigSaveStatus('Saving…', 'info');
       setDiscoveryStatus('Saving discovery settings…', 'info');
       postJSON(url, data, (resp) => {
         if (resp && typeof resp === 'object') {
@@ -2415,6 +2465,7 @@ export function initConfigEditor(force = false) {
         invokeUpdateHash();
         window.location.reload();
       }, (err) => {
+        setConfigSaveStatus(`Failed to save: ${formatError(err)}`, 'error');
         setDiscoveryStatus(`Failed to save discovery settings: ${formatError(err)}`, 'error');
       });
     });
