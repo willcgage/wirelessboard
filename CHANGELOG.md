@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **Tests for the slot save rules.** Every fault fixed in 1.6.1 that lost data silently — a group dropping slots that were off screen, a configuration row discarded for want of a device type — was found by hand in a browser, and nothing stopped it coming back. The decisions behind both now live in `js/slot-rules.mjs`, which reads no DOM and imports nothing, and are covered by 17 tests: 31 JavaScript tests in total, up from 14. The cases are the faults themselves, including the counter-case that a slot genuinely dragged out of a group must still be removed — without it the fix for the first fault would make removal impossible. (#43)
 
 ### Changed
 - _Nothing yet._

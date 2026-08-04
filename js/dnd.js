@@ -5,53 +5,29 @@ import { initChart, charts } from './chart-smoothie.js';
 import { renderDisplayList, updateViewOnly } from './channelview.js';
 import { postJSON } from './data.js';
 import { toggleDisplayMode } from './display.js';
+import { mergeUnrenderedSlots, readSlotOrder } from './slot-rules.mjs';
 
 let swappable;
 
+// Reads the board; the ordering rules themselves live in slot-rules.mjs so they
+// can be tested without one.
 function slotOrder() {
-  const slotList = [];
   const currentBoard = document.getElementById('micboard').getElementsByClassName('col-sm');
 
-  for (let i = 0; i < currentBoard.length; i += 1) {
-    const slot = parseInt(currentBoard[i].id.replace(/[^\d.]/g, ''), 10);
-    if (slot && (slotList.indexOf(slot) === -1)) {
-      slotList.push(slot);
-    } else if (currentBoard[i].classList.contains('blank')) {
-      slotList.push(0);
-    }
-  }
-
-  return slotList;
+  return readSlotOrder(Array.from(currentBoard).map((el) => ({
+    id: el.id,
+    blank: el.classList.contains('blank'),
+  })));
 }
 
-// slotOrder reads the board, and the board only shows slots that have a
-// transmitter -- so a slot whose transmitter has not arrived yet is missing
-// from the order and saving the group dropped it for good. Its own entry in
-// `slots` survived, so the loss was silent: the slot simply stopped belonging
-// to the group. Put those back.
-//
-// A slot the operator genuinely dragged out is not affected: to be dragged it
-// had to be rendered, which means it has a transmitter. Having no transmitter
-// is exactly what separates "never shown" from "deliberately removed".
 function withUnrenderedSlots(ordered) {
   const stored = micboard.groups[micboard.group];
 
-  if (!stored || !stored.slots) {
-    return ordered;
-  }
-
-  const merged = ordered.slice();
-
-  stored.slots.forEach((slot, index) => {
-    // 0 is a blank spacer, positional rather than a slot, and the board is
-    // already the authority on where those sit.
-    if (slot === 0 || merged.indexOf(slot) !== -1 || micboard.transmitters[slot]) {
-      return;
-    }
-    merged.splice(Math.min(index, merged.length), 0, slot);
-  });
-
-  return merged;
+  return mergeUnrenderedSlots(
+    ordered,
+    stored && stored.slots,
+    (slot) => Boolean(micboard.transmitters[slot]),
+  );
 }
 
 function renderEditSlots(dl) {

@@ -43,7 +43,9 @@ export default [
   ...configs.base.recommended,
 
   {
-    files: ['js/**/*.js'],
+    // .mjs is included so the dependency-free rule modules and their tests are
+    // held to the same standard as the rest of js/.
+    files: ['js/**/*.js', 'js/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2021,
       sourceType: 'module',
@@ -88,7 +90,10 @@ export default [
 
       // This codebase writes explicit .js extensions on relative imports, which
       // is correct for ESM; airbnb's extensionless default is the odd one out.
-      'import-x/extensions': ['error', 'ignorePackages', { js: 'always' }],
+      // .mjs is likewise always written: the package is CommonJS by default, so
+      // the extension is what tells Node the file is a module, and dropping it
+      // would stop the rule modules resolving under `node --test`.
+      'import-x/extensions': ['error', 'ignorePackages', { js: 'always', mjs: 'always' }],
 
       // Empty catch blocks are the established idiom here for optional Bootstrap
       // calls that throw when an element is absent. Other empty blocks still error.

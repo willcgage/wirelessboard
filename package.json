@@ -32,7 +32,7 @@
     "version": "node scripts/sync-version.js",
     "pack": "electron-builder --config electron-builder.yml",
     "static": "python -m http.server 8058",
-    "test:js": "node --test \"electron/**/*.test.js\""
+    "test:js": "node --test \"electron/**/*.test.js\" \"js/**/*.test.mjs\""
   },
   "private": true,
   "license": "MIT",

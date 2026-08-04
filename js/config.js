@@ -1,6 +1,7 @@
 import { Collapse } from 'bootstrap';
 
 import { postJSON } from './data.js';
+import { resolveSlotType } from './slot-rules.mjs';
 
 const noop = () => {};
 
@@ -1223,29 +1224,17 @@ function collectSlotConfiguration() {
       const idField = configBoard[i].querySelector('.cfg-id');
       const idVal = idField ? String(idField.value || '').trim() : '';
 
-      // Decide type: if a known network device type, require IP+Channel; otherwise default to offline when any meaningful data exists
-      let finalType = typeVal;
-      if (!finalType) {
-        // If user provided a name but no type, treat as offline to persist the entry
-        if (nameVal && !ipVal) {
-          finalType = 'offline';
-        } else if (!nameVal && !ipVal) {
-          // Completely empty row — skip
-          finalType = '';
-        } else if (!nameVal && ipVal) {
-          // IP without type — leave incomplete, skip; user must choose a type
-          finalType = '';
-        } else if (nameVal && ipVal) {
-          // Both name and IP but no type — safest is to skip until type chosen
-          finalType = '';
-        }
-      }
+      // The rules themselves live in slot-rules.mjs, away from the DOM reading,
+      // so they can be tested directly.
+      const resolved = resolveSlotType({
+        type: typeVal, ip: ipVal, name: nameVal, id: idVal,
+      });
 
-      if (!finalType) {
+      if (!resolved.type) {
         // A row with nothing in it is just an unused blank from Add Row, so it
         // is dropped without comment. One the operator actually typed into is
         // reported instead -- that is data about to go missing.
-        if (ipVal || nameVal || idVal) {
+        if (resolved.incomplete) {
           incomplete.push({
             slot, ip: ipVal, name: nameVal, id: idVal,
           });
@@ -1253,7 +1242,7 @@ function collectSlotConfiguration() {
         continue;
       }
 
-      output.type = finalType;
+      output.type = resolved.type;
 
       if (NET_DEVICE_TYPES.indexOf(output.type) > -1) {
         // Only include IP/Channel for networked device types
