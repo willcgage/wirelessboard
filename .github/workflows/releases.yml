@@ -55,13 +55,19 @@ jobs:
     needs: test
     strategy:
       fail-fast: false
-      # One at a time, deliberately. Each job publishes with `--publish always`,
-      # and electron-builder creates the draft release if it cannot find one for
-      # the tag. Run in parallel, both jobs look, both find nothing, and both
-      # create one -- 1.6.0 produced two drafts created in the same second with
-      # the assets split across them, including a Windows blockmap that landed
-      # in the macOS release. Serialising costs wall-clock but not billable
-      # minutes, since the total runner time is unchanged.
+      # One at a time. This was added to stop two drafts being created per
+      # release and it does NOT achieve that -- see #45. 1.6.1 serialised
+      # correctly (macOS 03:10-03:17, Windows 03:17-03:21, no overlap) and still
+      # produced two drafts with the assets split across them, a macOS blockmap
+      # landing in the Windows one. The cause is not a race between jobs:
+      # GitHub's get-release-by-tag endpoint does not return drafts, so the
+      # second job cannot see the first job's release however long it waits, and
+      # `--publish always` makes another. The fix is to build with
+      # `--publish never` and have a single job create the release from the
+      # artifacts both jobs already upload.
+      #
+      # Kept meanwhile: serialising costs wall-clock but not billable minutes,
+      # since total runner time is unchanged.
       max-parallel: 1
       matrix:
         include:
