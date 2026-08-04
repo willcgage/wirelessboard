@@ -34,12 +34,16 @@ function infoToggle() {
     });
   });
 
-  // No element carries this id any more, so both branches threw and took
-  // infoToggle -- and every caller of it, including the slot editor -- down
-  // with them. app.js already null-checks the same id before binding to it.
+  // Editing a group only means something while one is being viewed, so this
+  // entry is hidden in the combined view. Hide the whole dropdown item rather
+  // than just the link, or the menu keeps a blank row where it used to sit.
+  // Still null-checked: nothing carried this id before it was added to the
+  // menu, and both branches threw, taking infoToggle and all of its callers
+  // down with them.
   const groupEdit = document.getElementById('go-groupedit');
   if (groupEdit) {
-    groupEdit.style.display = micboard.group === 0 ? 'none' : 'block';
+    const item = groupEdit.closest('li') || groupEdit;
+    item.style.display = micboard.group === 0 ? 'none' : 'block';
   }
 }
 

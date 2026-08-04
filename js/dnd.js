@@ -24,6 +24,36 @@ function slotOrder() {
   return slotList;
 }
 
+// slotOrder reads the board, and the board only shows slots that have a
+// transmitter -- so a slot whose transmitter has not arrived yet is missing
+// from the order and saving the group dropped it for good. Its own entry in
+// `slots` survived, so the loss was silent: the slot simply stopped belonging
+// to the group. Put those back.
+//
+// A slot the operator genuinely dragged out is not affected: to be dragged it
+// had to be rendered, which means it has a transmitter. Having no transmitter
+// is exactly what separates "never shown" from "deliberately removed".
+function withUnrenderedSlots(ordered) {
+  const stored = micboard.groups[micboard.group];
+
+  if (!stored || !stored.slots) {
+    return ordered;
+  }
+
+  const merged = ordered.slice();
+
+  stored.slots.forEach((slot, index) => {
+    // 0 is a blank spacer, positional rather than a slot, and the board is
+    // already the authority on where those sit.
+    if (slot === 0 || merged.indexOf(slot) !== -1 || micboard.transmitters[slot]) {
+      return;
+    }
+    merged.splice(Math.min(index, merged.length), 0, slot);
+  });
+
+  return merged;
+}
+
 function renderEditSlots(dl) {
   document.getElementById('eslotlist').innerHTML = '';
 
@@ -167,7 +197,7 @@ function submitSlotUpdate() {
     hide_charts: chartCheckBox
       ? chartCheckBox.checked
       : Boolean(currentGroup && currentGroup.hide_charts),
-    slots: slotOrder(),
+    slots: withUnrenderedSlots(slotOrder()),
   };
 
   postJSON(url, update);
