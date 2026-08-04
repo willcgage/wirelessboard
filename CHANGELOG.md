@@ -2,13 +2,20 @@
 
 ## [Unreleased]
 ### Added
+- **The Hide inactive charts checkbox is back.** The setting was fully implemented on every side — the sidebar carried its *Hide inactive charts* label, `channelview.js` honoured `hide_charts` when drawing a group, and the group API persisted it — but the `<input type="checkbox" id="chartCheck">` itself was missing, leaving an empty Bootstrap addon where it belonged. The gap dates from the original import, and it was also what made `updateEditor` throw (see *Fixed*). Restoring the one input makes a per-group setting reachable that until now could only be changed by editing `config.json` by hand.
 - **A Slot ID field on the configuration page.** `extended_id` is the position a slot answers to — `Vocal 1`, `Band 2` — and it is what PCO matches a plan's positions against, but the configuration editor had no field for it: IP, type, channel, device name and extended name, and nothing for the position. Until now it could only be set indirectly, by assigning a person in the slot editor with *Remember each person's position* enabled. It is now editable directly, beside the name it belongs with.
 
 ### Changed
 - _Nothing yet._
 
 ### Fixed
-- **The group and slot editors could not be opened at all.** `updateEditor` set `.checked` on an element with id `chartCheck`, and no such control has ever existed in the markup — it came across with the original import and was never rendered. `renderGroup` calls `updateEditor` on every single invocation, so the call threw every time, after the board itself had drawn but before anything the caller meant to do afterwards. Pressing **n** left the slot editor unopened and pressing **e** left the sidebar showing the static placeholder *Group 4* rather than the group being edited. Both editors now open. The control's absence no longer resets a group's `hide_charts` on save either: with nothing to read, the group's stored value stands instead of silently becoming `false`.
+- **The group editor sidebar never appeared, and the slot editor never opened.** Three independent faults, all dating from the original import, stacked on top of one another.
+
+  `updateEditor` set `.checked` on an element with id `chartCheck` that was not in the markup, and `renderGroup` calls `updateEditor` on *every* invocation — so it threw every time, after the board itself had drawn but before anything the caller meant to do next. Pressing **n** never opened the slot editor, and pressing **e** left the sidebar heading on its hard-coded placeholder *Group 4* instead of the group being edited.
+
+  `groupEditToggle` then added the `sidebar-open` class to `document.getElementsByClassName('container-fluid')[0]`. The navbar carries that class too and comes first in document order, so the class landed on an element the sidebar is not inside — and the rule that reveals it, `.sidebar-open .sidebar-nav`, needs an ancestor. The sidebar stayed `display: none` no matter what. It is now addressed by id, as every other module already did.
+
+  Both editors now open, and the sidebar renders.
 - A second dead id, `go-groupedit`, was dereferenced unguarded in `infoToggle`, taking down every caller of it the same way. `app.js` already null-checks that id; the two remaining sites now do too.
 - **The slot editor crashed when a transmitter and the configuration disagreed.** Each list can briefly hold a slot the other does not — a configured slot has no transmitter until the next data push builds one, and a transmitter can outlive its entry in the configuration — and both were indexed without a guard, so the gap threw and took the editor down with it. Each side is now skipped when its counterpart is missing, matching what `renderDisplayList` already did.
 - **Clear IDs on the configuration page wiped every receiver's IP address.** The button was wired to `.cfg-ip`, so pressing the control labelled *Clear IDs* emptied the address column and disconnected every configured receiver — the field it was meant to clear, the slot's position, had no input on that page at all (see *Added*). It now clears the Slot ID and leaves the addresses untouched.

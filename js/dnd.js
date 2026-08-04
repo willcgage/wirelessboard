@@ -136,7 +136,11 @@ function GridLayout() {
 }
 
 export function groupEditToggle() {
-  const container = document.getElementsByClassName('container-fluid')[0];
+  // The navbar carries container-fluid too and comes first in document order,
+  // so [0] put sidebar-open on an element the sidebar is not inside -- and the
+  // rule that reveals it, `.sidebar-open .sidebar-nav`, needs an ancestor.
+  // Every other module already addresses this element by id.
+  const container = document.getElementById('container');
   if (container.classList.contains('sidebar-open')) {
     container.classList.remove('sidebar-open');
     swappable.destroy();
