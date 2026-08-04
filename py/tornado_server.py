@@ -4,6 +4,7 @@ import asyncio
 import socket
 import logging
 import sys
+import time
 from typing import Any, cast, Iterable
 
 import tornado.websocket as websocket
@@ -34,16 +35,51 @@ def file_list(extension):
             files.append(file)
     return files
 
-# Its not efficecent to get the IP each time, but for now we'll assume server might have dynamic IP
+# Resolved lazily and cached as (url, monotonic deadline).
+_LOCAL_URL_CACHE = None
+_LOCAL_URL_TTL_SECONDS = 60
+
+
 def localURL():
+    """Best-effort http://<local ip>:<port> for the QR code.
+
+    gethostbyname on the host's own name is a blocking resolver call, and this
+    runs inside /data.json, which every open board requests every five seconds.
+    Where that name does not resolve the call does not fail fast -- it spends
+    the full resolver timeout, and since the handler is synchronous it spends
+    it holding the IOLoop, so every other request queues behind it. A floor of
+    just over 5000ms on every /data.json, with the backlog climbing past 100s,
+    is what that looks like from the outside.
+
+    The address is still re-resolved periodically, which was the point of doing
+    it per request, but a slow or failing lookup now costs that once a minute
+    rather than once per request. Failures are cached too: a lookup that times
+    out is the expensive case and the one most worth not repeating.
+    """
+    global _LOCAL_URL_CACHE
+
     if 'local_url' in config.config_tree:
         return config.config_tree['local_url']
+
+    if _LOCAL_URL_CACHE is not None and time.monotonic() < _LOCAL_URL_CACHE[1]:
+        return _LOCAL_URL_CACHE[0]
+
+    started = time.monotonic()
     try:
         ip = socket.gethostbyname(socket.gethostname())
-        return 'http://{}:{}'.format(ip, config.config_tree['port'])
+        url = 'http://{}:{}'.format(ip, config.config_tree['port'])
     except OSError:
         logger.debug('Unable to resolve local IP for the QR code URL', exc_info=True)
-        return 'https://github.com/willcgage/wirelessboard'
+        url = 'https://github.com/willcgage/wirelessboard'
+
+    elapsed = time.monotonic() - started
+    if elapsed > 1:
+        logger.warning(
+            'Resolving this host took %.1fs, and every request waits while it runs. '
+            'Set "local_url" in config.json to skip the lookup entirely.', elapsed)
+
+    _LOCAL_URL_CACHE = (url, time.monotonic() + _LOCAL_URL_TTL_SECONDS)
+    return url
 
 def wirelessboard_json(network_devices):
     offline_devices = offline.offline_json()

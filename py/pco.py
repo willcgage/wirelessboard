@@ -236,16 +236,45 @@ def _apply_assignments(resolved: List[Dict[str, Any]], options: Dict[str, Any]) 
 BASE_URL = 'https://api.planningcenteronline.com/services/v2'
 
 
+# Status of the most recent failed request, so a caller that only receives None
+# can still say why it failed. These calls are serialized on the IOLoop, so
+# there is no interleaving to account for.
+_LAST_HTTP_ERROR: Optional[int] = None
+
+
 def _http_get(url: str, headers: Dict[str, str], params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    global _LAST_HTTP_ERROR
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=10)
         if resp.status_code != 200:
+            _LAST_HTTP_ERROR = resp.status_code
             logger.warning('PCO GET %s failed: %s %s', url, resp.status_code, resp.text[:200])
             return None
+        _LAST_HTTP_ERROR = None
         return resp.json()
     except Exception as exc:
+        _LAST_HTTP_ERROR = None
         logger.warning('PCO request error: %s', exc)
         return None
+
+
+def _fetch_error(default: str) -> str:
+    """Explain the last failure rather than only reporting that there was one.
+
+    A rejected token and an unreachable API both surfaced as the same "Unable to
+    fetch..." string, so telling them apart meant reading the server log.
+    """
+    status = _LAST_HTTP_ERROR
+    if status in (401, 403):
+        return (
+            'Planning Center rejected these credentials ({}). PCO credentials are kept '
+            'in this computer\'s system keyring rather than in config.json, so a token '
+            'entered on another machine does not carry across -- re-enter the PAT here. '
+            'If it was entered on this machine, check it has not been revoked in PCO.'
+        ).format(status)
+    if status is not None:
+        return '{} (Planning Center returned {})'.format(default, status)
+    return default
 
 
 def _http_get_collection(url: str, headers: Dict[str, str], params: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -315,7 +344,7 @@ def list_service_types() -> Dict[str, Any]:
     headers = { 'Authorization': _basic_auth_header(auth['token'], auth['secret']) }
     data = _http_get(f"{BASE_URL}/service_types", headers, params={"per_page": 200})
     if not data:
-        return {"ok": False, "error": "Unable to fetch service types"}
+        return {"ok": False, "error": _fetch_error("Unable to fetch service types")}
     services = []
     for item in (data.get('data') or []):
         attrs = item.get('attributes') or {}
@@ -344,7 +373,7 @@ def list_plans_for_service(service_type_value) -> Dict[str, Any]:
     url = f"{BASE_URL}/service_types/{stid}/plans"
     data = _http_get(url, headers, params={"filter": "future", "per_page": 25, "order": "sort_date"})
     if not data:
-        return {"ok": False, "error": "Unable to fetch plans"}
+        return {"ok": False, "error": _fetch_error("Unable to fetch plans")}
     plans = []
     for item in (data.get('data') or []):
         attrs = item.get('attributes') or {}
@@ -372,7 +401,7 @@ def list_plans() -> Dict[str, Any]:
 
     st_data = _http_get(f"{BASE_URL}/service_types", headers, params={"per_page": 200})
     if not st_data:
-        return {"ok": False, "error": "Unable to fetch service types"}
+        return {"ok": False, "error": _fetch_error("Unable to fetch service types")}
     out: List[Dict[str, Any]] = []
     for item in (st_data.get('data') or []):
         stid = item.get('id')
@@ -429,7 +458,7 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
         # Try generic, then robust fallback across all service types
         plan_people = _get_plan_people_any(plan_id, headers)
     if not plan_people:
-        return {"ok": False, "error": "Unable to fetch plan people"}
+        return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
 
     included_maps = _build_included_maps(plan_people.get('included') or [])
     # Keyed by (name, team, position), not by name. One person can be scheduled
@@ -599,7 +628,7 @@ def list_teams_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]
     if not plan_people:
         plan_people = _get_plan_people_any(plan_id, headers)
     if not plan_people:
-        return {"ok": False, "error": "Unable to fetch plan people"}
+        return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
 
     included_maps = _build_included_maps(plan_people.get('included') or [])
     members: Dict[str, set] = {}
@@ -1097,7 +1126,7 @@ def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False)
 
     plan_people = _fetch_plan_people(stid, plan_id, headers)
     if not plan_people:
-        return {"ok": False, "error": "Unable to fetch plan people"}
+        return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
 
     people = _dedupe_people(_flatten_plan_people(plan_people, category, team_filters))
     resolved, unmatched = resolve_assignments(people, options)
