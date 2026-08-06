@@ -1,0 +1,60 @@
+name: CI
+
+# The test suite ran only on a release tag, so a pull request could be merged
+# on the strength of the version-sync check alone -- the one check that did run
+# compares two version strings and knows nothing about the code. #46, #47 and
+# #48 all merged that way, and the tests they added did not run in CI until
+# afterwards, on the tag.
+#
+# Deliberately the *same* job releases.yml gates on, called rather than copied.
+# A CI job that has drifted from the release gate is worse than no CI job at
+# all, because it reports green on something other than what ships.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_call:
+
+# Superseding a pull request run is safe and saves a fair amount of time when a
+# branch is pushed repeatedly. Release runs are never cancelled: this is also
+# the release gate, and cancelling it would fail the packaging jobs behind it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Lint, Test, and Build Assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r py/requirements.txt
+          python -m pip install pytest
+      - name: Lint JavaScript
+        run: npm run lint
+        continue-on-error: true
+      - name: Build frontend bundle
+        run: npm run build
+      - name: Check Python sources compile
+        run: python -m compileall py
+      - name: Run Python tests
+        run: python -m pytest py/tests -q
+        # node:test ships with Node 22, so the main-process logic is covered
+        # without adding a test framework. It is pure by construction -- no
+        # electron import, network injected -- precisely so it can run here.
+      - name: Run JavaScript tests
+        run: npm run test:js
