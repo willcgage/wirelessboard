@@ -2,13 +2,31 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.8.0] - 2026-08-06
+Two changes to how Wirelessboard reaches you, rather than to what it does
+once it is running.
+
+Updating no longer means noticing a line of text in a menu and going to a
+web browser to do it by hand — the application asks, and installs it for you
+if you say yes. And a release is now a single release with everything in it,
+which it had not been: every version until this one produced two of them,
+with the installers split between them and neither carrying any notes.
+
+Both are first exercised by this release itself.
+
+### Added
 - **Updates can be installed from the application.** Until now the only sign that a new version existed was a line of text inside the tray menu, which nobody sees unless they open it, and following it opened a browser to download and install by hand. A window now appears when an update is available and stays there until it is answered — *Download and Install* fetches it, stops the board, and hands over to the installer, which brings the board back up on the new version. Nothing downloads or installs on its own: this application runs during live services, and an update that helped itself to the moment could take a board down mid-service, so the decision stays where it was. What changed is that the offer is no longer buried. Saying *Not now* silences that particular version — the next release asks again — while the tray goes on reporting it, because declining a prompt is not the same as wanting to forget it exists. (#52)
 
 ### Changed
 - **A release is now one release, with its notes already written.** Each platform's packaging job used to publish its own, so every version produced two draft releases with the installers split between them and both bodies empty — they had to be consolidated and written up by hand before anyone could download anything. The platforms now only build, and a single job assembles the release from what they produce, taking the notes from this changelog. It refuses to create a release whose update manifests name a file that is not in it, which is the fault that made the split dangerous rather than merely untidy. (#45)
-
-### Fixed
-- _Nothing yet._
 
 ## [1.7.0] - 2026-08-05
 A release about the configuration file surviving.
