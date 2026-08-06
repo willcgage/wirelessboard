@@ -5,7 +5,7 @@
 - _Nothing yet._
 
 ### Changed
-- _Nothing yet._
+- **A release is now one release, with its notes already written.** Each platform's packaging job used to publish its own, so every version produced two draft releases with the installers split between them and both bodies empty — they had to be consolidated and written up by hand before anyone could download anything. The platforms now only build, and a single job assembles the release from what they produce, taking the notes from this changelog. It refuses to create a release whose update manifests name a file that is not in it, which is the fault that made the split dangerous rather than merely untidy. (#45)
 
 ### Fixed
 - _Nothing yet._
