@@ -2,6 +2,7 @@ import { Collapse } from 'bootstrap';
 
 import { postJSON } from './data.js';
 import { resolveSlotType } from './slot-rules.mjs';
+import { discoveryHint } from './discovery-hint.mjs';
 
 const noop = () => {};
 
@@ -453,13 +454,64 @@ function collectDiscoverySettingsFromForm() {
 }
 
 // Render the discovered device list in the config editor
+// An empty list used to render as blank space under the "Discovered Devices"
+// heading, which told an operator whose receivers were missing nothing at all --
+// not even whether a scan had run. The wording rules are in discovery-hint.mjs
+// so they can be tested without a DOM.
+function renderDiscoveryHint(container) {
+  const hint = discoveryHint({
+    scan: micboard.discovery_scan,
+    config: (micboard.config && micboard.config.discovery) || null,
+    deviceCount: 0,
+  });
+  if (!hint) return;
+
+  const box = document.createElement('div');
+  box.id = 'discovery-empty-hint';
+  box.className = 'alert alert-secondary small';
+  box.setAttribute('role', 'status');
+
+  const title = document.createElement('strong');
+  title.textContent = hint.title;
+  box.appendChild(title);
+
+  hint.body.forEach((line) => {
+    const p = document.createElement('p');
+    p.className = 'mb-1 mt-2';
+    p.textContent = line;
+    box.appendChild(p);
+  });
+
+  // Only when there is somewhere to send them. The field is in the panel above
+  // and easy to scroll past, so the hint moves the page to it rather than just
+  // naming it.
+  if (hint.showManualHint) {
+    const jump = document.createElement('button');
+    jump.type = 'button';
+    jump.className = 'btn btn-sm btn-outline-secondary mt-2';
+    jump.textContent = 'Add a manual CIDR range';
+    jump.addEventListener('click', () => {
+      const field = document.getElementById('discovery-subnets');
+      if (!field) return;
+      field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      field.focus();
+    });
+    box.appendChild(jump);
+  }
+
+  container.appendChild(box);
+}
+
 function renderDiscoveredDeviceList() {
   const discoveredList = document.getElementById('discovered_list');
   if (!discoveredList) return;
   renderDiscoveryEnvironmentStatus(micboard.discovery_status);
   discoveredList.innerHTML = '';
   const discovered = micboard.discovered || [];
-  if (!Array.isArray(discovered) || discovered.length === 0) return;
+  if (!Array.isArray(discovered) || discovered.length === 0) {
+    renderDiscoveryHint(discoveredList);
+    return;
+  }
   const template = document.getElementById('config-slot-template');
   if (!template || !template.content) return;
 

@@ -517,6 +517,7 @@ function initialMap(callback) {
           micboard.backgroundDefaultMode = 'NONE';
         }
         micboard.discovery_status = data.discovery_status || null;
+        micboard.discovery_scan = data.discovery_scan || null;
         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
           try {
             const eventName = 'wirelessboard:discovery-status';

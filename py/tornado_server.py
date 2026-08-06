@@ -109,6 +109,7 @@ def wirelessboard_json(network_devices):
         'config': config.get_public_config_tree(),
         'discovered': discovered,
         'discovery_status': discover.get_dcid_status(),
+        'discovery_scan': discover.get_scan_status(),
     }, sort_keys=True, indent=4)
 
 
@@ -422,6 +423,7 @@ class ConfigHandler(web.RequestHandler):
             'config': config.get_public_config_tree(),
             'discovery': config.get_discovery_settings(),
             'discovery_status': discover.get_dcid_status(),
+            'discovery_scan': discover.get_scan_status(),
             'health': config.config_health(),
         }
         self.write(json.dumps(response))
@@ -459,6 +461,7 @@ class ConfigHandler(web.RequestHandler):
             'config': config.get_public_config_tree(),
             'discovery': config.get_discovery_settings(),
             'discovery_status': discover.get_dcid_status(),
+            'discovery_scan': discover.get_scan_status(),
             'health': config.config_health(),
         }
         self.write(json.dumps(response))
@@ -520,6 +523,7 @@ class ConfigRecoveryHandler(web.RequestHandler):
             'config': config.get_public_config_tree(),
             'discovery': config.get_discovery_settings(),
             'discovery_status': discover.get_dcid_status(),
+            'discovery_scan': discover.get_scan_status(),
             'health': health,
         }))
 

@@ -40,6 +40,7 @@ function JsonUpdate() {
       micboard.connectionStatus = 'CONNECTED';
       micboard.config = data.config;
       micboard.discovery_status = data.discovery_status || micboard.discovery_status || null;
+      micboard.discovery_scan = data.discovery_scan || micboard.discovery_scan || null;
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         try {
           const eventName = 'wirelessboard:discovery-status';
