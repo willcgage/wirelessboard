@@ -42,6 +42,46 @@ FALLBACK_DISCOVERY_SETTINGS = {
 FALLBACK_DISCOVERY_MIN_TIMEOUT = 100
 FALLBACK_DISCOVERY_MAX_TIMEOUT = 5000
 
+# What the last active scan actually did.
+#
+# "No devices found" is the one discovery outcome the interface could say nothing
+# useful about: it looked identical whether a scan had run and come back empty,
+# whether there was nothing configured to scan in the first place, or whether the
+# board had only just started. Reporting what was scanned lets it say which, and
+# lets an operator see immediately that the scan covered 192.168.1.0/24 while
+# their receivers are on 10.100.50.x.
+scan_status: Dict[str, Any] = {
+    'has_scanned': False,
+    'last_scan_at': None,
+    'networks': [],
+    'found': 0,
+    # The board's own platform, not the browser's -- the permission that can
+    # silently block discovery belongs to the machine running the service, which
+    # is not necessarily the one looking at the page.
+    'platform': sys.platform,
+}
+scan_status_lock = threading.Lock()
+
+
+def get_scan_status() -> Dict[str, Any]:
+    with scan_status_lock:
+        return copy.deepcopy(scan_status)
+
+
+def _record_scan(networks: List[str]) -> None:
+    global scan_status
+    with discovered_lock:
+        found = len(discovered)
+    with scan_status_lock:
+        scan_status = {
+            'has_scanned': True,
+            'last_scan_at': time.time(),
+            'networks': list(networks),
+            'found': found,
+            'platform': sys.platform,
+        }
+
+
 dcid_status: Dict[str, Any] = {
     'loaded': False,
     'source': None,
@@ -246,6 +286,10 @@ def _run_active_scan(settings: Dict[str, Any]) -> None:
     networks = _candidate_subnets(settings)
     if not networks:
         logger.debug('No discovery subnets configured for active scan')
+        # Recorded, not skipped. "Nothing to scan" is a distinct state from
+        # "scanned and found nothing", and it is the one the interface can
+        # actually tell the operator how to fix.
+        _record_scan([])
         return
 
     for network in networks:
@@ -253,7 +297,11 @@ def _run_active_scan(settings: Dict[str, Any]) -> None:
             _probe_network(network, timeout)
         except RuntimeError as exc:
             logger.debug('Active scan halted while shutting down: %s', exc)
+            # Deliberately not recorded: the scan was cut short by shutdown, so
+            # reporting it as a completed sweep would claim coverage it never had.
             return
+
+    _record_scan([str(network) for network in networks])
 
 
 def _candidate_subnets(settings: Dict[str, Any]) -> List[ipaddress.IPv4Network]:
