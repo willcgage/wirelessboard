@@ -893,6 +893,17 @@ def _reconfig_locked(payload):
     save_current_config()
     config_load_degraded = False
 
+    rebuild_from_disk()
+
+
+def rebuild_from_disk():
+    """Drop every receiver and rebuild the board from config.json on disk.
+
+    Shared by a save and by a recovery, so both take the identical path: the
+    only difference between them is which bytes reached the file first.
+
+    Call with _RECONFIG_LOCK held.
+    """
     # Kept so a failed rebuild can put the running server back. config() below
     # reassigns config_tree from disk, and if that raises -- a config.json that
     # cannot be read is exactly when it does -- the process was left holding the
@@ -1003,6 +1014,142 @@ def read_json_config(file):
             save_current_config()
         except Exception as exc:  # noqa: BLE001
             logger.warning('Could not persist configuration migrations: %s', exc)
+
+    # Last, so the copy matches the file as it now stands rather than as it was
+    # before the migration above rewrote it. A save rebuilds through here too,
+    # so the backup tracks the most recent configuration that actually loaded.
+    if not config_load_degraded:
+        _capture_backup(file)
+
+
+CONFIG_BACKUP_SUFFIX = '.bak'
+CONFIG_REJECTED_SUFFIX = '.rejected'
+
+
+def backup_file():
+    return config_file() + CONFIG_BACKUP_SUFFIX
+
+
+def rejected_file():
+    return config_file() + CONFIG_REJECTED_SUFFIX
+
+
+def _capture_backup(source):
+    """Keep a copy of a config.json that has just been read successfully.
+
+    Byte-for-byte off the file rather than re-serialised from config_tree: the
+    point is to preserve what actually worked, not our reading of it.
+
+    Only ever taken after a clean load, so a board that comes up degraded
+    cannot overwrite the last good copy with the damaged one -- which is the
+    single thing that would make this useless exactly when it is needed.
+    """
+    try:
+        copyfile(source, backup_file())
+    except Exception as exc:  # noqa: BLE001
+        # Never fatal. Failing to keep a spare copy must not stop the board
+        # from starting.
+        logger.warning('Could not update the configuration backup: %s', exc)
+
+
+def config_health():
+    """What the interface needs in order to offer a way out."""
+    backup = backup_file()
+    healthy_backup = os.path.exists(backup)
+    return {
+        'degraded': bool(config_load_degraded),
+        'backup_available': healthy_backup,
+        'config_path': config_file(),
+        'backup_path': backup if healthy_backup else None,
+    }
+
+
+def _default_config_payload():
+    """The same bytes a fresh install starts from.
+
+    config_file() seeds a brand new install by copying democonfig.json, so
+    reusing it here makes "reset to defaults" mean exactly "as if this board
+    had never been configured" -- which is what an admin reaching for it
+    expects. The inline fallback only matters if the bundle is missing the
+    seed file.
+    """
+    demo_config_path = app_dir('democonfig.json')
+    if demo_config_path is not None and os.path.exists(demo_config_path):
+        with open(demo_config_path) as handle:
+            return handle.read()
+
+    logger.warning('democonfig.json is missing; resetting to a minimal configuration')
+    return json.dumps(
+        {'port': DEFAULT_PORT, 'groups': [], 'slots': []},
+        indent=2, separators=(',', ': '), sort_keys=True)
+
+
+def recover(action):
+    """Replace config.json from the backup, or from the shipped defaults.
+
+    The way out of a config.json the board cannot use. Until this existed the
+    only remedy was editing JSON by hand on the machine -- and the failure that
+    prompted it left no interface running to explain that.
+
+    Takes the same lock as a save: it rewrites the same file and rebuilds the
+    same devices.
+    """
+    with _RECONFIG_LOCK:
+        return _recover_locked(action)
+
+
+def _recover_locked(action):
+    global config_load_degraded
+
+    if action == 'restore':
+        source = backup_file()
+        if not os.path.exists(source):
+            raise FileNotFoundError('No configuration backup is available to restore')
+        with open(source) as handle:
+            payload = handle.read()
+        # Refuse to restore a backup that is itself unusable, rather than
+        # trading one broken config for another and reporting success.
+        parsed = json.loads(payload)
+        if not isinstance(parsed.get('slots'), list):
+            raise ValueError('The configuration backup is not usable')
+    elif action == 'defaults':
+        payload = _default_config_payload()
+    else:
+        raise ValueError('Unknown recovery action: {}'.format(action))
+
+    target = config_file()
+
+    # The file being replaced is kept, not deleted. It is the only copy of
+    # whatever the admin had, and "reset to defaults" must not be the moment it
+    # stops existing -- a config that merely failed to parse is often a one
+    # character fix for someone reading it later.
+    if os.path.exists(target):
+        try:
+            copyfile(target, rejected_file())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Could not set the previous configuration aside: %s', exc)
+
+    tmp = '{}.tmp'.format(target)
+    try:
+        with open(tmp, 'w') as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, target)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+    logger.warning(
+        'Configuration recovered via "%s"; the previous file was kept at %s',
+        action, rejected_file())
+
+    config_load_degraded = False
+    rebuild_from_disk()
+    return config_health()
 
 
 def init_config():

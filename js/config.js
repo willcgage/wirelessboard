@@ -240,6 +240,120 @@ function setConfigSaveStatus(message, level = 'info') {
   }
 }
 
+// A board whose config.json did not load cleanly now starts anyway, so that the
+// interface is reachable at all -- but it comes up with an empty board and
+// writes nothing back, and neither of those is obvious from looking at it. An
+// admin who is not told will read it as "my configuration is gone" and rebuild
+// it by hand. Say what happened, and offer the two ways out.
+function renderConfigHealth(health) {
+  const banner = document.getElementById('config-health-banner');
+  if (!banner) return;
+
+  if (!health || !health.degraded) {
+    banner.hidden = true;
+    return;
+  }
+
+  const detail = document.getElementById('config-health-detail');
+  if (detail) {
+    detail.textContent = health.config_path
+      ? `${health.config_path} could not be read as a usable configuration, so this board `
+        + 'started with no devices.'
+      : 'The configuration file could not be read as a usable configuration, so this '
+        + 'board started with no devices.';
+  }
+
+  // Offering a restore with no backup to restore from is a dead end, and the
+  // admin cannot tell it is one until they press it.
+  const restoreBtn = document.getElementById('config-restore-backup');
+  if (restoreBtn) {
+    restoreBtn.hidden = !health.backup_available;
+    restoreBtn.title = health.backup_available && health.backup_path
+      ? `Restores ${health.backup_path}`
+      : '';
+  }
+
+  banner.hidden = false;
+}
+
+function setConfigHealthStatus(message, level = 'info') {
+  const statusEl = document.getElementById('config-health-status');
+  if (!statusEl) return;
+
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('text-white', 'text-warning-emphasis');
+  if (level === 'error') {
+    statusEl.classList.add('text-warning-emphasis');
+  } else {
+    statusEl.classList.add('text-white');
+  }
+}
+
+function runConfigRecovery(action, buttons) {
+  buttons.forEach((btn) => { if (btn) btn.disabled = true; });
+  setConfigHealthStatus(
+    action === 'restore' ? 'Restoring the last working configuration…' : 'Resetting to defaults…',
+  );
+
+  postJSON('api/config/recover', { action }, (resp) => {
+    // postJSON resolves the body whatever the status is, so a refusal (no
+    // backup, unusable backup) arrives here rather than in the error handler.
+    if (!resp || resp.ok !== true) {
+      buttons.forEach((btn) => { if (btn) btn.disabled = false; });
+      const reason = (resp && resp.error) || 'unknown error';
+      setConfigHealthStatus(`Could not recover: ${reason}`, 'error');
+      return;
+    }
+    setConfigHealthStatus('Configuration recovered. Reloading…');
+    window.location.reload();
+  }, (err) => {
+    buttons.forEach((btn) => { if (btn) btn.disabled = false; });
+    setConfigHealthStatus(`Could not recover: ${formatError(err)}`, 'error');
+  });
+}
+
+function ensureConfigHealthBindings() {
+  const banner = document.getElementById('config-health-banner');
+  if (!banner || banner.dataset.bound === 'true') return;
+  banner.dataset.bound = 'true';
+
+  const restoreBtn = document.getElementById('config-restore-backup');
+  const resetBtn = document.getElementById('config-reset-defaults');
+  const buttons = [restoreBtn, resetBtn];
+
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', () => {
+      runConfigRecovery('restore', buttons);
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      // Destructive and not obviously so -- "defaults" reads as harmless until
+      // it has replaced a config someone spent a service building.
+      // eslint-disable-next-line no-alert
+      if (!window.confirm(
+        'Reset the configuration to defaults?\n\n'
+        + 'Every slot and group will be cleared. The file being replaced is kept '
+        + 'alongside it as config.json.rejected.',
+      )) return;
+      runConfigRecovery('defaults', buttons);
+    });
+  }
+}
+
+async function loadConfigHealth() {
+  try {
+    const response = await fetch(`api/config?_=${Date.now()}`, { cache: 'no-store' });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data) return;
+    renderConfigHealth(data.health);
+  } catch (_) {
+    // A board that cannot reach its own API has a louder problem than this
+    // banner, and the rest of the config view reports it.
+  }
+}
+
 function renderDiscoveryEnvironmentStatus(status) {
   const alert = document.getElementById('dcid-warning');
   if (!alert) return;
@@ -2237,6 +2351,9 @@ export function initConfigEditor(force = false) {
 
   ensureGoogleDriveBindings();
   loadGoogleDriveState({ silent: true }).catch(() => {});
+
+  ensureConfigHealthBindings();
+  loadConfigHealth();
 
   // Render slot list (replacement for missing renderSlotList)
   const holder = document.getElementById('editor_holder');

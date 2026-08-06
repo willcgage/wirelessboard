@@ -478,6 +478,28 @@
   <p>Could not connect to the wirelessboard server. Please refresh the page.</p>
       </div>
       <div class="settings">
+        <!-- Shown only when config.json did not load cleanly. The board starts
+             anyway so this panel is reachable, but starting is not fixing, and
+             nothing writes to the file while it is in this state -- so the way
+             out has to be stated here rather than left in the log. -->
+        <div id="config-health-banner" class="alert alert-danger" role="alert" hidden>
+          <h5 class="alert-heading">This board started without a usable configuration</h5>
+          <p id="config-health-detail" class="mb-2"></p>
+          <p class="mb-3 small">
+            Nothing has been written to the configuration file — it is exactly as it was found.
+            Saving from this page will overwrite it.
+          </p>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-light" id="config-restore-backup">
+              Restore last working configuration
+            </button>
+            <button type="button" class="btn btn-outline-light" id="config-reset-defaults">
+              Reset to defaults
+            </button>
+          </div>
+          <div id="config-health-status" class="small mt-2" role="status" aria-live="polite"></div>
+        </div>
+
         <div class="row mb-3" id="config-tabs">
           <div class="col d-flex flex-wrap gap-2 align-items-center">
             <div class="btn-group" role="group" aria-label="Settings sections">
