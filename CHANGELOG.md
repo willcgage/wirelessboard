@@ -2,13 +2,39 @@
 
 ## [Unreleased]
 ### Added
-- **Tests for the slot save rules.** Every fault fixed in 1.6.1 that lost data silently — a group dropping slots that were off screen, a configuration row discarded for want of a device type — was found by hand in a browser, and nothing stopped it coming back. The decisions behind both now live in `js/slot-rules.mjs`, which reads no DOM and imports nothing, and are covered by 17 tests: 31 JavaScript tests in total, up from 14. The cases are the faults themselves, including the counter-case that a slot genuinely dragged out of a group must still be removed — without it the fix for the first fault would make removal impossible. (#43)
+- _Nothing yet._
 
 ### Changed
 - _Nothing yet._
 
 ### Fixed
 - _Nothing yet._
+
+## [1.7.0] - 2026-08-05
+A release about the configuration file surviving.
+
+One operator action — saving a discovery subnet — destroyed a `config.json`
+and left the board unable to start at all. Not slow to respond: never up,
+because the configuration is loaded before the web server is, so the process
+ended before anything was listening and there was no interface left to repair
+it from. This release fixes the way that happened, makes it survivable when
+something else damages the file, and gives an admin a way back that does not
+involve editing JSON on the machine.
+
+It also removes a Planning Center token that had been readable in this public
+repository since the import from micboard.
+
+### Added
+- **A way back from a damaged configuration.** A board that cannot use its `config.json` now starts anyway, so the interface is reachable — but starting is not fixing, and the board comes up with no devices and deliberately writes nothing back. The config view now says so, naming the file, and offers two ways out: *Restore last working configuration*, which puts back the last `config.json` that loaded cleanly from a copy taken on every clean load, and *Reset to defaults*, which writes the same bytes a fresh install starts from. Neither deletes anything — the file being replaced is kept beside it as `config.json.rejected`, because a config that merely failed to parse is often a one character fix for whoever reads it next. The restore is offered only when a backup actually exists, and validates it before committing, rather than trading one broken config for another and reporting success. The backup is taken byte-for-byte off the file rather than rebuilt from memory, and only after a clean load — a board restarting onto a damaged config must not overwrite the last good copy with the damaged one, which is precisely the restart during which it has to survive. (#48)
+- **Tests for the slot save rules.** Every fault fixed in 1.6.1 that lost data silently — a group dropping slots that were off screen, a configuration row discarded for want of a device type — was found by hand in a browser, and nothing stopped it coming back. The decisions behind both now live in `js/slot-rules.mjs`, which reads no DOM and imports nothing, and are covered by 17 tests: 31 JavaScript tests in total, up from 14. The cases are the faults themselves, including the counter-case that a slot genuinely dragged out of a group must still be removed — without it the fix for the first fault would make removal impossible. (#43)
+
+### Changed
+- **The request log no longer buries the diagnostic log.** Tornado writes a line per HTTP request, a board polls `/data.json` every five seconds, and every reload re-fetches the static assets. In a captured day from a site that came to 22,626 of 22,651 lines — 99.9% of the file — so the handful of lines describing an actual fault were scattered among them, and rotation by size, which was already in place, only made it worse by discarding the older ones sooner. Tornado grades these by status, so `tornado.access` now logs at WARNING: every failed request is kept and only the successful ones are dropped. Set `logging.access_level` to `INFO` to get the full request log back. (#46)
+- **Runtime configuration and OS metadata are no longer tracked in Git.** `.gitignore` had listed `config/config.json` since it was written, under the heading *Runtime configuration containing secrets* — but ignore rules do not apply to files Git already tracks, so the rule had never had any effect and the file had been in this public repository the whole time, carrying a live Planning Center personal access token. **That token has been revoked.** It remains readable in earlier commits, so removing the file does not un-leak it; revoking it is what mattered. The 1.6.1 changelog already claimed these files were untracked, which was not true at the time. It is now. (#47)
+
+### Fixed
+- **Saving the configuration could destroy `config.json`, and the board would then not start.** Reported as a save that returned an error three times and a server that stopped responding within sixty seconds of launching. Four faults in one chain. The Save button was bound afresh on every visit to the settings view, and it lives in the served markup, so it outlived the function that bound it — three visits meant three click listeners, and one click meant three concurrent saves. Applying a configuration was moved onto a worker thread in 1.6.1, which also removed the only thing that had been keeping two saves apart: each one sets the slots, writes the file, then clears the shared tree, so one clearing in between another's write and its assignment put an empty object into the operator's `config.json`. Loading then indexed the slots key without a guard, so the resulting file raised `KeyError` — and because the configuration is read before the web thread starts, that ended the process rather than the board. Saves are serialised now, the Save button binds once and is disabled while a save is in flight, a configuration with no slots is an empty board reported loudly rather than a refusal to start, and the configuration file is written to a temporary file and moved into place so a write that cannot complete leaves the previous one intact. (#46)
+- **A configuration that failed to load could be overwritten with defaults on the next start.** Loading fills in defaults from four separate helpers, and two paths wrote the result straight back — a Planning Center migration marker and the first-run UUID — so a board coming up on a damaged file replaced the one copy of the operator's settings with an empty board, silently. Neither writes now when the file did not load cleanly. An explicit save from the interface still does, because that is the way back out. (#46, #48)
 
 ## [1.6.1] - 2026-08-04
 A repair release. Two faults in here slowed down or froze every installation,
