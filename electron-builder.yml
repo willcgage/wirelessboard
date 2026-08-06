@@ -1,5 +1,16 @@
 appId: com.wirelessboard.app
 productName: Wirelessboard Server
+# Stated explicitly rather than inferred from package.json's repository field.
+# This is what electron-builder writes into the packaged app-update.yml, which
+# is the only thing telling electron-updater where to look at runtime — and
+# since #45 the builds run with `--publish never`, so nothing else in the
+# pipeline would reveal a broken inference until an update failed in the field.
+# It also keeps latest.yml / latest-mac.yml being generated, which the publish
+# job verifies before it will create a release.
+publish:
+  provider: github
+  owner: willcgage
+  repo: wirelessboard
 extraResources:
   - from: dist/wirelessboard-service
     to: dist/wirelessboard-service

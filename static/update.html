@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<title>Wirelessboard Update</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    margin: 0; padding: 20px 22px;
+    font-size: 13px; line-height: 1.45;
+    background: Canvas; color: CanvasText;
+  }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  .version { color: GrayText; margin: 0 0 14px; }
+  .notes {
+    max-height: 132px; overflow-y: auto;
+    border: 1px solid rgba(128,128,128,.35); border-radius: 6px;
+    padding: 9px 11px; margin-bottom: 14px;
+    white-space: pre-wrap; word-break: break-word;
+    background: rgba(128,128,128,.06);
+  }
+  .notes:empty { display: none; }
+  /* Reserved rather than shown, so the buttons do not jump when a download
+     starts. */
+  .progress { height: 34px; margin-bottom: 10px; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(128,128,128,.28); overflow: hidden; }
+  .bar > div { height: 100%; width: 0%; background: #2f81f7; transition: width .18s linear; }
+  .status { margin-top: 6px; color: GrayText; }
+  .status.error { color: #d1242f; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  button {
+    font: inherit; padding: 6px 14px; border-radius: 6px;
+    border: 1px solid rgba(128,128,128,.45); background: transparent; color: inherit;
+    cursor: pointer;
+  }
+  button.primary { background: #2f81f7; border-color: #2f81f7; color: #fff; }
+  button[disabled] { opacity: .5; cursor: default; }
+  .link {
+    border: 0; background: none; padding: 0; margin-right: auto;
+    color: #2f81f7; text-decoration: underline; cursor: pointer;
+  }
+  .warn { color: #9a6700; margin: 0 0 12px; }
+  .warn:empty { display: none; }
+</style>
+</head>
+<body>
+  <h1 id="headline">A Wirelessboard update is available</h1>
+  <p class="version" id="version"></p>
+  <p class="warn" id="warn"></p>
+  <div class="notes" id="notes"></div>
+
+  <div class="progress">
+    <div class="bar" id="bar-wrap" hidden><div id="bar"></div></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="actions">
+    <button class="link" id="release-page" type="button">Release notes</button>
+    <button id="dismiss" type="button">Not now</button>
+    <button class="primary" id="download" type="button">Download and Install</button>
+  </div>
+
+<script>
+  const api = window.wirelessboardUpdate;
+  const el = (id) => document.getElementById(id);
+
+  function render(state) {
+    if (!state) return;
+
+    el('version').textContent = state.latestVersion
+      ? `Version ${state.latestVersion} — you are running ${state.currentVersion}.`
+      : '';
+    el('notes').textContent = state.notes || '';
+    el('warn').textContent = state.warning || '';
+
+    const busy = state.phase === 'downloading';
+    const ready = state.phase === 'ready';
+
+    el('bar-wrap').hidden = !busy;
+    el('bar').style.width = `${state.percent || 0}%`;
+
+    const status = el('status');
+    status.textContent = state.message || '';
+    status.classList.toggle('error', state.phase === 'error');
+
+    const download = el('download');
+    // Deliberately still enabled after an error: a failed download is most
+    // often a network blip, and the obvious thing to do is press it again.
+    download.disabled = busy;
+    download.textContent = ready ? 'Restart and Install' : 'Download and Install';
+
+    el('headline').textContent = ready
+      ? 'The update is ready to install'
+      : 'A Wirelessboard update is available';
+
+    // Closing mid-download would leave it running with nothing reporting on it.
+    el('dismiss').disabled = busy;
+  }
+
+  el('download').addEventListener('click', () => api.download());
+  el('dismiss').addEventListener('click', () => api.dismiss());
+  el('release-page').addEventListener('click', () => api.openReleasePage());
+
+  api.onState(render);
+  api.getState().then(render);
+</script>
+</body>
+</html>
