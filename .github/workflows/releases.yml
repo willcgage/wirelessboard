@@ -26,20 +26,17 @@ jobs:
     needs: test
     strategy:
       fail-fast: false
-      # One at a time. This was added to stop two drafts being created per
-      # release and it does NOT achieve that -- see #45. 1.6.1 serialised
-      # correctly (macOS 03:10-03:17, Windows 03:17-03:21, no overlap) and still
-      # produced two drafts with the assets split across them, a macOS blockmap
-      # landing in the Windows one. The cause is not a race between jobs:
-      # GitHub's get-release-by-tag endpoint does not return drafts, so the
-      # second job cannot see the first job's release however long it waits, and
-      # `--publish always` makes another. The fix is to build with
-      # `--publish never` and have a single job create the release from the
-      # artifacts both jobs already upload.
+      # These build but no longer publish (`--publish never`); the `publish` job
+      # below makes the one release from the artifacts they upload. That is the
+      # fix for #45 -- two jobs each calling `--publish always` produced two
+      # draft releases with the assets split across them, because GitHub's
+      # get-release-by-tag endpoint does not return drafts, so the second job
+      # could never see the first job's release however long it waited.
       #
-      # Kept meanwhile: serialising costs wall-clock but not billable minutes,
-      # since total runner time is unchanged.
-      max-parallel: 1
+      # `max-parallel: 1` was the attempted workaround and is gone with it. It
+      # never worked -- 1.6.1 serialised cleanly (macOS 03:10-03:17, Windows
+      # 03:17-03:21, no overlap) and still produced two drafts -- and it cost
+      # wall-clock for nothing. Both platforms build concurrently again.
       matrix:
         include:
           # artifact_folder must match electron-builder.yml's `output:
@@ -239,6 +236,115 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}-${{ github.ref_name }}
           path: ${{ matrix.artifact_folder }}
+
+  publish:
+    name: Publish the release
+    # One job, after every platform has finished, so there is exactly one
+    # release and it holds every asset. See #45.
+    needs: package-desktop
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect the distributables
+        shell: bash
+        run: |
+          mkdir -p dist
+          # -maxdepth 2 deliberately. download-artifact lays these out as
+          # artifacts/<artifact-name>/<file>, and the packaged output also
+          # contains win-unpacked/ and mac-arm64/ full of .exe and .app
+          # internals. Recursing would sweep the unpacked application into the
+          # release alongside the installer.
+          find artifacts -maxdepth 2 -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' \
+               -o -name '*.blockmap' -o -name 'latest*.yml' \) \
+            -exec cp -n {} dist/ \;
+          echo "=== assets for this release ==="
+          ls -la dist
+
+      - name: Verify every update manifest resolves
+        shell: bash
+        run: |
+          # The failure #45 actually causes. A manifest naming a payload that is
+          # not in the same release is invisible until a client tries to update
+          # and 404s, so it is checked here rather than discovered in the field.
+          python3 - <<'PY'
+          import os, re, sys
+          have = {f: os.path.getsize(os.path.join('dist', f)) for f in os.listdir('dist')}
+          problems = []
+          manifests = [f for f in have if f.startswith('latest') and f.endswith('.yml')]
+          if not manifests:
+              sys.exit('No latest*.yml among the artifacts -- nothing would auto-update.')
+          for man in manifests:
+              text = open(os.path.join('dist', man)).read()
+              refs = re.findall(r'url:\s*(\S+)\s+sha512:\s*\S+\s+size:\s*(\d+)', text)
+              if not refs:
+                  problems.append(f'{man}: no file entries could be parsed')
+              for url, size in refs:
+                  if url not in have:
+                      problems.append(f'{man} -> {url} MISSING from the release')
+                  elif have[url] != int(size):
+                      problems.append(
+                          f'{man} -> {url} size {have[url]} != {size} declared')
+                  else:
+                      print(f'  ok  {man} -> {url} ({size} bytes)')
+          if problems:
+              print('\n'.join('  FAIL ' + p for p in problems))
+              sys.exit('Update manifests do not match the assets; refusing to publish.')
+          print('\nEvery manifest reference resolves.')
+          PY
+
+      - name: Take the release notes from the changelog
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re
+          version = os.environ['GITHUB_REF_NAME'].lstrip('v')
+          text = open('CHANGELOG.md', encoding='utf-8').read()
+          m = re.search(r'^## \[' + re.escape(version) + r'\][^\n]*\n(.*?)(?=\n## \[)',
+                        text, re.S | re.M)
+          if m:
+              body = m.group(1).strip()
+          else:
+              body = (f'No `## [{version}]` section was found in CHANGELOG.md when this '
+                      'release was built. Add the notes before publishing.')
+              print(f'::warning::{body}')
+          open('release-notes.md', 'w', encoding='utf-8').write(body + '\n')
+          print(f'notes: {len(body)} characters')
+          PY
+
+      - name: Create or update the single release
+        shell: bash
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          # Left as a draft on purpose. This ships to boards that are in use
+          # during live services, so a tag push should not put an update in
+          # front of anyone until a human has looked at it -- and a draft is
+          # invisible to the releases/latest endpoint an updater reads, which
+          # keeps that gate meaningful. Publish with:
+          #   gh release edit "$TAG" --draft=false --latest
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; updating notes and re-uploading assets."
+            gh release edit "$TAG" --notes-file release-notes.md
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --draft \
+              --title "${TAG#v}" \
+              --notes-file release-notes.md
+          fi
+          echo "=== assets now on $TAG ==="
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name)  \(.size)B"'
 
   package-pi:
     if: github.event_name == 'workflow_dispatch' && inputs.build_pi == true
