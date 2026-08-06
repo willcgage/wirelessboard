@@ -422,6 +422,7 @@ class ConfigHandler(web.RequestHandler):
             'config': config.get_public_config_tree(),
             'discovery': config.get_discovery_settings(),
             'discovery_status': discover.get_dcid_status(),
+            'health': config.config_health(),
         }
         self.write(json.dumps(response))
 
@@ -458,8 +459,70 @@ class ConfigHandler(web.RequestHandler):
             'config': config.get_public_config_tree(),
             'discovery': config.get_discovery_settings(),
             'discovery_status': discover.get_dcid_status(),
+            'health': config.config_health(),
         }
         self.write(json.dumps(response))
+
+
+class ConfigRecoveryHandler(web.RequestHandler):
+    """Put a usable config.json back, from the backup or from the defaults.
+
+    The board can now start on a config it cannot use, which is what makes it
+    reachable at all after the file is damaged -- but starting is not fixing.
+    Without this the only remedy is editing JSON on the machine by hand, and
+    the admin who needs it is the one who has just lost the interface's own
+    account of what is wrong.
+    """
+
+    async def post(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+        try:
+            payload = json.loads(self.request.body or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid JSON payload'}))
+            return
+
+        action = payload.get('action')
+        if action not in ('restore', 'defaults'):
+            self.set_status(400)
+            self.write(json.dumps(
+                {'ok': False, 'error': 'action must be "restore" or "defaults"'}))
+            return
+
+        # Same reason as the save below it: this touches Tornado's own objects.
+        SocketHandler.close_all_ws()
+
+        try:
+            # Rebuilds every receiver exactly as a save does, so it belongs off
+            # the IOLoop for exactly the same reason.
+            health = await ioloop.IOLoop.current().run_in_executor(
+                None, config.recover, action)
+        except FileNotFoundError as exc:
+            self.set_status(409)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except ValueError as exc:
+            self.set_status(409)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except Exception:
+            logger.exception('Configuration recovery failed')
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': 'Unable to recover configuration'}))
+            return
+
+        self.write(json.dumps({
+            'ok': True,
+            'action': action,
+            'config': config.get_public_config_tree(),
+            'discovery': config.get_discovery_settings(),
+            'discovery_status': discover.get_dcid_status(),
+            'health': health,
+        }))
+
 
 class GroupUpdateHandler(web.RequestHandler):
     def get(self):
@@ -916,6 +979,7 @@ def twisted():
     (r'/api/logs/settings', LogSettingsHandler),
     (r'/api/logs/purge', LogsPurgeHandler),
     (r'/api/logs', LogsHandler),
+        (r'/api/config/recover', ConfigRecoveryHandler),
         (r'/api/config', ConfigHandler),
         (r'/api/pco/sync', PcoSyncHandler),
         (r'/api/pco/preview', PcoPreviewHandler),
