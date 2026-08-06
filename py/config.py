@@ -6,6 +6,7 @@ import logging
 import logging.config
 import os
 import sys
+import threading
 import time
 import uuid
 from shutil import copyfile
@@ -37,6 +38,14 @@ DEFAULT_PORT = 8058
 logger = logging.getLogger('micboard.core')
 
 config_tree = {}
+
+# Set when config.json loaded but did not give us a usable tree. Everything that
+# writes the config back *without the operator asking* has to consult this:
+# after a degraded load the tree in memory is mostly defaults, so saving it
+# replaces the one damaged-but-possibly-recoverable copy of their settings with
+# an empty board. An explicit save from the interface still writes, and clears
+# this -- that one is the operator's decision, not ours.
+config_load_degraded = False
 
 gif_dir = ''
 
@@ -234,8 +243,18 @@ def update_discovery_settings(payload: Optional[Dict[str, Any]], *, persist: boo
 def uuid_init():
     if 'uuid' not in config_tree:
         micboard_uuid = str(uuid.uuid4())
-        logger.info('Adding UUID: %s to config.conf', micboard_uuid)
         config_tree['uuid'] = micboard_uuid
+        # Held in memory only when the file did not load cleanly. A config
+        # missing its uuid is also what a damaged one looks like, so saving here
+        # would write the defaults assembled during load straight over the
+        # operator's file -- the same overwrite the migration write-back below
+        # is held back from. A fresh uuid next start costs nothing.
+        if config_load_degraded:
+            logger.warning(
+                'Not persisting the generated UUID: %s did not load cleanly.',
+                config_file())
+            return
+        logger.info('Adding UUID: %s to config.conf', micboard_uuid)
         save_current_config()
 
 
@@ -823,6 +842,9 @@ def config_mix(slots):
     return slots
 
 
+_RECONFIG_LOCK = threading.Lock()
+
+
 def reconfig(payload):
     """Apply a configuration change and rebuild every device.
 
@@ -830,7 +852,23 @@ def reconfig(payload):
     per receiver, so on the loop it froze every other request for as long as
     that took. The caller closes the websockets beforehand, because that
     touches Tornado's own objects and has to happen on the loop.
+
+    Serialised, because moving it off the loop also removed the only thing that
+    was keeping two saves apart. Every save mutates the module-global
+    config_tree and then clears it, so two of them interleaving lets one thread
+    clear the tree in between another's ``config_tree['slots'] = ...`` and its
+    ``save_current_config()`` -- which writes ``{}`` over the operator's
+    config.json. That is not a transient error: the file is destroyed, and
+    every start after it fails to load. Observed on site as three concurrent
+    saves and three ``KeyError: 'slots'``.
     """
+    with _RECONFIG_LOCK:
+        _reconfig_locked(payload)
+
+
+def _reconfig_locked(payload):
+    global config_load_degraded
+
     if isinstance(payload, dict):
         slots = payload.get('slots', [])
         discovery_payload = payload.get('discovery')
@@ -850,7 +888,17 @@ def reconfig(payload):
 
     config_tree['slots'] = config_mix(slots)
 
+    # The operator asked for this one, so it writes even after a degraded load,
+    # and the file it leaves behind is a real config again.
     save_current_config()
+    config_load_degraded = False
+
+    # Kept so a failed rebuild can put the running server back. config() below
+    # reassigns config_tree from disk, and if that raises -- a config.json that
+    # cannot be read is exactly when it does -- the process was left holding the
+    # cleared tree, serving a board with no slots, no port and no pco block
+    # until someone restarted it.
+    previous_tree = copy.deepcopy(config_tree)
 
     config_tree.clear()
     for device in shure.NetworkDevices:
@@ -870,7 +918,16 @@ def reconfig(payload):
     # runs off the IOLoop the wait costs only this thread.
     time.sleep(2)
 
-    config()
+    try:
+        config()
+    except Exception:
+        config_tree.clear()
+        config_tree.update(previous_tree)
+        logger.exception(
+            'Could not reload configuration after saving; keeping the previously '
+            'loaded settings in memory. config.json on disk may need attention.')
+        raise
+
     for rx in shure.NetworkDevices:
         rx.socket_connect()
 
@@ -887,10 +944,28 @@ def get_version_number():
 def read_json_config(file):
     global config_tree
     global gif_dir
+    global config_load_degraded
     with open(file) as config_file:
         config_tree = json.load(config_file)
 
-        for chan in config_tree['slots']:
+        # A config with no slots is a board with no receivers, not a reason to
+        # refuse to start. This was an unguarded config_tree['slots'], so a
+        # config.json missing the key raised KeyError out of read_json_config --
+        # and since init_config() runs before the web thread starts, that took
+        # the whole server down rather than just the board. The operator was
+        # then left with a process that would not come up and no interface to
+        # fix it in. Say so loudly and carry on with an empty board instead;
+        # nothing is written back, so a recoverable file stays recoverable.
+        slots = config_tree.get('slots')
+        config_load_degraded = not isinstance(slots, list)
+        if config_load_degraded:
+            logger.warning(
+                'No usable "slots" list in %s -- starting with an empty board. '
+                'The file may be incomplete; it has been left exactly as found.',
+                file)
+            slots = []
+
+        for chan in slots:
             if chan['type'] in ['uhfr', 'qlxd', 'ulxd', 'axtd', 'p10t']:
                 netDev = shure.check_add_network_device(chan['ip'], chan['type'])
                 netDev.add_channel_device(chan)
@@ -911,7 +986,19 @@ def read_json_config(file):
 
     # Corrective migrations have to be written back, or the marker is lost and
     # they run again on the next start.
-    if migrate_pco_number_fallback():
+    #
+    # Not when the file did not load cleanly, though. Everything above this
+    # point fills in defaults, so saving now would write a complete, wholly
+    # invented config over whatever the operator actually had -- the one copy of
+    # a config that might still be recoverable, replaced by an empty board. The
+    # migration runs again next start, which is the cost, and it is much the
+    # smaller one. Re-running a migration is free; the file is not.
+    if config_load_degraded:
+        logger.warning(
+            'Not writing configuration back to %s: it did not load cleanly and '
+            'the tree in memory is mostly defaults. Fix or restore the file '
+            'first -- saving from the interface will overwrite it.', file)
+    elif migrate_pco_number_fallback():
         try:
             save_current_config()
         except Exception as exc:  # noqa: BLE001
@@ -922,8 +1009,34 @@ def init_config():
     config()
 
 def write_json_config(data):
-    with open(config_file(), 'w') as f:
-        json.dump(data, f, indent=2, separators=(',', ': '), sort_keys=True)
+    """Serialise the tree to config.json without ever truncating the old one.
+
+    open(..., 'w') empties the file first, so anything that went wrong between
+    that and a completed json.dump -- a crash, a full disk, a tree that is not
+    serialisable -- left the operator with a half-written or empty config.json
+    and a board that would not start. Rendering to a string first means a tree
+    that cannot be serialised fails before the real file is touched at all, and
+    os.replace puts the finished file in place in one step.
+    """
+    target = config_file()
+    payload = json.dumps(data, indent=2, separators=(',', ': '), sort_keys=True)
+
+    tmp = '{}.tmp'.format(target)
+    try:
+        with open(tmp, 'w') as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(tmp, target)
+    except Exception:
+        # Otherwise a disk that filled up mid-write leaves a half-written
+        # config.json.tmp sitting next to the real one for good.
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 def save_current_config():
     return write_json_config(config_tree)
@@ -949,7 +1062,10 @@ def update_group(data):
     save_current_config()
 
 def get_slot_by_number(slot_number):
-    for slot in config_tree['slots']:
+    # .get, because config_mix calls this while merging a save against the
+    # loaded tree, which -- on a board that started from a config with no slots
+    # -- does not have the key yet.
+    for slot in config_tree.get('slots') or []:
         if slot['slot'] == slot_number:
             return slot
     return None
