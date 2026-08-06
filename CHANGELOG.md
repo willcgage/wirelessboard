@@ -2,10 +2,25 @@
 
 ## [Unreleased]
 ### Added
-- **The Discovered Devices panel says what happened when it finds nothing.** It used to show blank space, which told an operator whose receivers were missing nothing at all — not which networks had been searched, not even whether a search had run yet. It now reports the networks actually scanned and that each address was probed on TCP port 2202, so a board looking at `192.168.1.0/24` while the receivers sit on `10.100.50.x` is obvious at a glance rather than a mystery. Where no network is configured to scan at all it says that instead, because that is a different problem with a different fix, and offers a button that takes you straight to the manual CIDR ranges field. On a macOS board it also mentions the Local Network permission, which blocks discovery silently — last, and as one possibility among others, since a mis-set range is at least as likely. (#51)
+- _Nothing yet._
 
 ### Changed
 - _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.9.0] - 2026-08-06
+Two things the interface should have been saying and wasn't.
+
+When discovery finds no receivers it now reports which networks it actually
+searched, instead of leaving an empty panel and no next step — which is the
+question behind almost every "it can't find my units". And the configuration
+pane has a Close button, which it has needed since the application was
+imported: the handler was there all along, only the button was missing.
+
+### Added
+- **The Discovered Devices panel says what happened when it finds nothing.** It used to show blank space, which told an operator whose receivers were missing nothing at all — not which networks had been searched, not even whether a search had run yet. It now reports the networks actually scanned and that each address was probed on TCP port 2202, so a board looking at `192.168.1.0/24` while the receivers sit on `10.100.50.x` is obvious at a glance rather than a mystery. Where no network is configured to scan at all it says that instead, because that is a different problem with a different fix, and offers a button that takes you straight to the manual CIDR ranges field. On a macOS board it also mentions the Local Network permission, which blocks discovery silently — last, and as one possibility among others, since a mis-set range is at least as likely. (#51)
 
 ### Fixed
 - **The configuration pane has a Close button.** Leaving it meant pressing Escape, which reloads the whole page, or picking another view from the Menu — while the Background Library and Planning Center panes have had their own Close all along. The button's handler was already written and waiting; only the button was missing, the same way both editors were reachable only from the keyboard until 1.6.1. (#44)
