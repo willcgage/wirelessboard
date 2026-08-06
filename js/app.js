@@ -176,7 +176,6 @@ export function hideHud() {
 }
 
 function mapGroups() {
-  const navbar = document.getElementById('navbarToggleExternalContent');
   const help = document.getElementById('hud');
   const goHud = document.getElementById('go-hud');
   const goBackground = document.getElementById('go-background');
@@ -258,7 +257,6 @@ function mapGroups() {
     goHud.addEventListener('click', (event) => {
       event.preventDefault();
       showHudPane('help', { toggleIfVisible: true });
-      if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
       resetViews();
     });
   }
@@ -267,7 +265,6 @@ function mapGroups() {
     goBackground.addEventListener('click', (event) => {
       event.preventDefault();
       openBackground();
-      if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
     });
   }
 
@@ -303,7 +300,6 @@ function mapGroups() {
       slotEditToggle();
       hideHud();
       resetViews();
-      if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
     });
   }
 
@@ -315,7 +311,6 @@ function mapGroups() {
       hideHud();
       if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
       resetViews();
-      if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
     });
   }
 
@@ -326,7 +321,6 @@ function mapGroups() {
         groupEditToggle();
         hideHud();
         resetViews();
-        if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (e) {} }
       }
     });
   }
@@ -356,7 +350,6 @@ function mapGroups() {
         renderGroup(target);
         hideHud();
         resetViews();
-        if (navbar) { try { new Collapse(navbar, { hide: true }); } catch (err) {} }
       });
     });
   }

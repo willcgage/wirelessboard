@@ -8,7 +8,7 @@
 - _Nothing yet._
 
 ### Fixed
-- _Nothing yet._
+- **The configuration pane has a Close button.** Leaving it meant pressing Escape, which reloads the whole page, or picking another view from the Menu — while the Background Library and Planning Center panes have had their own Close all along. The button's handler was already written and waiting; only the button was missing, the same way both editors were reachable only from the keyboard until 1.6.1. (#44)
 
 ## [1.8.0] - 2026-08-06
 Two changes to how Wirelessboard reaches you, rather than to what it does

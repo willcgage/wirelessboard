@@ -2569,9 +2569,6 @@ export function initConfigEditor(force = false) {
   if (elToken) elToken.value = '';
   if (elSecret) elSecret.value = '';
   renderPcoCredentialStatus(pco.auth || {});
-  const services = pco.services || {};
-  const elSt = document.getElementById('pco-service-type');
-  if (elSt) elSt.value = (services.service_type || services.service_type_id || '');
   applyPcoMappingToForm(pco.mapping);
 
   const addDisc = document.getElementById('add-discovered');
@@ -2709,8 +2706,6 @@ function populatePCOFormFromServer() {
         if (elSecret) elSecret.value = '';
         const s = p.services || {};
         if (elStid) elStid.value = s.service_type_id || '';
-        const elSt2 = document.getElementById('pco-service-type');
-        if (elSt2) elSt2.value = (s.service_type || s.service_type_id || '');
         applyPcoMappingToForm(p.mapping);
         ensureNotePreviewUI();
         renderPcoCredentialStatus(p.auth || {});
@@ -2737,7 +2732,6 @@ export function bindPcoNav() {
     if (t && t.id === 'go-pco') {
       e.preventDefault();
       showPCOView();
-      try { document.getElementById('navbarToggleExternalContent').classList.remove('show'); } catch (err) {}
     }
   });
   window.addEventListener('micboard:open-pco', showPCOView);
@@ -2880,7 +2874,6 @@ function buildPcoPayload() {
   const enabled = document.getElementById('pco-enabled')?.checked || false;
   const token = (document.getElementById('pco-token')?.value || '').trim();
   const secret = (document.getElementById('pco-secret')?.value || '').trim();
-  const serviceType = (document.getElementById('pco-service-type')?.value || '').trim();
   const serviceTypeId = (document.getElementById('pco-service-type-id')?.value || '').trim();
   const noteCategory = (document.getElementById('pco-note-category')?.value || 'Mic / IEM Assignments').trim();
   const noteSource = (document.getElementById('pco-note-source')?.value || 'person').trim() || 'person';
@@ -2902,9 +2895,6 @@ function buildPcoPayload() {
       seed_extended_id: seedExtendedIdEl ? !!seedExtendedIdEl.checked : false,
     },
   };
-  if (serviceType) {
-    payload.services.service_type = serviceType;
-  }
   if (serviceTypeId) {
     payload.services.service_type_id = serviceTypeId;
   }
