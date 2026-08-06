@@ -15,40 +15,11 @@ permissions:
   contents: write
 
 jobs:
+  # The same job that guards every pull request, called rather than repeated.
+  # Two copies would drift, and the copy that drifts is always the one deciding
+  # whether a release is fit to build.
   test:
-    name: Lint, Test, and Build Assets
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install Node dependencies
-        run: npm ci
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r py/requirements.txt
-          python -m pip install pytest
-      - name: Lint JavaScript
-        run: npm run lint
-        continue-on-error: true
-      - name: Build frontend bundle
-        run: npm run build
-      - name: Check Python sources compile
-        run: python -m compileall py
-      - name: Run Python tests
-        run: python -m pytest py/tests -q
-        # node:test ships with Node 22, so the main-process logic is covered
-        # without adding a test framework. It is pure by construction -- no
-        # electron import, network injected -- precisely so it can run here.
-      - name: Run JavaScript tests
-        run: npm run test:js
+    uses: ./.github/workflows/ci.yml
 
   package-desktop:
     name: Package desktop apps
