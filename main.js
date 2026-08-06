@@ -6,14 +6,17 @@ const {
   Tray,
   nativeImage,
   dialog,
+  ipcMain,
 } = require('electron');
 const path = require('path');
 const child = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const { autoUpdater } = require('electron-updater');
 const servicePaths = require('./electron/service-paths');
 const updateCheck = require('./electron/update-check');
+const updatePrompt = require('./electron/update-prompt');
 
 let win;
 let tray;
@@ -23,8 +26,6 @@ let rebuildTrayMenu = () => {};
 // Bumped on every start so a superseded readiness poll cannot report on the
 // attempt that replaced it.
 let startGeneration = 0;
-// What the last successful update check found; null until one completes.
-let updateStatus = null;
 
 const SERVICE_CANDIDATES = [
   ['wirelessboard-service', 'wirelessboard-service'],
@@ -299,14 +300,128 @@ function restartWirelessboardServer() {
 }
 
 
-// -- Update check -----------------------------------------------------------
-// Notify only. This runs during live services, so nothing is downloaded or
-// installed on its own; the tray reports what is available and the operator
-// decides when. The comparison lives in electron/update-check.js so it can be
-// tested without a network or a running app.
+// -- Updates ----------------------------------------------------------------
+// Nothing is downloaded or installed without the operator asking. This runs
+// during live services, so an update that helped itself to the moment could
+// take a board down mid-service; what changed is that the offer is no longer
+// buried in a menu nobody opens.
+//
+// Two pieces on purpose:
+//   * electron/update-check.js decides whether a newer release exists. It works
+//     in a dev checkout and is tested without a network, and it reads
+//     /releases/latest, which excludes drafts -- releases are published by hand
+//     from a draft (#45), so a check that saw drafts would announce versions
+//     nobody can download.
+//   * electron-updater does the downloading and installing, and only once the
+//     operator has pressed the button. It refuses to run unpackaged, which is
+//     why it is not also used for the check.
 
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const UPDATE_CHECK_DELAY_MS = 30 * 1000;
+const UPDATE_STATE_FILE = 'update-state.json';
+
+let updateWindow = null;
+// 'checking' | 'current' | 'available' | 'downloading' | 'ready' | 'error' |
+// 'unsupported'
+let updatePhase = 'checking';
+let updateInfo = { latestVersion: null, url: null, notes: '', percent: 0, message: '', warning: '' };
+
+function updateStatePath() {
+  return resolveAppDataPath(UPDATE_STATE_FILE);
+}
+
+function readDismissedVersion() {
+  try {
+    const raw = fs.readFileSync(updateStatePath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    return updatePrompt.normalizeVersion(parsed && parsed.dismissedVersion);
+  } catch (err) {
+    // Absent or unreadable both mean "nothing dismissed". Never fatal: failing
+    // to remember a dismissal costs one extra prompt, which is the safe way to
+    // be wrong.
+    return null;
+  }
+}
+
+function writeDismissedVersion(version) {
+  try {
+    fs.writeFileSync(updateStatePath(), JSON.stringify({ dismissedVersion: version }, null, 2));
+  } catch (err) {
+    console.warn(`Could not remember the dismissed update version: ${err.message}`);
+  }
+}
+
+function pushUpdateState() {
+  rebuildTrayMenu();
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.webContents.send('update:state', currentUpdateState());
+  }
+}
+
+function currentUpdateState() {
+  return {
+    phase: updatePhase,
+    currentVersion: app.getVersion(),
+    latestVersion: updateInfo.latestVersion,
+    notes: updateInfo.notes,
+    percent: updateInfo.percent,
+    message: updateInfo.message,
+    warning: updateInfo.warning,
+  };
+}
+
+function setUpdatePhase(phase, patch = {}) {
+  updatePhase = phase;
+  updateInfo = { ...updateInfo, ...patch };
+  pushUpdateState();
+}
+
+function showUpdateWindow() {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.show();
+    updateWindow.focus();
+    return;
+  }
+
+  updateWindow = new BrowserWindow({
+    width: 520,
+    height: 420,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: 'Wirelessboard Update',
+    // The requirement is that it stays until it is acted on. A native
+    // notification will not do that -- on macOS a banner auto-dismisses after a
+    // few seconds unless the user has set this app to Alerts, which is not
+    // something to depend on for the one message that matters.
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'electron', 'update-window-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  updateWindow.setMenuBarVisibility(false);
+  updateWindow.loadFile(path.join(__dirname, 'static', 'update.html'));
+  updateWindow.once('ready-to-show', () => updateWindow.show());
+
+  // Closing the window is a dismissal. Not while a download is running, though
+  // -- that would leave it going with nothing left to report on it.
+  updateWindow.on('close', (event) => {
+    if (updatePhase === 'downloading') {
+      event.preventDefault();
+      return;
+    }
+    if (updatePhase === 'available' && updateInfo.latestVersion) {
+      writeDismissedVersion(updateInfo.latestVersion);
+    }
+  });
+
+  updateWindow.on('closed', () => { updateWindow = null; });
+}
 
 function getJson(url) {
   return new Promise((resolve, reject) => {
@@ -341,6 +456,40 @@ function getJson(url) {
   });
 }
 
+let updaterWired = false;
+
+function wireUpdater() {
+  if (updaterWired) return autoUpdater;
+  updaterWired = true;
+
+  // Never on its own initiative. checkForUpdates() is only called from the
+  // download handler, and this makes sure that even then it does not start
+  // pulling ~190 MB the moment it finds something.
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.logger = null;
+
+  autoUpdater.on('download-progress', (progress) => {
+    const { percent, label } = updatePrompt.formatProgress(progress);
+    setUpdatePhase('downloading', { percent, message: label });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    setUpdatePhase('ready', {
+      percent: 100,
+      message: 'Downloaded. Installing will stop the board briefly and restart it.',
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    setUpdatePhase('error', {
+      message: `Update failed: ${err && err.message ? err.message : String(err)}`,
+    });
+  });
+
+  return autoUpdater;
+}
+
 async function runUpdateCheck() {
   const result = await updateCheck.checkForUpdate({
     currentVersion: app.getVersion(),
@@ -351,13 +500,99 @@ async function runUpdateCheck() {
     // A failed check is not worth interrupting anyone over; it is recorded and
     // the menu keeps whatever it last knew.
     console.warn(`Update check failed (${result.reason}): ${result.error || ''}`.trim());
+    if (updatePhase === 'checking') setUpdatePhase('error');
     return;
   }
 
-  updateStatus = result.updateAvailable
-    ? { label: `Update available: ${result.latestVersion}`, url: result.url }
-    : { label: `Up to date (${result.currentVersion})`, url: null };
-  rebuildTrayMenu();
+  if (!result.updateAvailable) {
+    setUpdatePhase('current', { latestVersion: result.latestVersion, url: result.url });
+    return;
+  }
+
+  // A download or a finished download outranks a fresh check: re-reporting
+  // "available" would reset a window the operator is watching.
+  if (updatePhase === 'downloading' || updatePhase === 'ready') return;
+
+  setUpdatePhase('available', {
+    latestVersion: result.latestVersion,
+    url: result.url,
+    percent: 0,
+    message: '',
+    // Windows installers are not signed yet, and SmartScreen will say so. Better
+    // to warn here than to have an update the operator started look like malware.
+    warning: process.platform === 'win32'
+      ? 'Windows may show a SmartScreen warning during installation; the installers are not yet code-signed.'
+      : '',
+  });
+
+  const dismissed = readDismissedVersion();
+  if (updatePrompt.shouldPrompt({
+    currentVersion: app.getVersion(),
+    latestVersion: result.latestVersion,
+    dismissedVersion: dismissed,
+  })) {
+    showUpdateWindow();
+  }
+}
+
+function registerUpdateIpc() {
+  ipcMain.handle('update:get-state', () => currentUpdateState());
+
+  ipcMain.on('update:open-release-page', () => {
+    if (updateInfo.url) shell.openExternal(updateInfo.url);
+  });
+
+  ipcMain.on('update:dismiss', () => {
+    if (updatePhase === 'available' && updateInfo.latestVersion) {
+      writeDismissedVersion(updateInfo.latestVersion);
+    }
+    if (updateWindow && !updateWindow.isDestroyed()) updateWindow.close();
+  });
+
+  ipcMain.on('update:download', async () => {
+    // Second press once it is downloaded means install, not download again.
+    if (updatePhase === 'ready') {
+      installDownloadedUpdate();
+      return;
+    }
+
+    if (!app.isPackaged) {
+      setUpdatePhase('unsupported', {
+        message: 'Updates can only be installed from a packaged build, not a dev checkout.',
+      });
+      return;
+    }
+
+    setUpdatePhase('downloading', { percent: 0, message: 'Starting download…' });
+    try {
+      const updater = wireUpdater();
+      // electron-updater will not download anything it has not itself found,
+      // so this check has to happen even though update-check.js already did one.
+      await updater.checkForUpdates();
+      await updater.downloadUpdate();
+    } catch (err) {
+      setUpdatePhase('error', {
+        message: `Update failed: ${err && err.message ? err.message : String(err)}`,
+      });
+    }
+  });
+}
+
+function installDownloadedUpdate() {
+  setUpdatePhase('ready', { message: 'Stopping the board and installing…' });
+
+  // The service is a separate binary beside the app, and on Windows a running
+  // executable cannot be replaced. Stop it and give it a moment to actually go
+  // before handing over to the installer -- will-quit would also stop it, but
+  // not early enough to be sure it has exited first.
+  exitPyProc();
+
+  setTimeout(() => {
+    // isSilent false so the operator sees the installer doing something;
+    // isForceRunAfter true so the board comes back on its own, which is the
+    // whole point of restarting it here rather than leaving it down.
+    autoUpdater.quitAndInstall(false, true);
+  }, 1000);
 }
 
 
@@ -380,12 +615,19 @@ app.on('ready', () => {
     const ready = serviceState === 'running';
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: STATE_LABELS[serviceState] || 'Wirelessboard', enabled: false },
-      // Only clickable when there is somewhere to go; otherwise it reads as
-      // status, which is all it is until a check has found something.
+      // Keeps reporting the update after the prompt has been dismissed --
+      // dismissing means "stop interrupting me", not "forget this exists", and
+      // this is the only always-visible surface a menu-bar app has. Clicking
+      // reopens the prompt rather than sending the operator to a browser to
+      // install by hand.
       {
-        label: updateStatus ? updateStatus.label : 'Checking for updates…',
-        enabled: Boolean(updateStatus && updateStatus.url),
-        click() { if (updateStatus && updateStatus.url) shell.openExternal(updateStatus.url); },
+        label: updatePrompt.trayLabel({
+          state: updatePhase,
+          currentVersion: app.getVersion(),
+          latestVersion: updateInfo.latestVersion,
+        }),
+        enabled: ['available', 'downloading', 'ready'].includes(updatePhase),
+        click() { showUpdateWindow(); },
       },
       { type: 'separator' },
       { label: 'About', click() { createWindow(`${SERVICE_URL}/about`); } },
@@ -399,6 +641,8 @@ app.on('ready', () => {
       { role: 'quit' },
     ]));
   };
+
+  registerUpdateIpc();
 
   setServiceState('starting');
   startServiceAndOpen({ openBrowser: true });
