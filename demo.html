@@ -506,6 +506,12 @@
               <button type="button" class="btn btn-secondary config-tab" id="config-tab-devices" data-config-tab="devices">Devices</button>
               <button type="button" class="btn btn-outline-secondary config-tab" id="config-tab-logs" data-config-tab="logs">Logs</button>
             </div>
+            <!-- The handler for this has existed in app.js since the import; the
+                 button never did, so leaving this view meant pressing Escape —
+                 which reloads the whole page — or picking another view from the
+                 Menu. The Background and Planning Center panes both have their
+                 own Close, and this is the same control for this one. -->
+            <button type="button" class="btn btn-outline-secondary ms-auto" id="close-settings-inline">Close</button>
           </div>
         </div>
 
