@@ -71,13 +71,13 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WIRELESSBOARD_REMOVE_VENV: 'false'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Install Node dependencies
@@ -232,7 +232,7 @@ jobs:
             exit 1
           fi
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact_name }}-${{ github.ref_name }}
           path: ${{ matrix.artifact_folder }}
@@ -249,10 +249,10 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -349,16 +349,22 @@ jobs:
   package-pi:
     if: github.event_name == 'workflow_dispatch' && inputs.build_pi == true
     name: Package Raspberry Pi bundle
+    # ⚠️ The actions below now run on Node 24 and need Actions Runner >= 2.327.1.
+    # GitHub-hosted runners are long past that; THIS ONE IS SELF-HOSTED, so it
+    # has to be updated by hand. If this job starts failing to even start a
+    # step, update the runner before looking anywhere else. It is opt-in behind
+    # workflow_dispatch, so the failure will not surface until someone asks for
+    # a Pi build.
     runs-on: [self-hosted, linux, arm64]
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Install Node dependencies
@@ -371,7 +377,7 @@ jobs:
       - name: Build Raspberry Pi release
         run: npm run release:pi
       - name: Upload Pi artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wirelessboard-pi-${{ github.ref_name }}
           path: release/pi/wirelessboard-pi-*.tar.gz
