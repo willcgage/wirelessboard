@@ -2412,9 +2412,23 @@ export function initConfigEditor(force = false) {
     });
   }
 
+  // #save lives in the served markup, so it outlives this function -- and this
+  // function runs again every time the settings view is opened, and again on
+  // closePCOView(). Binding unconditionally stacked one more click listener per
+  // visit, and a single click then fired that many concurrent POSTs to
+  // /api/config. Three of them arriving together is what destroyed an
+  // operator's config.json on site. Same dataset.bound guard the other
+  // ensure*Bindings helpers here use.
   const saveBtn = document.getElementById('save');
-  if (saveBtn) {
+  if (saveBtn && saveBtn.dataset.bound !== 'true') {
+    saveBtn.dataset.bound = 'true';
     saveBtn.addEventListener('click', () => {
+      // A save takes seconds -- it tears down and redials every receiver -- and
+      // there is no feedback on the button itself, so waiting operators click
+      // it again. The server serialises saves now, but a second one is still a
+      // second full rebuild of every receiver that nobody asked for.
+      if (saveBtn.dataset.saving === 'true') return;
+
       const { incomplete, ...data } = generateJSONConfig();
 
       // Saving reloads the page, so a warning afterwards would be wiped along
@@ -2433,6 +2447,10 @@ export function initConfigEditor(force = false) {
       }
 
       const url = 'api/config';
+      // Held until the page reloads on success, so the button stays shut for
+      // the whole round trip rather than only until the response lands.
+      saveBtn.dataset.saving = 'true';
+      saveBtn.disabled = true;
       setConfigSaveStatus('Saving…', 'info');
       setDiscoveryStatus('Saving discovery settings…', 'info');
       postJSON(url, data, (resp) => {
@@ -2454,6 +2472,9 @@ export function initConfigEditor(force = false) {
         invokeUpdateHash();
         window.location.reload();
       }, (err) => {
+        // Released only on failure -- the success path reloads the page.
+        saveBtn.dataset.saving = 'false';
+        saveBtn.disabled = false;
         setConfigSaveStatus(`Failed to save: ${formatError(err)}`, 'error');
         setDiscoveryStatus(`Failed to save discovery settings: ${formatError(err)}`, 'error');
       });

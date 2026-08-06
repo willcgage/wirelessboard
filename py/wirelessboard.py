@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 
@@ -8,14 +9,34 @@ import shure
 import discover
 
 
-def main():
+def _load_config():
     init_config = getattr(config, "init_config", None)
     if callable(init_config):
         init_config()
-    else:
-        init_fn = getattr(config, "init", None)
-        if callable(init_fn):
-            init_fn()
+        return
+    init_fn = getattr(config, "init", None)
+    if callable(init_fn):
+        init_fn()
+
+
+def main():
+    try:
+        _load_config()
+    except Exception:
+        # A config.json that cannot be loaded used to end the process here,
+        # before the web thread was ever started -- so the one interface the
+        # operator could have fixed it from never came up, and from outside it
+        # looked like the server simply stopped responding. Come up on defaults
+        # instead and say why. Nothing is written back: the file on disk is left
+        # exactly as it is so it stays recoverable, and so a board that is only
+        # temporarily unreadable is not overwritten with an empty one.
+        logging.getLogger('micboard.core').exception(
+            'Could not load configuration; starting with defaults so the '
+            'interface is reachable. config.json has been left unchanged.')
+        config.config_load_degraded = True
+        config.config_tree.setdefault('slots', [])
+        config.config_tree.setdefault('groups', [])
+        config.config_tree.setdefault('port', config.DEFAULT_PORT)
 
     time.sleep(.1)
     rxquery_t = threading.Thread(target=shure.WirelessQueryQueue)

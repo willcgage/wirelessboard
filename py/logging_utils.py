@@ -29,10 +29,20 @@ LOGGER_NAMES: Iterable[str] = (
 DEFAULT_SETTINGS: Dict[str, Any] = {
     'level': 'INFO',
     'console_level': 'WARNING',
+    # Tornado logs one line per HTTP request, and a board polls /data.json every
+    # five seconds and pulls its static assets on every reload. In a captured
+    # day of logs that was 22,626 of 22,651 lines -- 99.9% -- so the handful of
+    # lines actually describing a fault were spread across rotated files and
+    # effectively unfindable. Tornado grades these by status: 2xx/3xx at INFO,
+    # 4xx at WARNING, 5xx at ERROR. WARNING therefore keeps every failed request
+    # and drops only the successful ones. Set to INFO to get them all back.
+    'access_level': 'WARNING',
     'levels': {},
     'max_bytes': 10 * 1024 * 1024,
     'backups': 5,
 }
+
+ACCESS_LOGGER_NAME = 'tornado.access'
 
 LOG_FILENAME = 'application.log'
 
@@ -85,7 +95,7 @@ def normalize_level(value: Any, fallback: str = 'INFO') -> str:
 def normalize_settings(raw: Any) -> Dict[str, Any]:
     settings = default_settings()
     if isinstance(raw, dict):
-        for key in ('level', 'console_level'):
+        for key in ('level', 'console_level', 'access_level'):
             if key in raw:
                 settings[key] = normalize_level(raw.get(key), settings[key])
         if 'max_bytes' in raw:
@@ -197,6 +207,16 @@ def build_logging_config(settings: Dict[str, Any], logfile_path: str) -> Dict[st
             'level': level,
             'propagate': False,
         }
+
+    # Explicit, because tornado.access otherwise falls through to the root
+    # logger and is emitted at the root's level.
+    access_level = levels.get(ACCESS_LOGGER_NAME) or settings.get(
+        'access_level', DEFAULT_SETTINGS['access_level'])
+    loggers[ACCESS_LOGGER_NAME] = {
+        'handlers': ['console', 'file'],
+        'level': access_level,
+        'propagate': False,
+    }
 
     config_dict = {
         'version': 1,
