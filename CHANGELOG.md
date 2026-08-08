@@ -8,6 +8,15 @@
 - _Nothing yet._
 
 ### Fixed
+- _Nothing yet._
+
+## [1.9.1] - 2026-08-06
+A repair release, for a fault that was quietly wrong rather than visibly
+broken: on every board where Planning Center had assigned people, the slots
+were labelled with their microphones instead — and the photos followed the
+microphones with them.
+
+### Fixed
 - **A slot's photo and video follow the person, not the transmitter.** Wherever Planning Center had assigned someone, the board went on showing the microphone's own channel label — so the artwork for a slot was looked up under the device, and a photo only appeared where a transmitter happened to be named after whoever was holding it. Two things caused it. The assigned name was only honoured when the configuration also held a snapshot of the device name taken at the time, which a Planning Center sync never writes; it is now honoured unless there is positive evidence it has gone stale, which is a transmitter that has since been renamed. And the filename guide in the photo/video section derived its names from the device while the board looked for the person, so the two contradicted each other — they now come from one place, and what the guide prints is what the board goes looking for. Related: a transmitter renamed while the board was running used to delete the assignment from `config.json` outright; it is now left alone and the mismatch is logged.
 
 ## [1.9.0] - 2026-08-06
