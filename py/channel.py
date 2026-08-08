@@ -3,8 +3,9 @@ import re
 from collections import defaultdict
 import logging
 
-import config
 from device_config import BASE_CONST
+
+logger = logging.getLogger('micboard.slot')
 
 chart_update_list = []
 data_update_list = []
@@ -48,23 +49,47 @@ class ChannelDevice:
         else:
             chan_name = self.chan_name_raw
 
-        if 'chan_name_raw' in self.cfg:
-            if self.cfg['chan_name_raw'] == self.chan_name_raw:
-                if 'extended_id' in self.cfg:
-                    if self.cfg['extended_id']:
-                        chan_id = self.cfg['extended_id']
+        # Who is on this channel beats what the transmitter is called. The
+        # assignment only steps aside when there is positive evidence it has
+        # gone stale -- a snapshot of the device name taken when it was made,
+        # which no longer matches the hardware.
+        #
+        # This used to require that snapshot to be PRESENT before it would
+        # apply the assignment at all, which meant a slot without one showed
+        # the device name no matter who was assigned to it. Planning Center
+        # never writes one -- _apply_assignments deliberately preserves the
+        # hardware naming keys so a sync can never overwrite a channel label --
+        # so every PCO-assigned person was displayed as their transmitter, and
+        # the photo/video for a slot resolved to the device rather than to the
+        # person. Absent evidence is not evidence.
+        snapshot = self.cfg.get('chan_name_raw')
+        repatched = (
+            bool(snapshot)
+            and snapshot != self.chan_name_raw
+            # A channel still reporting its placeholder has not been re-patched;
+            # it has not reported in yet, and dropping the assignment there
+            # would lose it every time the board restarts.
+            and 'SLOT' not in self.chan_name_raw
+        )
 
-                if 'extended_name' in self.cfg:
-                    if self.cfg['extended_name']:
-                        chan_name = self.cfg['extended_name']
-
-            elif 'SLOT' not in self.chan_name_raw:
-                if 'extended_id' in self.cfg:
-                    self.cfg.pop('extended_id')
-                if 'extended_name' in self.cfg:
-                    self.cfg.pop('extended_name')
-                self.cfg.pop('chan_name_raw')
-                config.save_current_config()
+        if not repatched:
+            if self.cfg.get('extended_id'):
+                chan_id = self.cfg['extended_id']
+            if self.cfg.get('extended_name'):
+                chan_name = self.cfg['extended_name']
+        elif self.cfg.get('extended_id') or self.cfg.get('extended_name'):
+            # Deliberately not deleted. This used to pop extended_id,
+            # extended_name and the snapshot and then save -- from inside a
+            # getter that ch_json calls, which every open board triggers every
+            # five seconds. A transmitter renamed mid-service destroyed the
+            # assignment on disk with no record of what it had been. Ignoring it
+            # for display is enough; the operator's configuration is theirs.
+            logger.info(
+                'Slot %s is assigned to "%s" but its transmitter now reports "%s" '
+                '(was "%s"); showing the device name until the assignment is '
+                'updated.',
+                self.slot, self.cfg.get('extended_name') or self.cfg.get('extended_id'),
+                self.chan_name_raw, snapshot)
 
         return (chan_id, chan_name)
 
