@@ -3,6 +3,7 @@ import { Collapse } from 'bootstrap';
 import { postJSON } from './data.js';
 import { resolveSlotType } from './slot-rules.mjs';
 import { discoveryHint } from './discovery-hint.mjs';
+import { backgroundNameForSlot, backgroundFilenames } from './background-key.mjs';
 
 const noop = () => {};
 
@@ -1679,11 +1680,6 @@ function setBackgroundDirectoryStatus(message, level = 'info') {
   statusEl.classList.add(STATUS_CLASSES[level] || 'text-muted');
 }
 
-function normalizeBackgroundKey(value) {
-  if (!value) return '';
-  return String(value).trim().toLowerCase();
-}
-
 function dispatchBackgroundLibraryUpdated() {
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
     return;
@@ -1713,19 +1709,17 @@ function currentSlotList() {
   });
 }
 
-function resolveDeviceName(slotNumber, slotConfig) {
+// The name this slot's media is keyed on. Was `resolveDeviceName`, and it
+// preferred `name_raw` -- the transmitter's own channel label -- so the guide
+// told operators to name files after the device while gif.js went looking for
+// the person. backgroundNameForSlot is now the single answer both use.
+function resolveBackgroundName(slotNumber, slotConfig) {
   const txList = micboard && micboard.transmitters;
-  let name = '';
+  let tx = null;
   if (txList && typeof txList === 'object') {
-    const tx = Array.isArray(txList) ? txList[slotNumber] : txList[String(slotNumber)] || txList[slotNumber];
-    if (tx) {
-      name = tx.name_raw || tx.name || tx.device_name || tx.device || tx.label || '';
-    }
+    tx = Array.isArray(txList) ? txList[slotNumber] : txList[String(slotNumber)] || txList[slotNumber];
   }
-  if (!name && slotConfig) {
-    name = slotConfig.chan_name_raw || slotConfig.device || slotConfig.name || '';
-  }
-  return name || '';
+  return backgroundNameForSlot(tx, slotConfig);
 }
 
 function decorateFilenameCell(cell, filename, exists) {
@@ -1771,10 +1765,8 @@ export function renderBackgroundFilenameGuide() {
       return;
     }
 
-    const deviceName = resolveDeviceName(slotNumber, slotConfig);
-    const baseKey = normalizeBackgroundKey(deviceName);
-    const imgFilename = baseKey ? `${baseKey}.jpg` : '';
-    const videoFilename = baseKey ? `${baseKey}.mp4` : '';
+    const backgroundName = resolveBackgroundName(slotNumber, slotConfig);
+    const { image: imgFilename, video: videoFilename } = backgroundFilenames(backgroundName);
     const hasImg = !!(imgFilename && imgList.indexOf(imgFilename) > -1);
     const hasVideo = !!(videoFilename && mp4List.indexOf(videoFilename) > -1);
 
@@ -1786,8 +1778,8 @@ export function renderBackgroundFilenameGuide() {
     row.appendChild(slotCell);
 
     const nameCell = document.createElement('td');
-    if (deviceName) {
-      nameCell.textContent = deviceName;
+    if (backgroundName) {
+      nameCell.textContent = backgroundName;
     } else {
       nameCell.textContent = '—';
       nameCell.classList.add('text-muted');

@@ -182,14 +182,14 @@
               <section class="library-section" id="background-filename-guide">
                 <h5 class="h6 text-muted text-uppercase">Background Filenames</h5>
                 <p class="small text-muted" id="background-filename-description">
-                  Wirelessboard looks for media named after each slot's device name, lowercased and trimmed. Reference the expected filenames below when preparing artwork or videos.
+                  Wirelessboard looks for media named after the person assigned to each slot — the name shown on the board, lowercased and trimmed. A slot with nobody assigned falls back to the name its transmitter reports. Reference the expected filenames below when preparing artwork or videos.
                 </p>
                 <div class="table-responsive">
                   <table class="table table-sm table-striped mb-0" id="background-filename-table" aria-describedby="background-filename-description">
                     <thead class="table-dark">
                       <tr>
                         <th scope="col">Slot</th>
-                        <th scope="col">Device Name</th>
+                        <th scope="col">Name</th>
                         <th scope="col">Image (.jpg)</th>
                         <th scope="col">Video (.mp4)</th>
                       </tr>
@@ -198,7 +198,7 @@
                   </table>
                 </div>
                 <div class="small text-muted" id="background-filename-empty" hidden>
-                  No active device names are available yet. Once the board receives data for a slot, the expected filenames will appear here.
+                  No names are available yet. Once a person is assigned to a slot, or the board receives data for it, the expected filenames will appear here.
                 </div>
               </section>
             </div>

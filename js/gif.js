@@ -1,9 +1,5 @@
 import { micboard } from './app.js';
-
-const MEDIA_EXTENSIONS = {
-  IMG: '.jpg',
-  MP4: '.mp4',
-};
+import { backgroundFilenameForMode } from './background-key.mjs';
 
 const MEDIA_BASE_PATH = 'bg/';
 
@@ -88,22 +84,15 @@ export function updateBackground(slotEl) {
     return;
   }
 
-  const extension = MEDIA_EXTENSIONS[micboard.backgroundMode];
-  if (!extension) {
-    removeMedia(slotEl);
-    return;
-  }
-
+  // The rendered name, which is the person once one is assigned. Derived
+  // through background-key.mjs so this and the guide table in the photo/video
+  // section cannot disagree about what the file is called.
   const rawName = nameEl.textContent || nameEl.innerText || nameEl.innerHTML || '';
-  const baseName = String(rawName)
-    .trim()
-    .toLowerCase();
-  if (!baseName) {
+  const filename = backgroundFilenameForMode(rawName, micboard.backgroundMode);
+  if (!filename) {
     removeMedia(slotEl);
     return;
   }
-
-  const filename = baseName + extension;
 
   if (micboard.backgroundMode === 'MP4') {
     if (Array.isArray(micboard.mp4_list) && micboard.mp4_list.indexOf(filename) > -1) {
