@@ -10,6 +10,11 @@
  *
  * Prefers the virtualenv, falls back to PATH so a system-installed set of
  * dependencies keeps working. Mirrors the resolution order in run-pytest.js.
+ *
+ * Pass --system to skip the virtualenv deliberately, which is what server:sys
+ * wants. It used to name `python3`, but on Windows that reaches the Store alias
+ * stub rather than an interpreter, so the script opened the Microsoft Store
+ * instead of starting anything.
  */
 const path = require('path');
 const fs = require('fs');
@@ -29,18 +34,35 @@ function venvPython() {
   return null;
 }
 
-function resolveInterpreter() {
+// `python3` is not a safe name for this on Windows: the Store alias stub
+// answers to it whether or not an interpreter is installed. `python` is what
+// resolves to a real one, which is why the platforms differ here.
+function systemPython() {
+  return process.platform === 'win32' ? 'python' : 'python3';
+}
+
+function resolveInterpreter({ system }) {
+  // An explicit interpreter stays the most specific instruction, so it wins
+  // over --system rather than the other way round.
   const override = process.env.WIRELESSBOARD_PYTHON && process.env.WIRELESSBOARD_PYTHON.trim();
   if (override) return override;
+
+  if (system) return systemPython();
 
   const venv = venvPython();
   if (venv) return venv;
 
-  return process.platform === 'win32' ? 'python' : 'python3';
+  return systemPython();
 }
 
-const python = resolveInterpreter();
-const args = [path.join('py', 'wirelessboard.py'), ...process.argv.slice(2)];
+// --system is ours; everything else belongs to wirelessboard.py.
+const passthrough = process.argv.slice(2);
+const systemIndex = passthrough.indexOf('--system');
+const system = systemIndex !== -1;
+if (system) passthrough.splice(systemIndex, 1);
+
+const python = resolveInterpreter({ system });
+const args = [path.join('py', 'wirelessboard.py'), ...passthrough];
 const result = spawnSync(python, args, { cwd: projectRoot, stdio: 'inherit' });
 
 if (result.error) {

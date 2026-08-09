@@ -6,7 +6,7 @@
   "scripts": {
     "server": "node scripts/run-server.js",
     "server:venv": "node scripts/run-server.js",
-    "server:sys": "python3 py/wirelessboard.py",
+    "server:sys": "node scripts/run-server.js --system",
     "setup:venv": "node scripts/setup-venv.js",
     "postinstall": "npm run setup:venv",
     "build": "node node_modules/webpack/bin/webpack.js --mode production --progress --config=webpack.config.js",
@@ -14,7 +14,7 @@
     "test": "npm run test:py && npm run test:js",
     "test:py": "node scripts/run-pytest.js",
     "build:dev": "node node_modules/webpack/bin/webpack.js --mode development --watch --config=webpack.config.js",
-    "server:watch": "nodemon --watch static --watch demo.html --watch css --watch js --watch py --ignore 'config/config.json' --ignore 'config/**/*.json' --ext js,json,html,css,py --exec \"node scripts/run-server.js\"",
+    "server:watch": "nodemon --watch static --watch demo.html --watch css --watch js --watch py --ignore \"config/config.json\" --ignore \"config/**/*.json\" --ext js,json,html,css,py --exec \"node scripts/run-server.js\"",
     "dev": "concurrently \"npm run build:dev\" \"npm run server:watch\"",
     "bundle:server": "node scripts/run-pyinstaller.js",
     "bundle:server:win": "node scripts/build-universal.js",
