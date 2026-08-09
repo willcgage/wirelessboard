@@ -122,7 +122,10 @@
                 <form id="background-directory-form" class="row g-3 align-items-end">
                   <div class="col-md-8 col-12">
                     <label for="background-directory" class="form-label text-muted">Folder</label>
-                    <input type="text" id="background-directory" class="form-control" placeholder="~/Library/Application Support/wirelessboard/backgrounds">
+                    <div class="input-group">
+                      <input type="text" id="background-directory" class="form-control" placeholder="~/Library/Application Support/wirelessboard/backgrounds">
+                      <button type="button" id="background-directory-browse" class="btn btn-outline-secondary">Browse&hellip;</button>
+                    </div>
                     <small id="background-directory-help" class="form-text text-muted"></small>
                     <div class="mt-3">
                       <label for="background-default-mode" class="form-label text-muted">TV Mode Default Background</label>
@@ -203,6 +206,32 @@
               </section>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kept outside #background-settings: that container is hidden whenever the
+       Background Library view is closed, and a modal inside it would be too. -->
+  <div class="modal fade" id="folder-picker-modal" tabindex="-1" aria-labelledby="folder-picker-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="folder-picker-title">Choose Background Folder</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex gap-2 align-items-center mb-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="folder-picker-up">&uarr; Up</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="folder-picker-home">This Computer</button>
+            <code class="small text-truncate flex-grow-1" id="folder-picker-path"></code>
+          </div>
+          <div id="folder-picker-status" class="small text-muted mb-2"></div>
+          <div class="list-group" id="folder-picker-list" style="max-height: 40vh; overflow-y: auto;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="folder-picker-select" disabled>Use This Folder</button>
         </div>
       </div>
     </div>

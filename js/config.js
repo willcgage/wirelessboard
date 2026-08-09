@@ -1,4 +1,4 @@
-import { Collapse } from 'bootstrap';
+import { Collapse, Modal } from 'bootstrap';
 
 import { postJSON } from './data.js';
 import { resolveSlotType } from './slot-rules.mjs';
@@ -640,6 +640,15 @@ const backgroundDirectoryState = {
 
 const backgroundFilenameGuideState = {
   scheduled: false,
+};
+
+// The picker walks the service's filesystem rather than the browser's: the
+// board is opened with shell.openExternal, so there is no Electron dialog to
+// call, and a browser folder input never reveals an absolute path.
+const folderPickerState = {
+  listing: null,
+  loading: false,
+  bound: false,
 };
 
 const GOOGLE_DRIVE_AUTH_MESSAGE = 'wirelessboard:drive-auth';
@@ -1854,6 +1863,13 @@ function renderBackgroundDirectory(info) {
 
     const disableInput = busy || (info && info.source === 'cli');
     input.disabled = disableInput;
+
+    const browseBtn = document.getElementById('background-directory-browse');
+    if (browseBtn) {
+      // Browsing only helps if the chosen path can then be saved, and a
+      // command-line override means it cannot.
+      browseBtn.disabled = disableInput;
+    }
   }
 
   if (saveBtn) {
@@ -1899,6 +1915,145 @@ function renderBackgroundDirectory(info) {
   }
 }
 
+function setFolderPickerStatus(message, level = 'info') {
+  const statusEl = document.getElementById('folder-picker-status');
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.className = `small mb-2 ${STATUS_CLASSES[level] || 'text-muted'}`;
+}
+
+function renderFolderPicker() {
+  const list = document.getElementById('folder-picker-list');
+  const pathEl = document.getElementById('folder-picker-path');
+  const upBtn = document.getElementById('folder-picker-up');
+  const selectBtn = document.getElementById('folder-picker-select');
+  const { listing } = folderPickerState;
+
+  if (pathEl) {
+    pathEl.textContent = listing && listing.path ? listing.path : 'This Computer';
+  }
+
+  if (upBtn) {
+    // At a filesystem root there is nowhere further up, so Up returns to the
+    // list of drives and home folders rather than going nowhere.
+    upBtn.disabled = folderPickerState.loading || !listing || listing.is_roots;
+  }
+
+  if (selectBtn) {
+    selectBtn.disabled = folderPickerState.loading || !listing || !listing.path;
+  }
+
+  if (!list) return;
+  list.textContent = '';
+
+  if (folderPickerState.loading) {
+    return;
+  }
+
+  if (!listing || !Array.isArray(listing.entries) || listing.entries.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'list-group-item text-muted small';
+    empty.textContent = listing && listing.path
+      ? 'No sub-folders here. Use This Folder to select it.'
+      : 'Nothing to show.';
+    list.appendChild(empty);
+    return;
+  }
+
+  listing.entries.forEach((entry) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'list-group-item list-group-item-action';
+    item.textContent = entry.name;
+    item.addEventListener('click', () => {
+      loadFolderPicker(entry.path).catch(() => {});
+    });
+    list.appendChild(item);
+  });
+}
+
+async function loadFolderPicker(path) {
+  if (folderPickerState.loading) {
+    return;
+  }
+
+  folderPickerState.loading = true;
+  renderFolderPicker();
+  setFolderPickerStatus('Loading…', 'info');
+
+  try {
+    const query = path ? `?path=${encodeURIComponent(path)}` : '';
+    const response = await fetch(`api/folders${query}`, { cache: 'no-store' });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.ok !== true) {
+      throw new Error((data && data.error) || `Request failed (${response.status})`);
+    }
+    folderPickerState.listing = data.folder || null;
+    setFolderPickerStatus('', 'info');
+  } catch (err) {
+    // Keep the previous listing on screen: a folder that cannot be read is a
+    // dead end, not a reason to lose the operator's place.
+    setFolderPickerStatus(formatError(err), 'error');
+  } finally {
+    folderPickerState.loading = false;
+    renderFolderPicker();
+  }
+}
+
+function openFolderPicker() {
+  const modalEl = document.getElementById('folder-picker-modal');
+  if (!modalEl) return;
+
+  ensureFolderPickerBindings();
+  Modal.getOrCreateInstance(modalEl).show();
+
+  const input = document.getElementById('background-directory');
+  const typed = input ? input.value.trim() : '';
+  const { info } = backgroundDirectoryState;
+  const start = typed || (info && (info.resolved_path || info.default_path)) || '';
+  // A path that no longer exists answers 400; the roots list is the way back.
+  loadFolderPicker(start).catch(() => {});
+}
+
+function ensureFolderPickerBindings() {
+  if (folderPickerState.bound) return;
+  const modalEl = document.getElementById('folder-picker-modal');
+  if (!modalEl) return;
+  folderPickerState.bound = true;
+
+  const upBtn = document.getElementById('folder-picker-up');
+  if (upBtn) {
+    upBtn.addEventListener('click', () => {
+      const { listing } = folderPickerState;
+      if (!listing || listing.is_roots) return;
+      loadFolderPicker(listing.parent || '').catch(() => {});
+    });
+  }
+
+  const homeBtn = document.getElementById('folder-picker-home');
+  if (homeBtn) {
+    homeBtn.addEventListener('click', () => {
+      loadFolderPicker('').catch(() => {});
+    });
+  }
+
+  const selectBtn = document.getElementById('folder-picker-select');
+  if (selectBtn) {
+    selectBtn.addEventListener('click', () => {
+      const { listing } = folderPickerState;
+      if (!listing || !listing.path) return;
+      const input = document.getElementById('background-directory');
+      if (input) {
+        input.value = listing.path;
+      }
+      Modal.getOrCreateInstance(modalEl).hide();
+      // Choosing is not saving -- Save Folder still has to be pressed, and the
+      // status line is where that gets said.
+      setBackgroundDirectoryStatus(`Folder selected. Press Save Folder to apply ${listing.path}.`, 'info');
+    });
+  }
+}
+
 function ensureBackgroundDirectoryBindings() {
   const form = document.getElementById('background-directory-form');
   if (form && form.dataset.bound !== 'true') {
@@ -1911,6 +2066,14 @@ function ensureBackgroundDirectoryBindings() {
       const modeSelect = document.getElementById('background-default-mode');
       const defaultMode = modeSelect ? modeSelect.value : 'NONE';
       saveBackgroundDirectory(value, { useDefault, defaultMode }).catch(() => {});
+    });
+  }
+
+  const browseBtn = document.getElementById('background-directory-browse');
+  if (browseBtn && browseBtn.dataset.bound !== 'true') {
+    browseBtn.dataset.bound = 'true';
+    browseBtn.addEventListener('click', () => {
+      openFolderPicker();
     });
   }
 
