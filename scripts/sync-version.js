@@ -55,7 +55,13 @@ function rebuildBundles(npmCli) {
 // A hardcoded list that quietly falls behind a new entry would reintroduce the
 // exact staleness this build exists to prevent.
 function bundleOutputPaths() {
-  const { entry, output } = require(WEBPACK_CONFIG_PATH);
+  // The config is a function of (env, argv) so that devtool can follow the
+  // mode. Ask it for the production shape, which is what `npm run build` --
+  // the build this script just ran -- produces.
+  const config = require(WEBPACK_CONFIG_PATH);
+  const { entry, output } = typeof config === 'function'
+    ? config({}, { mode: 'production' })
+    : config;
   return Object.keys(entry).flatMap((name) => {
     const bundle = path.join(output.path, output.filename.replace('[name]', name));
     // devtool is 'source-map', so every bundle has a sibling map. webpack also

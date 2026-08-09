@@ -2,8 +2,16 @@ const path = require('path');
 const webpack = require('webpack');
 
 
-module.exports = {
-  devtool: 'source-map',
+// Exported as a function so devtool can depend on the mode. Callers that only
+// want the static shape (scripts/sync-version.js reads entry and output to
+// work out what the build emits) invoke it with a mode of their choosing.
+module.exports = (env, argv = {}) => ({
+  // Source maps embed each source file's text verbatim in sourcesContent, line
+  // endings and all, so a bundle built from a CRLF checkout differs byte for
+  // byte from one built from LF. That made the committed bundles impossible to
+  // verify against a CI rebuild. Production ships without them; build:dev,
+  // which runs in development mode, still gets them.
+  devtool: argv.mode === 'production' ? false : 'source-map',
   resolve: {
     extensions: ['.mjs', '.js', '.jsx', '.json'],
   },
@@ -60,4 +68,4 @@ module.exports = {
       },
     ],
   },
-};
+});
