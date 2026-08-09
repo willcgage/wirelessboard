@@ -9,6 +9,21 @@ The Wirelessboard server is written in Python. [PyInstaller](https://pyinstaller
 
 The Electron wrapper is written in JavaScript. It provides a menubar app with access to Wirelessboard, its configuration directory, and the Wirelessboard logs. The menu labels continue to include “Micboard” when running in legacy compatibility mode.
 
+## Update checks
+
+The desktop app looks for a newer release 30 seconds after launch and every six hours after that. It never downloads or installs anything on its own — it reports what is available and leaves the decision to the operator, because this runs during live services.
+
+Two controls in the tray menu:
+
+- **Check for Updates Now** — asks immediately. Available whether or not automatic checks are on.
+- **Check for Updates Automatically** — turn the periodic check off for sites that manage their own update windows, run offline, or are on a locked-down network. On by default.
+
+Both settings live in `update-state.json`, beside `config.json` in the configuration directory, alongside the version whose prompt was last dismissed. Nothing in the Electron app writes `config.json`.
+
+Turning automatic checks off stops the periodic check and the prompt it raises. It does not hide an update already found, and it does not disable **Check for Updates Now** — off means "stop doing this on your own", not "refuse when I ask".
+
+Dismissing a prompt is separate and applies to one version: it stops that release interrupting you, while the tray keeps reporting it until it is installed or superseded.
+
 ## Building Cross-Platform Releases
 Wirelessboard now ships with repeatable release scripts and a GitHub Actions workflow that publish artefacts for macOS, Windows, and Raspberry Pi. The Python backend is bundled with PyInstaller while [`electron-builder`](https://www.electron.build) produces the desktop shells.
 

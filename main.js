@@ -17,6 +17,7 @@ const { autoUpdater } = require('electron-updater');
 const servicePaths = require('./electron/service-paths');
 const updateCheck = require('./electron/update-check');
 const updatePrompt = require('./electron/update-prompt');
+const updateSettings = require('./electron/update-settings');
 
 let win;
 let tray;
@@ -330,25 +331,47 @@ function updateStatePath() {
   return resolveAppDataPath(UPDATE_STATE_FILE);
 }
 
-function readDismissedVersion() {
+function readUpdateStateFile() {
   try {
     const raw = fs.readFileSync(updateStatePath(), 'utf8');
     const parsed = JSON.parse(raw);
-    return updatePrompt.normalizeVersion(parsed && parsed.dismissedVersion);
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch (err) {
-    // Absent or unreadable both mean "nothing dismissed". Never fatal: failing
-    // to remember a dismissal costs one extra prompt, which is the safe way to
-    // be wrong.
-    return null;
+    // Absent or unreadable both mean "nothing remembered". Never fatal: the
+    // cost is one extra prompt, which is the safe way to be wrong.
+    return {};
   }
 }
 
-function writeDismissedVersion(version) {
+// ⛔ Read, merge, write. This used to replace the whole file with the one key
+// it was changing, which was harmless while there was only one -- but a
+// dismissal would now switch automatic checks back on behind the operator.
+function patchUpdateState(patch) {
   try {
-    fs.writeFileSync(updateStatePath(), JSON.stringify({ dismissedVersion: version }, null, 2));
+    const merged = updateSettings.mergeSettings(readUpdateStateFile(), patch);
+    fs.writeFileSync(updateStatePath(), JSON.stringify(merged, null, 2));
+    return true;
   } catch (err) {
-    console.warn(`Could not remember the dismissed update version: ${err.message}`);
+    console.warn(`Could not save update settings: ${err.message}`);
+    return false;
   }
+}
+
+function readDismissedVersion() {
+  return updatePrompt.normalizeVersion(readUpdateStateFile().dismissedVersion);
+}
+
+function writeDismissedVersion(version) {
+  patchUpdateState({ dismissedVersion: version });
+}
+
+function automaticChecksEnabled() {
+  return updateSettings.normalizeSettings(readUpdateStateFile()).automaticChecks;
+}
+
+function setAutomaticChecks(enabled) {
+  patchUpdateState({ automaticChecks: Boolean(enabled) });
+  rebuildTrayMenu();
 }
 
 function pushUpdateState() {
@@ -490,7 +513,17 @@ function wireUpdater() {
   return autoUpdater;
 }
 
-async function runUpdateCheck() {
+async function runUpdateCheck({ manual = false } = {}) {
+  // Read at the point of use rather than caching: the operator can turn this
+  // off between the six-hourly firings, and the next one should already know.
+  if (!updateSettings.shouldCheck({ settings: readUpdateStateFile(), manual })) {
+    return;
+  }
+
+  if (manual) {
+    setUpdatePhase('checking', { message: 'Checking for updates…' });
+  }
+
   const result = await updateCheck.checkForUpdate({
     currentVersion: app.getVersion(),
     getJson,
@@ -629,6 +662,20 @@ app.on('ready', () => {
         enabled: ['available', 'downloading', 'ready'].includes(updatePhase),
         click() { showUpdateWindow(); },
       },
+      // Stays available whatever the checkbox says: switching the automatic
+      // checks off means "stop doing this on your own", and leaving no way to
+      // ask deliberately would make the setting a trap.
+      {
+        label: 'Check for Updates Now',
+        enabled: !['downloading', 'ready'].includes(updatePhase),
+        click() { runUpdateCheck({ manual: true }); },
+      },
+      {
+        label: 'Check for Updates Automatically',
+        type: 'checkbox',
+        checked: automaticChecksEnabled(),
+        click(menuItem) { setAutomaticChecks(menuItem.checked); },
+      },
       { type: 'separator' },
       { label: 'About', click() { createWindow(`${SERVICE_URL}/about`); } },
       { type: 'separator' },
@@ -651,8 +698,11 @@ app.on('ready', () => {
   // waiting on the server, and an update check has no business competing with
   // it. Six-hourly thereafter keeps this far inside GitHub's unauthenticated
   // rate limit.
-  setTimeout(runUpdateCheck, UPDATE_CHECK_DELAY_MS);
-  setInterval(runUpdateCheck, UPDATE_CHECK_INTERVAL_MS);
+  // The timers always run; runUpdateCheck decides whether to act on them by
+  // reading the setting each time. Cancelling and re-arming an interval as the
+  // checkbox is toggled would be more state to get wrong for no benefit.
+  setTimeout(() => runUpdateCheck(), UPDATE_CHECK_DELAY_MS);
+  setInterval(() => runUpdateCheck(), UPDATE_CHECK_INTERVAL_MS);
 });
 
 
