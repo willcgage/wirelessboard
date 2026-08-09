@@ -10,6 +10,36 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.11.0] - 2026-08-09
+Mostly the board itself, and one long-overdue piece of housekeeping underneath
+it.
+
+A channel now says which transmitter it is, which it never did — and stops
+saying who is on it twice, which it did on every assigned slot. How the board
+arranges itself is now the operator's choice rather than a consequence of how
+many channels happen to be on. And the desktop app no longer insists on
+checking for updates on its own schedule.
+
+Underneath, the Electron runtime the desktop app is built on moves forward five
+major versions, closing eighteen security advisories. That is the largest
+change here even though none of it is visible.
+
+### Added
+- **The device name on every channel.** The card now reads device, then person, then position, top to bottom. The transmitter's own channel label was already being sent to the board and was only ever visible by opening the info drawer, so there was no way to see which physical unit a slot was on at a glance. A transmitter that has not reported in yet leaves the line blank rather than showing a placeholder.
+- **A choice of board layout.** Two controls in TV mode, both listed in the help overlay: **O** cycles the shape of the grid and **A** cycles the shape of a channel card, each between fit-to-page, landscape and portrait. Until now a card's proportions were whatever fell out of fitting every channel onto one screen — twelve channels gave short wide cards, three gave tall ones, with no say in it. Choosing a card shape keeps it, and the board scrolls when the channels no longer fit. Both choices are remembered on the machine, so a display that loses power comes back the way it was left; a link that names a layout still overrides them.
+- **A way to turn off automatic update checks.** The desktop app checked for a new release every six hours with no way to stop it, which suited nobody managing their own update windows, running offline, or on a restricted network. The tray menu now offers *Check for Updates Automatically*, alongside a *Check for Updates Now* that works whether or not it is switched on. Turning it off stops the periodic check and the prompt it raises; it does not stop you asking.
+
+### Changed
+- **Electron 38 to 43, closing 18 security advisories.** The desktop app's runtime was five major versions behind and its line had stopped receiving security fixes, so those advisories had no patch to take. None was realistically exploitable here — the board opens in the operator's own browser, and the desktop app shows almost no web content of its own — but the runtime is on a supported line again.
+- **The desk view stacks the three lines.** It previously put the position on the left with the name floated to the right, which cannot express a three-line order. It is the default view, so this is the arrangement most people will notice.
+- **The keyboard shortcut list is generated from the shortcuts themselves.** It was maintained by hand and had fallen behind: **T**, which switches between the desk and TV views, was missing from it, as was **D**.
+- **Smaller frontend assets.** Source maps are no longer built into the released board, which roughly halves it.
+
+### Fixed
+- **Slot editing saves what you typed.** Pressing **N** to name slots has been quietly broken since the application was first imported: the editor never filled in the existing name, pasting a list of names did nothing, and saving sent nothing at all. A duplicate element sharing a name with the editor's input was intercepting all three.
+- **Windows builds were shipping different code from macOS builds.** The step that modernises one of the board's dependencies for older browsers never ran when packaging on Windows, because of the way a file path was matched. Windows installers have therefore been shipping code that some browsers may not accept. Both platforms now build the same thing, and the build fails if the released assets ever drift from their source again.
+- **The board reported the wrong version on a source checkout.** 1.10.0 shipped frontend assets still identifying themselves as 1.9.1. A version bump now rebuilds them.
+
 ## [1.10.0] - 2026-08-09
 One thing the photo/video settings had always asked of an operator and should
 not have: that they know, and type, an absolute path.
