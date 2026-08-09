@@ -35,7 +35,11 @@ module.exports = (env, argv = {}) => ({
     rules: [
       {
         test: /\.mjs$/,
-        include: /node_modules\/@shopify\/draggable/,
+        // Matched against a native path, so the separator has to be either.
+        // With a forward slash only, this never matched on Windows and
+        // @shopify/draggable went into the bundle untranspiled -- a Windows
+        // build produced a smaller app.js that had quietly skipped babel.
+        include: /node_modules[\\/]@shopify[\\/]draggable/,
         type: 'javascript/auto',
         use: {
           loader: 'babel-loader',
