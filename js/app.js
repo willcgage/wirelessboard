@@ -8,12 +8,16 @@ import { initLiveData } from './data.js';
 import { groupEditToggle, initEditor } from './dnd.js';
 import { slotEditToggle } from './extended.js';
 import { keybindings } from './kbd.js';
-import { setBackground, setInfoDrawer } from './display.js';
+import { setBackground, setInfoDrawer, applyBoardLayout } from './display.js';
 import { setTimeMode } from './chart-smoothie.js';
 import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule, scheduleBackgroundFilenameGuide,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
+import { isOrientation, isAspect } from './board-layout.mjs';
+import {
+  resolvePref, safeStorage, ORIENTATION_KEY, ASPECT_KEY,
+} from './view-prefs.mjs';
 
 import '../css/colors.scss';
 import '../css/style.scss';
@@ -28,6 +32,10 @@ micboard.MIC_MODELS = ['uhfr', 'qlxd', 'ulxd', 'axtd'];
 micboard.IEM_MODELS = ['p10t'];
 micboard.url = [];
 micboard.displayMode = 'deskmode';
+// Both default to 'auto', which is the fit-to-page board this has always been.
+// Resolved properly in readURLParameters once the hash and storage are known.
+micboard.gridOrientation = 'auto';
+micboard.slotAspect = 'auto';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -386,6 +394,28 @@ function readURLParameters() {
   micboard.url.background = getUrlParameter('background');
   micboard.url.tvmode = getUrlParameter('tvmode');
   micboard.url.bgmode = getUrlParameter('bgmode');
+  micboard.url.layout = getUrlParameter('layout');
+  micboard.url.aspect = getUrlParameter('aspect');
+
+  // hash beats what the device remembers, which beats the default. A wall
+  // display that has just come back from a power cut has no hash and nobody
+  // present to press a key, so the stored value is what puts it back the way
+  // it was left.
+  const storage = safeStorage();
+  micboard.gridOrientation = resolvePref({
+    hashValue: micboard.url.layout,
+    storage,
+    key: ORIENTATION_KEY,
+    isValid: isOrientation,
+    fallback: 'auto',
+  });
+  micboard.slotAspect = resolvePref({
+    hashValue: micboard.url.aspect,
+    storage,
+    key: ASPECT_KEY,
+    isValid: isAspect,
+    fallback: 'auto',
+  });
 
   if (micboard.url.settings === 'logs') {
     micboard.configTab = 'logs';
@@ -409,6 +439,13 @@ export function updateHash() {
   }
   if (micboard.backgroundMode !== 'NONE') {
     hash += `&bgmode=${micboard.backgroundMode}`;
+  }
+  // Only when they say something, so a default board still has a clean URL.
+  if (micboard.gridOrientation && micboard.gridOrientation !== 'auto') {
+    hash += `&layout=${micboard.gridOrientation}`;
+  }
+  if (micboard.slotAspect && micboard.slotAspect !== 'auto') {
+    hash += `&aspect=${micboard.slotAspect}`;
   }
   if (micboard.settingsMode === 'CONFIG') {
     if (micboard.configTab === 'logs') {
@@ -574,6 +611,9 @@ document.addEventListener('DOMContentLoaded', () => {
   keybindings();
   // Bind PCO navbar and handlers
   try { bindPcoNav(); bindPcoHandlers(); } catch (e) {}
+  // Put the resolved view choices on the container before the first layout
+  // pass, so a remembered portrait board does not paint as fit-to-page first.
+  try { applyBoardLayout(); } catch (_) {}
   try { startTvLayoutWatchers(); } catch (_) {}
   try { scheduleBackgroundFilenameGuide(); } catch (_) {}
 

@@ -4,6 +4,7 @@ import {
 } from './app.js';
 import {
   toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
+  cycleGridOrientation, cycleSlotAspect,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
@@ -77,6 +78,16 @@ function bindingTable() {
       keys: ['t'],
       hud: 'Switch between desk and TV display modes.',
       run: () => toggleDisplayMode(),
+    },
+    {
+      keys: ['o'],
+      hud: 'Cycle the grid shape: fit to page, landscape, portrait (TV mode).',
+      run: () => cycleGridOrientation(),
+    },
+    {
+      keys: ['a'],
+      hud: 'Cycle the channel shape: fit to page, landscape, portrait (TV mode).',
+      run: () => cycleSlotAspect(),
     },
     {
       keys: ['f'],

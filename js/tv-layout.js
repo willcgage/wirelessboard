@@ -1,3 +1,6 @@
+import { micboard } from './app.js';
+import { computeLayout } from './board-layout.mjs';
+
 let tvResizeObserver;
 let tvMutationObserver;
 let scheduled = false;
@@ -63,16 +66,22 @@ export function updateTvLayoutMetrics() {
   const paddingLeft = readNumeric(containerStyle.paddingLeft, 0);
   const paddingRight = readNumeric(containerStyle.paddingRight, 0);
   const containerWidth = Math.max(0, container.clientWidth - paddingLeft - paddingRight);
-  const maxColumns = Math.max(1, Math.floor((containerWidth + gap) / (slotWidth + gap)));
-  const columns = Math.max(1, Math.min(maxColumns, slotCount));
-  const rows = Math.max(1, Math.ceil(slotCount / columns));
 
   const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || container.clientHeight || 1080;
   const containerRect = container.getBoundingClientRect();
   const availableHeight = Math.max(240, viewportHeight - containerRect.top);
-  const rowHeight = (availableHeight - gap * (rows - 1)) / rows;
-  const scale = rowHeight / 1080;
-  const boardHeight = rowHeight * rows + gap * (rows - 1);
+
+  const {
+    columns, rows, rowHeight, boardHeight, scale, scrolls,
+  } = computeLayout({
+    slotCount,
+    containerWidth,
+    availableHeight,
+    slotWidth,
+    gap,
+    orientation: micboard.gridOrientation,
+    aspect: micboard.slotAspect,
+  });
 
   container.style.setProperty('--tvmode-rows', rows.toString());
   container.style.setProperty('--tvmode-columns', columns.toString());
@@ -80,6 +89,18 @@ export function updateTvLayoutMetrics() {
   container.style.setProperty('--tvmode-row-height', `${rowHeight}px`);
   container.style.setProperty('--tvmode-board-height', `${boardHeight}px`);
   container.style.setProperty('--tvmode-scale', scale.toFixed(4));
+
+  // Only a fixed card aspect can outgrow the screen. TV mode hides overflow so
+  // a fit-to-page board never scrolls by accident; when the operator has asked
+  // for a shape instead, the rows below the fold have to be reachable.
+  container.classList.toggle('tvmode-scrolls', Boolean(scrolls));
+
+  // The grid template is driven by auto-fit at the slot width, which always
+  // packs as many across as fit. A chosen orientation has to state the column
+  // count outright or it would be ignored.
+  board.style.gridTemplateColumns = micboard.gridOrientation && micboard.gridOrientation !== 'auto'
+    ? `repeat(${columns}, minmax(0, var(--tvmode-slot-width)))`
+    : '';
 }
 
 export function requestTvLayoutUpdate() {
