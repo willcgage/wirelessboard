@@ -15,6 +15,7 @@ import tornado.escape as escape
 import shure
 import config as config_module
 import discover
+import folder_browser
 import offline
 import pco
 import google_drive
@@ -689,6 +690,38 @@ class BackgroundDirectoryHandler(web.RequestHandler):
         self.write(json.dumps({'ok': True, 'backgrounds': state}))
 
 
+class FolderBrowseHandler(web.RequestHandler):
+    """Directory listings for the background folder picker.
+
+    Read-only, and names only -- the settings page can already point the board
+    at any path on this machine, so listing what is there grants nothing it
+    could not already do by typing.
+    """
+
+    def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+        path = self.get_query_argument('path', default='')
+        try:
+            current = config.get_gif_dir()
+        except Exception:
+            current = None
+
+        try:
+            listing = folder_browser.browse(path, extra_roots=[current] if current else None)
+        except PermissionError as exc:
+            self.set_status(403)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except (ValueError, OSError) as exc:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+
+        self.write(json.dumps({'ok': True, 'folder': listing}))
+
+
 class GoogleDriveConfigHandler(web.RequestHandler):
     def _set_headers(self):
         self.set_header('Content-Type', 'application/json')
@@ -994,6 +1027,7 @@ def twisted():
         (r'/api/pco/teams', PcoTeamsHandler),
         (r'/api/pco/notes', PcoNotesHandler),
         (r'/api/backgrounds', BackgroundDirectoryHandler),
+        (r'/api/folders', FolderBrowseHandler),
         (r'/api/cloud/google-drive/config', GoogleDriveConfigHandler),
         (r'/api/cloud/google-drive/auth/start', GoogleDriveAuthStartHandler),
         (r'/api/cloud/google-drive/auth/complete', GoogleDriveAuthCompleteHandler),

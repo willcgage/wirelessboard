@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **A Browse button for the background folder.** The photo/video section asked for a folder but only accepted a typed absolute path, which on Windows meant transcribing something like `C:\Users\you\Pictures\board` by hand. There is now a picker beside the field: it walks the folders on the machine running the board, starting from the folder already in use and offering home, the usual media folders, and the drives. Choosing a folder fills the field; Save Folder still applies it, so nothing is written until that is pressed. The board opens in the operator's own browser rather than an application window, where no folder dialog can produce a real path — so the list comes from the service, which is on the machine that holds the media. It reports folder names only, and reads nothing.
 
 ### Changed
 - _Nothing yet._
