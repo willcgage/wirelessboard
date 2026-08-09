@@ -2,13 +2,24 @@
 
 ## [Unreleased]
 ### Added
-- **A Browse button for the background folder.** The photo/video section asked for a folder but only accepted a typed absolute path, which on Windows meant transcribing something like `C:\Users\you\Pictures\board` by hand. There is now a picker beside the field: it walks the folders on the machine running the board, starting from the folder already in use and offering home, the usual media folders, and the drives. Choosing a folder fills the field; Save Folder still applies it, so nothing is written until that is pressed. The board opens in the operator's own browser rather than an application window, where no folder dialog can produce a real path — so the list comes from the service, which is on the machine that holds the media. It reports folder names only, and reads nothing.
+- _Nothing yet._
 
 ### Changed
 - _Nothing yet._
 
 ### Fixed
 - _Nothing yet._
+
+## [1.10.0] - 2026-08-09
+One thing the photo/video settings had always asked of an operator and should
+not have: that they know, and type, an absolute path.
+
+Setting the background folder meant transcribing something like
+`C:\Users\you\Pictures\board` by hand, with nothing to confirm it existed until
+Save answered. There is now a Browse button beside the field.
+
+### Added
+- **A Browse button for the background folder.** The photo/video section asked for a folder but only accepted a typed absolute path, which on Windows meant transcribing something like `C:\Users\you\Pictures\board` by hand. There is now a picker beside the field: it walks the folders on the machine running the board, starting from the folder already in use and offering home, the usual media folders, and the drives. Choosing a folder fills the field; Save Folder still applies it, so nothing is written until that is pressed. The board opens in the operator's own browser rather than an application window, where no folder dialog can produce a real path — so the list comes from the service, which is on the machine that holds the media. It reports folder names only, and reads nothing.
 
 ## [1.9.1] - 2026-08-06
 A repair release, for a fault that was quietly wrong rather than visibly
