@@ -49,6 +49,49 @@ jobs:
         continue-on-error: true
       - name: Build frontend bundle
         run: npm run build
+        # static/ is committed, so it can fall behind js/ with nothing to say
+        # so: 1.10.0 shipped bundles still reporting 1.9.1, and CI stayed green
+        # throughout because building into a clean workspace never compares the
+        # result against what is checked in. The build above has just
+        # regenerated them, so anything git sees now is a difference between the
+        # committed bundles and the source they claim to come from.
+        #
+        # Two checks rather than one `git status --porcelain`, which reports a
+        # file as modified whenever the rebuild rewrites it with different line
+        # endings even though the normalized content is identical -- on a
+        # core.autocrlf checkout that is every bundle, every time. `git diff`
+        # applies the same normalization git would on commit, so it answers the
+        # question actually being asked. It cannot see untracked files, hence
+        # the second check: an entry added to webpack.config.js without
+        # committing what it emits shows up there and nowhere else.
+        #
+        # That second check deliberately omits --exclude-standard. .gitignore
+        # lists static/*.js as webpack output, so a newly emitted bundle arrives
+        # ignored and --exclude-standard would hide the one thing being looked
+        # for. The four bundles that are tracked predate that rule and stay
+        # tracked regardless of it. On a fresh CI checkout nothing else lands
+        # under static/, so there is nothing for the wider net to catch by
+        # mistake -- this is why the step is not meant to be run locally.
+      - name: Check committed bundles match the build
+        run: |
+          drift=0
+          if ! git diff --quiet -- static/; then
+            echo "::error::static/ does not match a fresh build of js/."
+            git diff --stat -- static/
+            drift=1
+          fi
+          untracked="$(git ls-files --others -- static/)"
+          if [ -n "$untracked" ]; then
+            echo "::error::the build emitted files that are not committed:"
+            echo "$untracked"
+            drift=1
+          fi
+          if [ "$drift" -ne 0 ]; then
+            echo "Run 'npm run build' and commit static/, or bump the version with"
+            echo "'npm version <bump>', which rebuilds and stages it for you."
+            exit 1
+          fi
+          echo "static/ matches a fresh build."
       - name: Check Python sources compile
         run: python -m compileall py
       - name: Run Python tests
