@@ -747,11 +747,15 @@
       </div>
   <template id="column-template">
       <div class="col-sm">
+        <!-- Device, then person, then position. The line that used to sit at the
+             bottom was `p.ext-name`, which printed extended_name -- the same
+             string `p.name` already showed, since get_chan_name resolves the
+             person from that very field. The device name was nowhere. -->
         <div class="mic_name">
           <div class="slot-media" aria-hidden="true"></div>
-          <p class="mic_id"></p>
+          <p class="device-name"></p>
           <p class="name"></p>
-          <p class="ext-name"></p>
+          <p class="mic_id"></p>
         </div>
         <div class="electrode"></div>
 

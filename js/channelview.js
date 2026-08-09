@@ -3,6 +3,7 @@ import { updateBackground } from './gif.js';
 import { initChart, charts } from './chart-smoothie.js';
 import { seedTransmitters, autoRandom } from './demodata.js';
 import { updateEditor } from './dnd.js';
+import { deviceLabel } from './device-label.mjs';
 
 function allSlots() {
   const slot = micboard.config.slots;
@@ -96,14 +97,11 @@ function updateID(slotSelector, data) {
 function updateName(slotSelector, data) {
   slotSelector.querySelector('p.name').innerHTML = data.name;
   updateBackground(slotSelector.querySelector('.mic_name'));
-  try {
-    // Show extended name if known from config. Prefer data.slot to work on fragments before DOM id is set.
-    const slotId = (data && Number.isFinite(data.slot)) ? data.slot : parseInt(slotSelector.id.replace(/[^\d.]/g, ''), 10);
-    const cfg = (micboard.config && Array.isArray(micboard.config.slots)) ? micboard.config.slots.find((s) => s.slot === slotId) : null;
-    const ext = cfg && cfg.extended_name ? cfg.extended_name : '';
-    const el = slotSelector.querySelector('p.ext-name');
-    if (el) el.textContent = ext || '';
-  } catch (_) {}
+  // There used to be a second line here reading extended_name straight out of
+  // the config. It always printed what `p.name` had just printed: get_chan_name
+  // resolves chan_name *from* extended_name, so `data.name` is that same string
+  // on every assigned slot. The device line below carries the information that
+  // was actually missing.
   try {
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       const detail = { slot: data && data.slot, name: data && data.name };
@@ -113,6 +111,13 @@ function updateName(slotSelector, data) {
       window.dispatchEvent(evt);
     }
   } catch (_) {}
+}
+
+function updateDeviceName(slotSelector, data) {
+  const el = slotSelector.querySelector('p.device-name');
+  if (el) {
+    el.textContent = deviceLabel(data && data.name_raw);
+  }
 }
 
 function updateStatus(slotSelector, data) {
@@ -217,7 +222,9 @@ function updateSelector(slotSelector, data) {
   updateCheck(data, 'name', () => {
     updateName(slotSelector, data);
   });
-  updateCheck(data, 'name_raw');
+  updateCheck(data, 'name_raw', () => {
+    updateDeviceName(slotSelector, data);
+  });
   updateCheck(data, 'status', () => {
     updateStatus(slotSelector, data);
   });
@@ -253,6 +260,9 @@ export function updateViewOnly(slotSelector, data) {
   }
   if ('name' in data) {
     updateName(slotSelector, data);
+  }
+  if ('name_raw' in data) {
+    updateDeviceName(slotSelector, data);
   }
   if ('tx_offset' in data) {
     updateTXOffset(slotSelector, data);
