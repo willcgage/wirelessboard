@@ -374,7 +374,16 @@ canvas.slotgraph {
 
   background-color: black;
   min-height: 100vh;
+  // Fit-to-page never overflows by construction, and hiding it stops a stray
+  // pixel putting a scrollbar on a wall display.
   overflow: hidden;
+
+  // A chosen channel shape keeps its aspect instead of being squashed to fit,
+  // so the rows past the fold have to be reachable. Set by tv-layout.js, and
+  // only ever when the board is genuinely taller than the screen.
+  &.tvmode-scrolls {
+    overflow-y: auto;
+  }
 
   .blank {
     background: black;
