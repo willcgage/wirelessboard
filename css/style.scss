@@ -63,7 +63,7 @@ html,body {
   font-style: bold;
 }
 
-p.ext-name {
+p.device-name {
   font-family: 'IBM Plex Sans';
   font-weight: 300;
   font-style: italic;
@@ -461,11 +461,11 @@ canvas.slotgraph {
 
   .mic_name .name,
   .mic_name .mic_id,
-  p.ext-name {
+  p.device-name {
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65), 0 0 12px rgba(0, 0, 0, 0.55);
   }
 
-  p.ext-name {
+  p.device-name {
     font-size: clamp(1.2rem, calc(var(--tvmode-row-height) * 0.06), 3rem);
     color: var(--color-white);
     opacity: 0.9;
@@ -635,12 +635,26 @@ canvas.slotgraph {
   }
 
 
+  // Device, person, position stacked in that order, the same reading order the
+  // board view uses. This was previously a float layout -- position inline on
+  // the left with the name floated right beside it -- which puts two of the
+  // three on one line and so cannot express an order at all. Floats on the
+  // children below are inert now they are flex items; they are left in place
+  // because .name and .ext-name are still floated inside the slot editor.
+  .mic_name {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
   .mic_id {
     display: inline;
     font-weight: 400;
     font-size: 18pt;
     text-align: left;
     padding-left: 1em;
+    // Bottom of the stack, but kept on the left as it has always been.
+    align-self: flex-start;
   }
 
   .name {
@@ -654,6 +668,23 @@ canvas.slotgraph {
     margin: 0px;
   }
 
+  // The small secondary line. Desk mode lays .mic_name out with floats rather
+  // than the column flex tvmode uses, so this keeps its compact shape --
+  // position on the left, person and device stacked to the right -- instead of
+  // the strict device/person/position column the board view shows.
+  p.device-name {
+    float: right;
+    clear: right;
+    padding-right: 1em;
+    text-align: right;
+    font-size: 11pt;
+    margin: 0px;
+    opacity: 0.85;
+  }
+
+  // Left unqualified as it always was, but with p.ext-name gone this now
+  // reaches only the slot editor's name input, which has silently been picking
+  // these up all along.
   .ext-name {
     float: right;
     padding-right: 1em;

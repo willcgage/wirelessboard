@@ -59,7 +59,10 @@ function randomTypeGenerator() {
 }
 
 function randomNameGenerator() {
-  return name_sample[getRandomInt(0, name_sample.length)];
+  // getRandomInt is inclusive of max, so passing the length reached one index
+  // past the end and put a literal "undefined" on the board where a person's
+  // name belongs.
+  return name_sample[getRandomInt(0, name_sample.length - 1)];
 }
 
 function randomIPGenerator() {
@@ -175,7 +178,7 @@ function randomNameListGenerator(length) {
   const indexList = [];
   const outputList = [];
   while (indexList.length < length) {
-    const r = getRandomInt(0, name_sample.length);
+    const r = getRandomInt(0, name_sample.length - 1);
     if (indexList.indexOf(r) < 0) {
       indexList.push(r);
     }
@@ -198,6 +201,12 @@ export function seedTransmitters(dl) {
       const n = names[i];
       r.name = n;
       r.id = `HH${slot.toString().padStart(2, '0')}`;
+      // The device line, which the demo would otherwise leave permanently
+      // blank. Deliberately a different name from the person: a transmitter
+      // keeps whatever label the last person to hold it left on it, and that
+      // gap between the hardware's label and who is actually on the channel is
+      // the reason the board shows both.
+      r.name_raw = `${r.id} ${names[(i + 1) % len] || 'SPARE'}`;
       micboard.transmitters[slot] = r;
     }
   }
