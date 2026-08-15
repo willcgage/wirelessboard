@@ -38,34 +38,25 @@ def file_list(extension):
             files.append(file)
     return files
 
-# Resolved lazily and cached as (url, monotonic deadline).
-_LOCAL_URL_CACHE = None
-_LOCAL_URL_TTL_SECONDS = 60
+# The last resolved address. Written only by the background refresh below;
+# localURL() reads it and never resolves anything itself.
+_LOCAL_URL = None
+_LOCAL_URL_FALLBACK = 'https://github.com/willcgage/wirelessboard'
+_LOCAL_URL_REFRESH_SECONDS = 300
+
+# One worker: two overlapping refreshes would be pointless, not harmful.
+_LOCAL_URL_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix='local-url')
+
+# Whether the slow-resolver warning has been said. Once is a diagnosis; every
+# five minutes for the life of the process is noise in the log the operator
+# needs for something else.
+_LOCAL_URL_SLOW_WARNED = False
 
 
-def localURL():
-    """Best-effort http://<local ip>:<port> for the QR code.
-
-    gethostbyname on the host's own name is a blocking resolver call, and this
-    runs inside /data.json, which every open board requests every five seconds.
-    Where that name does not resolve the call does not fail fast -- it spends
-    the full resolver timeout, and since the handler is synchronous it spends
-    it holding the IOLoop, so every other request queues behind it. A floor of
-    just over 5000ms on every /data.json, with the backlog climbing past 100s,
-    is what that looks like from the outside.
-
-    The address is still re-resolved periodically, which was the point of doing
-    it per request, but a slow or failing lookup now costs that once a minute
-    rather than once per request. Failures are cached too: a lookup that times
-    out is the expensive case and the one most worth not repeating.
-    """
-    global _LOCAL_URL_CACHE
-
-    if 'local_url' in config.config_tree:
-        return config.config_tree['local_url']
-
-    if _LOCAL_URL_CACHE is not None and time.monotonic() < _LOCAL_URL_CACHE[1]:
-        return _LOCAL_URL_CACHE[0]
+def _resolve_local_url():
+    """The blocking part. Only ever called on the executor."""
+    global _LOCAL_URL_SLOW_WARNED
 
     started = time.monotonic()
     try:
@@ -73,16 +64,63 @@ def localURL():
         url = 'http://{}:{}'.format(ip, config.config_tree['port'])
     except OSError:
         logger.debug('Unable to resolve local IP for the QR code URL', exc_info=True)
-        url = 'https://github.com/willcgage/wirelessboard'
+        url = _LOCAL_URL_FALLBACK
 
     elapsed = time.monotonic() - started
-    if elapsed > 1:
+    if elapsed > 1 and not _LOCAL_URL_SLOW_WARNED:
+        _LOCAL_URL_SLOW_WARNED = True
         logger.warning(
-            'Resolving this host took %.1fs, and every request waits while it runs. '
-            'Set "local_url" in config.json to skip the lookup entirely.', elapsed)
-
-    _LOCAL_URL_CACHE = (url, time.monotonic() + _LOCAL_URL_TTL_SECONDS)
+            'Resolving this host took %.1fs. Nothing waits on it any more -- it runs '
+            'in the background and the QR code address updates when it lands -- but '
+            'setting "local_url" in config.json skips the lookup entirely.', elapsed)
     return url
+
+
+def refresh_local_url():
+    """Kick a resolution off the IOLoop. Returns the future for tests."""
+    global _LOCAL_URL
+
+    def store(fut):
+        global _LOCAL_URL
+        try:
+            _LOCAL_URL = fut.result()
+        except Exception as exc:  # pragma: no cover - the resolver swallows its own
+            logger.debug('Local URL refresh failed: %s', exc)
+
+    future = _LOCAL_URL_EXECUTOR.submit(_resolve_local_url)
+    future.add_done_callback(store)
+    return future
+
+
+def start_local_url_refresh():
+    """Resolve now, then keep it current, both off the request path."""
+    refresh_local_url()
+    ioloop.PeriodicCallback(refresh_local_url, _LOCAL_URL_REFRESH_SECONDS * 1000).start()
+
+
+def localURL():
+    """Best-effort http://<local ip>:<port> for the QR code. Never blocks.
+
+    This is read inside /data.json, which every open board requests every five
+    seconds. It used to resolve the host's own name here -- a blocking call
+    that, on a network where that name does not resolve, spends the full
+    resolver timeout while holding the IOLoop, so every other request queues
+    behind it. Caching cut that from once a request to once a minute, but once
+    a minute is still a 5s freeze of the whole board, forever, which is what a
+    venue reported in #74.
+
+    So the lookup moved out entirely: it happens at startup and on a timer,
+    on a worker thread, and this only reads the answer. Until the first one
+    lands there is no address to give, which is a fallback rather than a wait --
+    the QR code is a convenience and nothing should ever queue behind it.
+    """
+    if 'local_url' in config.config_tree:
+        return config.config_tree['local_url']
+
+    if _LOCAL_URL is not None:
+        return _LOCAL_URL
+
+    return _LOCAL_URL_FALLBACK
 
 def wirelessboard_json(network_devices):
     offline_devices = offline.offline_json()
@@ -1072,4 +1110,8 @@ def twisted():
     asyncio.set_event_loop(asyncio.new_event_loop())
     app.listen(config.web_port())
     ioloop.PeriodicCallback(SocketHandler.ws_dump, 50).start()
+    # Started here rather than resolved inline: a slow resolver would otherwise
+    # delay the server coming up, and the address is only needed for the QR
+    # code. The first refresh is already in flight by the time anything asks.
+    start_local_url_refresh()
     ioloop.IOLoop.instance().start()
