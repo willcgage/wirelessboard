@@ -101,7 +101,22 @@ Open **Settings → Background Library** inside the Wirelessboard UI to review o
 - **Per-install defaults**: without an override, Wirelessboard stores media in the configuration directory’s `backgrounds/` subfolder (macOS: `~/Library/Application Support/wirelessboard/backgrounds`; Linux: `~/.local/share/wirelessboard/backgrounds`; Windows: `%LOCALAPPDATA%\wirelessboard\backgrounds`). The settings panel shows this location when no custom folder is configured.
 - **Persisted configuration**: choosing a custom folder from the UI writes the resolved path to `config.json` under `"background-folder"`. Removing that key—or using **Use Default**—returns to the default location.
 
-TV mode now keeps each slot at a fixed width so artwork never stretches or shrinks when the number of on-screen channels changes. Backgrounds are rendered at their native resolution, centred at the top of the slot without scaling; if the asset is larger than the slot it will crop, and if it is smaller it will leave the status colour visible around it. The default width is `420px`, controlled by the CSS custom property `--tvmode-slot-width` inside `css/style.scss`, and can be adjusted to suit house templates before rebuilding the frontend.
+TV mode keeps each slot at a fixed width so artwork never stretches or shrinks when the number of on-screen channels changes. Backgrounds are rendered at their native resolution, centred at the top of the slot without scaling; if the asset is larger than the slot it will crop, and if it is smaller it will leave the status colour visible around it. The default width is `420px`, controlled by the CSS custom property `--tvmode-slot-width` inside `css/style.scss`, and can be adjusted to suit house templates before rebuilding the frontend.
+
+That width is a **maximum**, not a guarantee, in the two arrangements that deliberately overrule it. **One row** and **one column** are requests to put every channel on a single line or stack, so the cards narrow to whatever that takes — twelve channels on a 1920px screen come out around 155px wide rather than 420px. **Fit to page** and **balanced grid** never ask for more columns than fit, so there the width holds exactly as before.
+
+### Arranging the board
+
+Two controls in TV mode, both listed in the help overlay (`?`):
+
+| Key | Setting | Options |
+| --- | --- | --- |
+| `O` | Arrangement | Fit to page, one row, one column, balanced grid |
+| `A` | Card shape | Auto, 16:9, 3:4 |
+
+Fit to page and Auto are the defaults and reproduce the original board exactly. A named card shape derives the card's height from its width, so the board scrolls when the channels no longer fit rather than squashing them; Auto always divides the available height instead, which is why one row with Auto gives tall narrow cards and `A` is the natural companion to it.
+
+Both choices are remembered on the machine, so a display that loses power returns to the layout it was left in. A link that names a layout still overrides what is remembered.
 
 ### Recommended image dimensions
 

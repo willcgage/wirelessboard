@@ -19,8 +19,38 @@
  * measured, so it can be tested without a DOM.
  */
 
-export const ORIENTATIONS = ['auto', 'landscape', 'portrait'];
-export const ASPECTS = ['auto', 'landscape', 'portrait'];
+/**
+ * How the channels are arranged. Named for what you get, not for a shape.
+ *
+ * The first version of this offered auto/landscape/portrait here *and* the
+ * same three words for the card, which read as the same control twice and
+ * still could not produce the thing operators asked for. Both orientations
+ * were anchored near the square root of the slot count, so twelve channels
+ * gave 4x3 either way and a single row was outside the option space entirely
+ * (#75).
+ */
+export const ARRANGEMENTS = ['fit', 'row', 'column', 'grid'];
+
+/** The shape of one card. Deliberately a different vocabulary from above. */
+export const CARD_SHAPES = ['auto', 'wide', 'tall'];
+
+/**
+ * 1.11.0 shipped the old names and boards have them stored. Map rather than
+ * discard: silently resetting somebody's wall display to the default because
+ * the vocabulary changed is a worse greeting than a near-equivalent layout.
+ */
+const LEGACY_ARRANGEMENTS = { auto: 'fit', landscape: 'grid', portrait: 'column' };
+const LEGACY_CARD_SHAPES = { auto: 'auto', landscape: 'wide', portrait: 'tall' };
+
+export function migrateArrangement(value) {
+  if (ARRANGEMENTS.includes(value)) return value;
+  return LEGACY_ARRANGEMENTS[value] || null;
+}
+
+export function migrateCardShape(value) {
+  if (CARD_SHAPES.includes(value)) return value;
+  return LEGACY_CARD_SHAPES[value] || null;
+}
 
 // The height the scale factor is expressed against; --tvmode-scale is
 // rowHeight/BASE_HEIGHT and drives the clamped font sizes.
@@ -49,45 +79,48 @@ export function nextOption(options, current) {
   return options[(i + 1) % options.length];
 }
 
-export function isOrientation(value) {
-  return ORIENTATIONS.includes(value);
+export function isArrangement(value) {
+  return ARRANGEMENTS.includes(value);
 }
 
-export function isAspect(value) {
-  return ASPECTS.includes(value);
+export function isCardShape(value) {
+  return CARD_SHAPES.includes(value);
 }
 
 /**
  * How many columns to use.
  *
- * - `auto` fills the width, which is what the board has always done.
- * - `landscape` aims for a grid at least as wide as it is tall.
- * - `portrait` aims for one strictly taller than it is wide.
+ * - `fit`    as many as fit at the slot width. The board's original behaviour.
+ * - `row`    every channel on one line.
+ * - `column` every channel in one stack.
+ * - `grid`   balanced, near the square root of the count.
  *
- * Both shaped options sit near the square root of the slot count and are then
- * nudged to the side of square they are named for. Neither can exceed the
- * number of columns that physically fit, so a narrow or rotated screen still
- * wins the argument.
+ * ⭐ `row` and `column` deliberately ignore `maxColumns`. Everywhere else the
+ * slot width is a hard size and the number of columns bends to it; asking for
+ * one row is asking for the opposite, and honouring the width there would
+ * silently give back a grid -- which is exactly the complaint that produced
+ * this. The width becomes a maximum instead and the cards get narrower, which
+ * the CSS already allows: the track is minmax(0, var(--tvmode-slot-width)).
+ * Twelve channels on a 1920px screen means ~155px cards, and that is the trade
+ * being asked for.
  */
-export function columnsFor({ slotCount, maxColumns, orientation = 'auto' }) {
+export function columnsFor({ slotCount, maxColumns, arrangement = 'fit' }) {
   const n = toCount(slotCount);
   const fits = toCount(maxColumns);
 
-  if (orientation === 'landscape') {
+  if (arrangement === 'row') {
+    return n;
+  }
+
+  if (arrangement === 'column') {
+    return 1;
+  }
+
+  if (arrangement === 'grid') {
     let c = Math.ceil(Math.sqrt(n));
     // Widen until the grid is no taller than it is wide.
     while (c < n && Math.ceil(n / c) > c) {
       c += 1;
-    }
-    return Math.max(1, Math.min(fits, c));
-  }
-
-  if (orientation === 'portrait') {
-    let c = Math.max(1, Math.floor(Math.sqrt(n)));
-    // Narrow until the grid is strictly taller than it is wide. n === 1 has
-    // nowhere to go and stays a single square.
-    while (c > 1 && Math.ceil(n / c) <= c) {
-      c -= 1;
     }
     return Math.max(1, Math.min(fits, c));
   }
@@ -98,21 +131,30 @@ export function columnsFor({ slotCount, maxColumns, orientation = 'auto' }) {
 /**
  * How tall one row is.
  *
- * `auto` divides the space so every row is on screen, which is the fit-to-page
- * behaviour. A named aspect derives the height from the slot width instead, so
- * the card keeps its shape and the board scrolls when there are too many --
- * that is the trade being asked for, and pretending otherwise would just
- * reproduce the squashing.
+ * `auto` divides the space so every row is on screen -- fit-to-page, whatever
+ * the arrangement. With `row` that means one row filling the height, so the
+ * cards come out narrow and tall; `wide` is the natural companion there and is
+ * one keypress away.
+ *
+ * A named shape derives the height from the card width instead, so the card
+ * keeps its proportions and the board scrolls when there are too many. That is
+ * the trade being asked for; pretending otherwise would just reproduce the
+ * squashing this exists to fix.
+ *
+ * `cardWidth` is the width a card will actually get, which is not the
+ * configured slot width once an arrangement is allowed to shrink it. Passing
+ * the configured width here would give a 16:9 card a height computed from a
+ * size it never had.
  */
 export function rowHeightFor({
-  aspect = 'auto', slotWidth, rows, availableHeight, gap = 0,
+  shape = 'auto', cardWidth, rows, availableHeight, gap = 0,
 }) {
-  const width = Number(slotWidth) > 0 ? Number(slotWidth) : 420;
+  const width = Number(cardWidth) > 0 ? Number(cardWidth) : 420;
 
-  if (aspect === 'landscape') {
+  if (shape === 'wide') {
     return width / LANDSCAPE_RATIO;
   }
-  if (aspect === 'portrait') {
+  if (shape === 'tall') {
     return width / PORTRAIT_RATIO;
   }
 
@@ -126,16 +168,26 @@ export function rowHeightFor({
 
 export function computeLayout({
   slotCount, containerWidth, availableHeight, slotWidth = 420, gap = 0,
-  orientation = 'auto', aspect = 'auto',
+  arrangement = 'fit', shape = 'auto',
 }) {
   const n = toCount(slotCount);
   const width = Number(slotWidth) > 0 ? Number(slotWidth) : 420;
   const maxColumns = Math.max(1, Math.floor((Number(containerWidth) + gap) / (width + gap)) || 1);
 
-  const columns = columnsFor({ slotCount: n, maxColumns, orientation });
+  const columns = columnsFor({ slotCount: n, maxColumns, arrangement });
   const rows = Math.max(1, Math.ceil(n / columns));
+
+  // The width a card will actually be given. `fit` and `grid` never ask for
+  // more columns than fit, so this is the configured width; `row` and `column`
+  // may, and there the configured width is a maximum the cards fall below.
+  const measured = Number(containerWidth);
+  const share = Number.isFinite(measured) && measured > 0
+    ? (measured - gap * (columns - 1)) / columns
+    : width;
+  const cardWidth = Math.max(1, Math.min(width, share));
+
   const rowHeight = rowHeightFor({
-    aspect, slotWidth: width, rows, availableHeight, gap,
+    shape, cardWidth, rows, availableHeight, gap,
   });
   const boardHeight = rowHeight * rows + gap * (rows - 1);
 
@@ -143,9 +195,10 @@ export function computeLayout({
     columns,
     rows,
     rowHeight,
+    cardWidth,
     boardHeight,
     scale: rowHeight / BASE_HEIGHT,
-    // Only a named aspect can overflow; auto is fit-to-page by construction.
+    // Only a named shape can overflow; auto is fit-to-page by construction.
     scrolls: boardHeight > Number(availableHeight) + 0.5,
   };
 }

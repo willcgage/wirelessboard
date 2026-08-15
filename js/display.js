@@ -2,9 +2,9 @@ import { micboard, updateHash } from './app.js';
 
 import { updateGIFBackgrounds } from './gif.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
-import { ORIENTATIONS, ASPECTS, nextOption } from './board-layout.mjs';
+import { ARRANGEMENTS, CARD_SHAPES, nextOption } from './board-layout.mjs';
 import {
-  writePref, safeStorage, ORIENTATION_KEY, ASPECT_KEY,
+  writePref, safeStorage, ARRANGEMENT_KEY, CARD_SHAPE_KEY,
 } from './view-prefs.mjs';
 
 function swapClass(selector, currentClass, newClass) {
@@ -55,10 +55,10 @@ function applyViewClasses() {
   if (!container) {
     return;
   }
-  ORIENTATIONS.forEach((o) => container.classList.remove(`grid-${o}`));
-  ASPECTS.forEach((a) => container.classList.remove(`aspect-${a}`));
-  container.classList.add(`grid-${micboard.gridOrientation}`);
-  container.classList.add(`aspect-${micboard.slotAspect}`);
+  ARRANGEMENTS.forEach((a) => container.classList.remove(`arrangement-${a}`));
+  CARD_SHAPES.forEach((s) => container.classList.remove(`card-${s}`));
+  container.classList.add(`arrangement-${micboard.arrangement}`);
+  container.classList.add(`card-${micboard.cardShape}`);
 }
 
 export function applyBoardLayout() {
@@ -70,20 +70,20 @@ export function applyBoardLayout() {
  * Cycle rather than set: one key per control instead of three, and the help
  * overlay stays one line each.
  */
-export function cycleGridOrientation() {
-  micboard.gridOrientation = nextOption(ORIENTATIONS, micboard.gridOrientation);
-  writePref({ storage: safeStorage(), key: ORIENTATION_KEY, value: micboard.gridOrientation });
+export function cycleArrangement() {
+  micboard.arrangement = nextOption(ARRANGEMENTS, micboard.arrangement);
+  writePref({ storage: safeStorage(), key: ARRANGEMENT_KEY, value: micboard.arrangement });
   applyBoardLayout();
   updateHash();
-  return micboard.gridOrientation;
+  return micboard.arrangement;
 }
 
-export function cycleSlotAspect() {
-  micboard.slotAspect = nextOption(ASPECTS, micboard.slotAspect);
-  writePref({ storage: safeStorage(), key: ASPECT_KEY, value: micboard.slotAspect });
+export function cycleCardShape() {
+  micboard.cardShape = nextOption(CARD_SHAPES, micboard.cardShape);
+  writePref({ storage: safeStorage(), key: CARD_SHAPE_KEY, value: micboard.cardShape });
   applyBoardLayout();
   updateHash();
-  return micboard.slotAspect;
+  return micboard.cardShape;
 }
 
 export function toggleDisplayMode() {

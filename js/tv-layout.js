@@ -72,15 +72,15 @@ export function updateTvLayoutMetrics() {
   const availableHeight = Math.max(240, viewportHeight - containerRect.top);
 
   const {
-    columns, rows, rowHeight, boardHeight, scale, scrolls,
+    columns, rows, rowHeight, cardWidth, boardHeight, scale, scrolls,
   } = computeLayout({
     slotCount,
     containerWidth,
     availableHeight,
     slotWidth,
     gap,
-    orientation: micboard.gridOrientation,
-    aspect: micboard.slotAspect,
+    arrangement: micboard.arrangement,
+    shape: micboard.cardShape,
   });
 
   container.style.setProperty('--tvmode-rows', rows.toString());
@@ -95,10 +95,18 @@ export function updateTvLayoutMetrics() {
   // for a shape instead, the rows below the fold have to be reachable.
   container.classList.toggle('tvmode-scrolls', Boolean(scrolls));
 
+  container.style.setProperty('--tvmode-card-width', `${cardWidth}px`);
+
   // The grid template is driven by auto-fit at the slot width, which always
-  // packs as many across as fit. A chosen orientation has to state the column
+  // packs as many across as fit. Any named arrangement has to state the column
   // count outright or it would be ignored.
-  board.style.gridTemplateColumns = micboard.gridOrientation && micboard.gridOrientation !== 'auto'
+  //
+  // minmax(0, ...) rather than a fixed track: `row` and `column` are allowed to
+  // ask for more columns than fit at the configured width, and the cards give
+  // way instead of the board overflowing sideways. Everywhere else the count
+  // never exceeds what fits, so the tracks sit at the configured width exactly
+  // as before.
+  board.style.gridTemplateColumns = micboard.arrangement && micboard.arrangement !== 'fit'
     ? `repeat(${columns}, minmax(0, var(--tvmode-slot-width)))`
     : '';
 }
