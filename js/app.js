@@ -14,9 +14,11 @@ import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule, scheduleBackgroundFilenameGuide,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
-import { isOrientation, isAspect } from './board-layout.mjs';
 import {
-  resolvePref, safeStorage, ORIENTATION_KEY, ASPECT_KEY,
+  isArrangement, isCardShape, migrateArrangement, migrateCardShape,
+} from './board-layout.mjs';
+import {
+  resolvePref, safeStorage, ARRANGEMENT_KEY, CARD_SHAPE_KEY,
 } from './view-prefs.mjs';
 
 import '../css/colors.scss';
@@ -34,8 +36,8 @@ micboard.url = [];
 micboard.displayMode = 'deskmode';
 // Both default to 'auto', which is the fit-to-page board this has always been.
 // Resolved properly in readURLParameters once the hash and storage are known.
-micboard.gridOrientation = 'auto';
-micboard.slotAspect = 'auto';
+micboard.arrangement = 'fit';
+micboard.cardShape = 'auto';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -402,18 +404,20 @@ function readURLParameters() {
   // present to press a key, so the stored value is what puts it back the way
   // it was left.
   const storage = safeStorage();
-  micboard.gridOrientation = resolvePref({
+  micboard.arrangement = resolvePref({
     hashValue: micboard.url.layout,
     storage,
-    key: ORIENTATION_KEY,
-    isValid: isOrientation,
-    fallback: 'auto',
+    key: ARRANGEMENT_KEY,
+    isValid: isArrangement,
+    migrate: migrateArrangement,
+    fallback: 'fit',
   });
-  micboard.slotAspect = resolvePref({
+  micboard.cardShape = resolvePref({
     hashValue: micboard.url.aspect,
     storage,
-    key: ASPECT_KEY,
-    isValid: isAspect,
+    key: CARD_SHAPE_KEY,
+    isValid: isCardShape,
+    migrate: migrateCardShape,
     fallback: 'auto',
   });
 
@@ -441,11 +445,11 @@ export function updateHash() {
     hash += `&bgmode=${micboard.backgroundMode}`;
   }
   // Only when they say something, so a default board still has a clean URL.
-  if (micboard.gridOrientation && micboard.gridOrientation !== 'auto') {
-    hash += `&layout=${micboard.gridOrientation}`;
+  if (micboard.arrangement && micboard.arrangement !== 'fit') {
+    hash += `&layout=${micboard.arrangement}`;
   }
-  if (micboard.slotAspect && micboard.slotAspect !== 'auto') {
-    hash += `&aspect=${micboard.slotAspect}`;
+  if (micboard.cardShape && micboard.cardShape !== 'auto') {
+    hash += `&aspect=${micboard.cardShape}`;
   }
   if (micboard.settingsMode === 'CONFIG') {
     if (micboard.configTab === 'logs') {

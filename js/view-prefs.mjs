@@ -16,8 +16,12 @@
  * refused to start over a remembered preference would be a poor trade.
  */
 
-export const ORIENTATION_KEY = 'wirelessboard.gridOrientation';
-export const ASPECT_KEY = 'wirelessboard.slotAspect';
+// ⛔ The stored keys keep their original names on purpose. 1.11.0 wrote them,
+// and boards have them; renaming the key would orphan every remembered choice
+// and quietly reset a wall display to the default. The *values* did change
+// vocabulary, which is what migrateArrangement/migrateCardShape are for.
+export const ARRANGEMENT_KEY = 'wirelessboard.gridOrientation';
+export const CARD_SHAPE_KEY = 'wirelessboard.slotAspect';
 
 export function safeStorage() {
   try {
@@ -30,13 +34,37 @@ export function safeStorage() {
   return null;
 }
 
+/**
+ * A value this build accepts, or null.
+ *
+ * `migrate` exists because the vocabulary changed after 1.11.0 shipped: boards
+ * have `landscape` stored and links carry it. Translating is kinder than
+ * ignoring, which would silently reset a wall display to the default.
+ */
+function accept(value, isValid, migrate) {
+  if (typeof isValid !== 'function') {
+    return null;
+  }
+  if (isValid(value)) {
+    return value;
+  }
+  if (typeof migrate === 'function') {
+    const migrated = migrate(value);
+    if (isValid(migrated)) {
+      return migrated;
+    }
+  }
+  return null;
+}
+
 export function readPref({
-  storage, key, isValid, fallback,
+  storage, key, isValid, migrate, fallback,
 }) {
   try {
     const value = storage && storage.getItem ? storage.getItem(key) : null;
-    if (typeof isValid === 'function' && isValid(value)) {
-      return value;
+    const accepted = accept(value, isValid, migrate);
+    if (accepted !== null) {
+      return accepted;
     }
   } catch (_) {
     // A read that fails means "nothing remembered", not "stop".
@@ -65,12 +93,13 @@ export function writePref({ storage, key, value }) {
  * in the app for someone to have typed by hand.
  */
 export function resolvePref({
-  hashValue, storage, key, isValid, fallback,
+  hashValue, storage, key, isValid, migrate, fallback,
 }) {
-  if (typeof isValid === 'function' && isValid(hashValue)) {
-    return hashValue;
+  const fromHash = accept(hashValue, isValid, migrate);
+  if (fromHash !== null) {
+    return fromHash;
   }
   return readPref({
-    storage, key, isValid, fallback,
+    storage, key, isValid, migrate, fallback,
   });
 }

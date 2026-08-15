@@ -2,130 +2,159 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  columnsFor, rowHeightFor, computeLayout, nextOption,
-  isOrientation, isAspect, ORIENTATIONS, ASPECTS,
+  ARRANGEMENTS, CARD_SHAPES, columnsFor, rowHeightFor, computeLayout, nextOption,
+  isArrangement, isCardShape, migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 
-// A wide screen where twelve 420px slots would all fit across, which is what
-// makes auto and the shaped orientations visibly different.
 const WIDE = { slotCount: 12, maxColumns: 12 };
 
-test('auto fills the width, as the board always has', () => {
-  assert.equal(columnsFor({ ...WIDE, orientation: 'auto' }), 12);
+test('fit fills the width, as the board always has', () => {
+  assert.equal(columnsFor({ ...WIDE, arrangement: 'fit' }), 12);
+  assert.equal(columnsFor({ slotCount: 12, maxColumns: 4, arrangement: 'fit' }), 4);
 });
 
-test('landscape gives a grid no taller than it is wide', () => {
-  const c = columnsFor({ ...WIDE, orientation: 'landscape' });
-  const rows = Math.ceil(12 / c);
-  assert.equal(c, 4);
-  assert.equal(rows, 3);
-  assert.ok(c >= rows, 'columns should be at least rows');
+test('row puts every channel on one line', () => {
+  // The request that produced #75. Twelve channels, one row, whatever the
+  // configured slot width says fits.
+  assert.equal(columnsFor({ slotCount: 12, maxColumns: 4, arrangement: 'row' }), 12);
+  assert.equal(columnsFor({ slotCount: 3, maxColumns: 1, arrangement: 'row' }), 3);
 });
 
-test('portrait gives a grid strictly taller than it is wide', () => {
-  const c = columnsFor({ ...WIDE, orientation: 'portrait' });
-  const rows = Math.ceil(12 / c);
-  assert.equal(c, 3);
-  assert.equal(rows, 4);
-  assert.ok(rows > c, 'rows should exceed columns');
+test('column stacks them', () => {
+  assert.equal(columnsFor({ slotCount: 12, maxColumns: 12, arrangement: 'column' }), 1);
 });
 
-test('the shaped orientations stay on their side of square across counts', () => {
-  for (let n = 2; n <= 40; n += 1) {
-    const wide = columnsFor({ slotCount: n, maxColumns: 999, orientation: 'landscape' });
-    assert.ok(wide >= Math.ceil(n / wide), `landscape n=${n} produced a tall grid`);
-
-    const tall = columnsFor({ slotCount: n, maxColumns: 999, orientation: 'portrait' });
-    assert.ok(Math.ceil(n / tall) > tall, `portrait n=${n} was not taller than wide`);
-  }
+test('row and column deliberately overrule the width that fits', () => {
+  // Everywhere else the slot width is a hard size and the column count bends to
+  // it. Asking for one row is asking for the opposite, and honouring the width
+  // there would hand back a grid -- which is the complaint that started this.
+  assert.equal(columnsFor({ slotCount: 20, maxColumns: 2, arrangement: 'row' }), 20);
+  assert.equal(columnsFor({ slotCount: 20, maxColumns: 20, arrangement: 'column' }), 1);
 });
 
-test('a single slot is a single column whatever the orientation', () => {
-  ORIENTATIONS.forEach((orientation) => {
-    assert.equal(columnsFor({ slotCount: 1, maxColumns: 9, orientation }), 1);
-  });
+test('grid stays balanced, near the square root', () => {
+  assert.equal(columnsFor({ ...WIDE, arrangement: 'grid' }), 4);
+  const columns = columnsFor({ slotCount: 7, maxColumns: 7, arrangement: 'grid' });
+  assert.equal(columns, 3);
+  assert.ok(Math.ceil(7 / columns) <= columns, 'grid should be no taller than it is wide');
 });
 
-test('no orientation asks for more columns than physically fit', () => {
-  // A narrow or rotated screen wins the argument.
-  ORIENTATIONS.forEach((orientation) => {
-    assert.equal(columnsFor({ slotCount: 12, maxColumns: 2, orientation }), 2);
+test('grid still cannot exceed the columns that physically fit', () => {
+  // Unlike row/column, a balanced grid has no reason to overflow the width.
+  assert.equal(columnsFor({ slotCount: 12, maxColumns: 3, arrangement: 'grid' }), 3);
+});
+
+test('a single slot is a single column whatever the arrangement', () => {
+  ARRANGEMENTS.forEach((arrangement) => {
+    assert.equal(columnsFor({ slotCount: 1, maxColumns: 8, arrangement }), 1, arrangement);
   });
 });
 
 test('auto row height divides the space so every row is on screen', () => {
-  // 3 rows, 1000px, 10px gaps -> (1000 - 20) / 3
-  assert.equal(rowHeightFor({
-    aspect: 'auto', slotWidth: 420, rows: 3, availableHeight: 1000, gap: 10,
-  }), 326.6666666666667);
+  const height = rowHeightFor({
+    shape: 'auto', cardWidth: 420, rows: 3, availableHeight: 900, gap: 0,
+  });
+  assert.equal(height, 300);
 });
 
-test('a named aspect derives height from the slot width, ignoring the space', () => {
+test('a named shape derives height from the card width, ignoring the space', () => {
   assert.equal(rowHeightFor({
-    aspect: 'landscape', slotWidth: 1600, rows: 4, availableHeight: 100,
+    shape: 'wide', cardWidth: 1600, rows: 1, availableHeight: 10,
   }), 900);
   assert.equal(rowHeightFor({
-    aspect: 'portrait', slotWidth: 300, rows: 4, availableHeight: 100,
+    shape: 'tall', cardWidth: 300, rows: 1, availableHeight: 10,
   }), 400);
 });
 
-test('a degenerate measurement does not collapse the board', () => {
-  // A hidden container reports 0 height; dividing it would give rows no height
-  // at all and the board would vanish rather than merely look wrong.
-  const h = rowHeightFor({
-    aspect: 'auto', slotWidth: 480, rows: 4, availableHeight: 0, gap: 6,
-  });
-  assert.ok(h > 0, 'expected a positive fallback height');
-});
-
-test('auto never reports scrolling: it is fit-to-page by construction', () => {
-  const out = computeLayout({
-    slotCount: 24, containerWidth: 1920, availableHeight: 1080, slotWidth: 420, gap: 6,
-  });
-  assert.equal(out.scrolls, false);
-  assert.ok(out.boardHeight <= 1080 + 0.5);
-});
-
-test('a fixed aspect reports scrolling when the cards no longer fit', () => {
-  const out = computeLayout({
-    slotCount: 24,
+test('a shaped card uses the width it will really get, not the configured one', () => {
+  // One row of twelve on a 1920px screen gives ~155px cards. A 16:9 height
+  // computed from the configured 420px would be for a card that never existed.
+  const { cardWidth, rowHeight } = computeLayout({
+    slotCount: 12,
     containerWidth: 1920,
     availableHeight: 1080,
     slotWidth: 420,
-    gap: 6,
-    aspect: 'portrait',
-    orientation: 'portrait',
+    gap: 0,
+    arrangement: 'row',
+    shape: 'wide',
   });
-  assert.equal(out.rowHeight, 560);
-  assert.ok(out.scrolls, 'portrait cards at this count should overflow');
+  assert.equal(cardWidth, 160);
+  assert.equal(rowHeight, 90);
+});
+
+test('a degenerate measurement does not collapse the board', () => {
+  const height = rowHeightFor({
+    shape: 'auto', cardWidth: 420, rows: 4, availableHeight: 0, gap: 0,
+  });
+  assert.ok(height > 0);
+});
+
+test('auto never reports scrolling: it is fit-to-page by construction', () => {
+  const { scrolls } = computeLayout({
+    slotCount: 24, containerWidth: 1920, availableHeight: 1080, slotWidth: 420, gap: 6,
+  });
+  assert.equal(scrolls, false);
+});
+
+test('a named shape reports scrolling when the cards no longer fit', () => {
+  const { scrolls } = computeLayout({
+    slotCount: 24,
+    containerWidth: 1920,
+    availableHeight: 400,
+    slotWidth: 420,
+    gap: 6,
+    shape: 'tall',
+  });
+  assert.equal(scrolls, true);
 });
 
 test('computeLayout defaults reproduce the old fit-to-page numbers', () => {
-  // 1920 wide fits four 420px slots; 12 slots therefore make a 4x3 grid whose
-  // rows divide the height. This is the behaviour before the setting existed.
-  const out = computeLayout({
+  // The board an existing site already has. Nothing about this change may move
+  // it until somebody presses a key.
+  const layout = computeLayout({
     slotCount: 12, containerWidth: 1920, availableHeight: 1080, slotWidth: 420, gap: 6,
   });
-  assert.equal(out.columns, 4);
-  assert.equal(out.rows, 3);
-  assert.equal(out.rowHeight, (1080 - 12) / 3);
-  assert.equal(out.scale, out.rowHeight / 1080);
+  assert.equal(layout.columns, 4);
+  assert.equal(layout.rows, 3);
+  assert.equal(layout.scrolls, false);
+  assert.ok(Math.abs(layout.rowHeight - (1080 - 12) / 3) < 0.001);
 });
 
 test('nextOption cycles and wraps', () => {
-  assert.equal(nextOption(ORIENTATIONS, 'auto'), 'landscape');
-  assert.equal(nextOption(ORIENTATIONS, 'landscape'), 'portrait');
-  assert.equal(nextOption(ORIENTATIONS, 'portrait'), 'auto');
-  // An unrecognised current value starts the cycle rather than sticking.
-  assert.equal(nextOption(ORIENTATIONS, 'sideways'), 'auto');
-  assert.equal(nextOption([], 'auto'), 'auto');
+  assert.equal(nextOption(ARRANGEMENTS, 'fit'), 'row');
+  assert.equal(nextOption(ARRANGEMENTS, 'grid'), 'fit');
+  assert.equal(nextOption(CARD_SHAPES, 'auto'), 'wide');
+  assert.equal(nextOption(CARD_SHAPES, 'tall'), 'auto');
 });
 
 test('the validators accept exactly the supported values', () => {
-  assert.deepEqual(ORIENTATIONS, ['auto', 'landscape', 'portrait']);
-  assert.deepEqual(ASPECTS, ['auto', 'landscape', 'portrait']);
-  assert.equal(isOrientation('portrait'), true);
-  assert.equal(isOrientation('sideways'), false);
-  assert.equal(isAspect('landscape'), true);
-  assert.equal(isAspect(undefined), false);
+  ['fit', 'row', 'column', 'grid'].forEach((v) => assert.ok(isArrangement(v), v));
+  ['auto', 'wide', 'tall'].forEach((v) => assert.ok(isCardShape(v), v));
+
+  // The old vocabulary is no longer valid on its own; it has to be migrated.
+  ['landscape', 'portrait', 'auto', '', null, undefined, 'sideways'].forEach((v) => {
+    assert.equal(isArrangement(v), false, String(v));
+  });
+  ['landscape', 'portrait', 'wide-ish', null].forEach((v) => {
+    assert.equal(isCardShape(v), false, String(v));
+  });
+});
+
+test('preferences written by 1.11.0 are translated, not discarded', () => {
+  // Boards have these stored. Ignoring them would quietly reset a wall display
+  // to the default because the vocabulary changed under it.
+  assert.equal(migrateArrangement('auto'), 'fit');
+  assert.equal(migrateArrangement('landscape'), 'grid');
+  assert.equal(migrateArrangement('portrait'), 'column');
+  assert.equal(migrateCardShape('landscape'), 'wide');
+  assert.equal(migrateCardShape('portrait'), 'tall');
+  assert.equal(migrateCardShape('auto'), 'auto');
+});
+
+test('migration passes current values through and refuses nonsense', () => {
+  assert.equal(migrateArrangement('row'), 'row');
+  assert.equal(migrateCardShape('wide'), 'wide');
+  assert.equal(migrateArrangement('sideways'), null);
+  assert.equal(migrateCardShape(''), null);
+  assert.equal(migrateArrangement(undefined), null);
 });

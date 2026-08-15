@@ -4,7 +4,7 @@ import {
 } from './app.js';
 import {
   toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
-  cycleGridOrientation, cycleSlotAspect,
+  cycleArrangement, cycleCardShape,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
@@ -80,14 +80,17 @@ function bindingTable() {
       run: () => toggleDisplayMode(),
     },
     {
+      // Two controls, two vocabularies. They previously offered the same three
+      // words -- fit to page, landscape, portrait -- differing only by the noun
+      // in front, which read as one control listed twice (#75).
       keys: ['o'],
-      hud: 'Cycle the grid shape: fit to page, landscape, portrait (TV mode).',
-      run: () => cycleGridOrientation(),
+      hud: 'Arrangement: fit to page, one row, one column, balanced grid (TV mode).',
+      run: () => cycleArrangement(),
     },
     {
       keys: ['a'],
-      hud: 'Cycle the channel shape: fit to page, landscape, portrait (TV mode).',
-      run: () => cycleSlotAspect(),
+      hud: 'Card shape: auto, 16:9, 3:4 (TV mode).',
+      run: () => cycleCardShape(),
     },
     {
       keys: ['f'],
