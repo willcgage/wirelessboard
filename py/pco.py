@@ -1,6 +1,7 @@
 import base64
 import logging
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -258,6 +259,48 @@ def _http_get(url: str, headers: Dict[str, str], params: Optional[Dict[str, Any]
         return None
 
 
+# A plan that has rolled off the schedule answers 404 to everything, and each
+# lookup pays for two of them: the service-scoped URL and then the global
+# fallback. The PCO panel polls, so a board left running past a plan's date
+# re-paid that indefinitely -- the ~20s freezes in #73. A 404 is a definitive
+# answer, unlike a timeout or a connection error, which may well be transient,
+# so it is the one worth remembering.
+#
+# Short-lived on purpose: a plan can reappear (a typo'd id corrected upstream,
+# a plan un-deleted), and five minutes of stale "gone" is a far smaller problem
+# than a board that will not notice for the rest of the service.
+_MISSING_PLAN_TTL_SECONDS = 300
+_MISSING_PLANS: Dict[str, float] = {}
+
+PLAN_GONE_ERROR = (
+    'That plan no longer exists in Planning Center. Pick a current plan; the '
+    'board will keep using the channel names it already has until you do.'
+)
+
+
+def _plan_is_known_missing(plan_id) -> bool:
+    if plan_id is None:
+        return False
+    expires = _MISSING_PLANS.get(str(plan_id))
+    if expires is None:
+        return False
+    if time.monotonic() >= expires:
+        _MISSING_PLANS.pop(str(plan_id), None)
+        return False
+    return True
+
+
+def _remember_missing_plan(plan_id) -> None:
+    if plan_id is not None:
+        _MISSING_PLANS[str(plan_id)] = time.monotonic() + _MISSING_PLAN_TTL_SECONDS
+
+
+def _forget_missing_plan(plan_id) -> None:
+    """Called whenever a lookup succeeds, so a plan is never stuck as missing."""
+    if plan_id is not None:
+        _MISSING_PLANS.pop(str(plan_id), None)
+
+
 def _fetch_error(default: str) -> str:
     """Explain the last failure rather than only reporting that there was one.
 
@@ -448,6 +491,9 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
     auth = pco_cfg['auth']
     headers = { 'Authorization': _basic_auth_header(auth['token'], auth['secret']) }
 
+    if _plan_is_known_missing(plan_id):
+        return {"ok": False, "error": PLAN_GONE_ERROR}
+
     plan_people = None
     stid = None
     if service_type_value is not None:
@@ -458,7 +504,12 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
         # Try generic, then robust fallback across all service types
         plan_people = _get_plan_people_any(plan_id, headers)
     if not plan_people:
+        if _LAST_HTTP_ERROR == 404:
+            _remember_missing_plan(plan_id)
+            return {"ok": False, "error": PLAN_GONE_ERROR}
         return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
+
+    _forget_missing_plan(plan_id)
 
     included_maps = _build_included_maps(plan_people.get('included') or [])
     # Keyed by (name, team, position), not by name. One person can be scheduled
@@ -623,12 +674,20 @@ def list_teams_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]
     auth = pco_cfg['auth']
     headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
 
+    if _plan_is_known_missing(plan_id):
+        return {"ok": False, "error": PLAN_GONE_ERROR}
+
     stid = _resolve_service_type_id(service_type_value, headers) if service_type_value is not None else None
     plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
     if not plan_people:
         plan_people = _get_plan_people_any(plan_id, headers)
     if not plan_people:
+        if _LAST_HTTP_ERROR == 404:
+            _remember_missing_plan(plan_id)
+            return {"ok": False, "error": PLAN_GONE_ERROR}
         return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
+
+    _forget_missing_plan(plan_id)
 
     included_maps = _build_included_maps(plan_people.get('included') or [])
     members: Dict[str, set] = {}

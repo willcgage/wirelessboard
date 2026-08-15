@@ -1,6 +1,8 @@
 import json
 import os
 import asyncio
+import concurrent.futures
+import functools
 import socket
 import logging
 import sys
@@ -539,7 +541,35 @@ class GroupUpdateHandler(web.RequestHandler):
         logger.debug('Group update payload: %s', data)
         self.write(data)
 
+# Planning Center calls go over the internet with a 10s timeout, and pco.py
+# uses requests, which blocks. Tornado runs one thread, so a handler that calls
+# straight into pco holds the IOLoop for the whole round trip -- no other
+# request, no websocket frame, no device poll. A plan that has rolled off the
+# schedule makes it worst: list_people_for_plan tries the service-scoped URL,
+# gets a 404, and falls back to the global one, so a slow API costs two
+# timeouts back to back. That is the ~20s freeze reported in #73.
+#
+# ⛔ ONE worker, deliberately. pco.py keeps the status of the most recent failed
+# request in a module global so a caller that only receives None can still say
+# why, and its comment says outright that the calls are serialized. They stay
+# serialized: this moves them off the IOLoop, it does not make them concurrent.
+# Raising max_workers would silently make _fetch_error report another request's
+# failure.
+_PCO_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix='pco')
+
+
+async def _run_pco(func, *args, **kwargs):
+    """Run a blocking PCO call on the executor rather than the IOLoop."""
+    loop = ioloop.IOLoop.current()
+    return await loop.run_in_executor(_PCO_EXECUTOR, functools.partial(func, *args, **kwargs))
+
+
 class PcoSyncHandler(web.RequestHandler):
+    # ⚠️ Deliberately still on the IOLoop. sync_from_pco writes config.json, and
+    # holding the loop is what currently stops that racing the other handlers
+    # that write it. Moving this one needs the config write path made
+    # thread-safe first; see #73. A sync is operator-initiated and infrequent,
+    # unlike the read-only lookups above it, which is why it waits.
     def post(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -552,14 +582,15 @@ class PcoSyncHandler(web.RequestHandler):
 class PcoPreviewHandler(web.RequestHandler):
     """Resolve the PCO mapping without writing anything to config.json."""
 
-    def get(self):
+    async def get(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_override = self.get_query_argument('plan', default=None)
-        self.write(json.dumps(pco.preview_sync(plan_override)))
+        result = await _run_pco(pco.preview_sync, plan_override)
+        self.write(json.dumps(result))
 
-    def post(self):
-        self.get()
+    async def post(self):
+        await self.get()
 
 
 class PcoConfigHandler(web.RequestHandler):
@@ -591,27 +622,27 @@ class PcoConfigHandler(web.RequestHandler):
 
 
 class PcoServicesHandler(web.RequestHandler):
-    def get(self):
+    async def get(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        result = pco.list_service_types()
+        result = await _run_pco(pco.list_service_types)
         self.write(json.dumps(result))
 
 
 class PcoPlansHandler(web.RequestHandler):
-    def get(self):
+    async def get(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         service = self.get_query_argument('service', default=None)
         if service:
-            result = pco.list_plans_for_service(service)
+            result = await _run_pco(pco.list_plans_for_service, service)
         else:
-            result = pco.list_plans()
+            result = await _run_pco(pco.list_plans)
         self.write(json.dumps(result))
 
 
 class PcoPeopleHandler(web.RequestHandler):
-    def get(self):
+    async def get(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_id = self.get_query_argument('plan', default=None)
@@ -621,12 +652,12 @@ class PcoPeopleHandler(web.RequestHandler):
             return
         # service is no longer required; keep optional for backward compatibility
         service = self.get_query_argument('service', default=None)
-        result = pco.list_people_for_plan(plan_id, service)
+        result = await _run_pco(pco.list_people_for_plan, plan_id, service)
         self.write(json.dumps(result))
 
 
 class PcoTeamsHandler(web.RequestHandler):
-    def get(self):
+    async def get(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_id = self.get_query_argument('plan', default=None)
@@ -635,12 +666,12 @@ class PcoTeamsHandler(web.RequestHandler):
             self.write('{"ok": false, "error": "Missing plan query param"}')
             return
         service = self.get_query_argument('service', default=None)
-        result = pco.list_teams_for_plan(plan_id, service)
+        result = await _run_pco(pco.list_teams_for_plan, plan_id, service)
         self.write(json.dumps(result))
 
 
 class PcoNotesHandler(web.RequestHandler):
-    def get(self):
+    async def get(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_id = self.get_query_argument('plan', default=None)
@@ -649,7 +680,7 @@ class PcoNotesHandler(web.RequestHandler):
             self.write('{"ok": false, "error": "Missing plan query param"}')
             return
         source = self.get_query_argument('source', default=None)
-        result = pco.notes_for_plan(plan_id, source_override=source)
+        result = await _run_pco(pco.notes_for_plan, plan_id, source_override=source)
         self.write(json.dumps(result))
 
 
