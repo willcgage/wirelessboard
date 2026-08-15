@@ -10,6 +10,36 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.11.1] - 2026-08-15
+A board left running through a service could stop responding. This is mostly
+about that.
+
+Two separate things were holding the server still. Planning Center lookups ran
+on the same single thread that serves everything else, so while one was in
+flight the board did nothing at all — and a plan that had rolled off the
+schedule was the worst case, because every lookup waited for two requests to
+fail before giving up. Separately, the address behind the QR code was being
+resolved on a networking call that took five seconds on some networks, once a
+minute, with the whole board waiting each time.
+
+Neither is a new fault. Both were reported from a venue running 1.11.0, and the
+logs from that board are what identified them.
+
+Also here: the two TV layout controls added in 1.11.0 were confusing and could
+not produce the arrangement they were asked for.
+
+### Added
+- **One row, and one column.** The `O` key now offers *fit to page*, *one row*, *one column* and *balanced grid*. Putting every channel on a single line was the request that prompted this and was not previously possible: both of the old options arranged the board near a square, so twelve channels came out three rows deep whichever was chosen. Note that one row and one column narrow the channels to make room — twelve on a typical screen come out around a third of their usual width — which is the trade that makes them work.
+
+### Changed
+- **The two TV layout controls no longer describe themselves the same way.** `O` and `A` both offered "fit to page, landscape, portrait", so they read as one control listed twice. `O` is now **Arrangement** — how the channels are laid out — and `A` is **Card shape** — auto, 16:9 or 3:4. Both are listed in the help overlay (`?`), and a layout remembered from 1.11.0 carries over rather than resetting.
+- **The QR code address is resolved in the background.** It is worked out when the board starts and refreshed periodically, instead of on a request. Setting `local_url` in `config.json` still skips the lookup altogether and remains the better answer for a site that knows its own address.
+
+### Fixed
+- **Planning Center lookups no longer stop the board.** The people, teams, plans, services, notes and preview requests now run alongside the rest of the server instead of in front of it. Previously each one held everything else — including the live channel updates — for as long as it took, up to twenty seconds where a plan no longer existed and the request had to time out twice.
+- **A plan that has rolled off the schedule is recognised.** It is remembered as gone for a few minutes rather than being asked for again on every refresh, and the message now says the plan no longer exists instead of reporting a generic failure. A request that merely timed out is still retried, because that may be temporary.
+- **The board no longer pauses for five seconds every minute** on networks where the machine's own name is slow to resolve.
+
 ## [1.11.0] - 2026-08-09
 Mostly the board itself, and one long-overdue piece of housekeeping underneath
 it.
