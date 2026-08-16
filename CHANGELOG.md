@@ -10,6 +10,12 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.11.3] - 2026-08-16
+The last of the freezes.
+
+### Fixed
+- **Running a Planning Center sync no longer stops the board while it works.** A sync makes several requests to Planning Center, and until now the whole board waited for them — channel updates stopped arriving, the interface stopped responding, and everything resumed only once the sync finished. That is poor timing by definition, since a sync is usually run shortly before a service. The requests now happen alongside the rest of the board instead of in front of it. Applying the result still happens the moment it arrives, exactly as before, so nothing about what a sync does to your channel assignments has changed.
+
 ## [1.11.2] - 2026-08-16
 One fix, for something 1.11.1 introduced.
 
