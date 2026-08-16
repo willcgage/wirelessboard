@@ -10,6 +10,12 @@
 ### Fixed
 - _Nothing yet._
 
+## [1.11.2] - 2026-08-16
+One fix, for something 1.11.1 introduced.
+
+### Fixed
+- **Channel text no longer runs off the card when the board is set to one row or one column.** Those arrangements make the channels narrower to fit them all on a line, but the name, position and device text was still being sized against the height of the row — and on a single row that height is the whole screen. The result was text scaled for a full-height row rendered into a card a fraction as wide, with whatever did not fit simply cut off. Text is now sized against whichever of the two dimensions is actually the tighter, and a long name wraps rather than disappearing. Fit to page and balanced grid are unaffected: their channels are never narrowed, so nothing about them changes.
+
 ## [1.11.1] - 2026-08-15
 A board left running through a service could stop responding. This is mostly
 about that.
