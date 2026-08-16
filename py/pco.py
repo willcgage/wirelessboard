@@ -1149,24 +1149,40 @@ def _dedupe_people(people: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return list(deduped.values())
 
 
-def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False) -> Dict[str, Any]:
-    """Read the selected plan and map its people onto Wirelessboard slots.
+# A sync is three jobs with different constraints, and #79 is about telling them
+# apart. Splitting them lets the slow one move off the IOLoop while the two that
+# touch config.json stay on it, so nothing new can race the file
+# (config-durability history is why that matters).
+#
+#   begin_sync    loads config. MAY WRITE config.json -- ensure_credentials
+#                 migrates credentials into the keyring through a save callback.
+#                 ⛔ Caller must run this on the IOLoop.
+#   resolve_sync  every HTTP call and all the matching. Writes nothing.
+#                 ✅ Safe on a worker, and the only slow part.
+#   finish_sync   applies the result. The single write. ⛔ IOLoop.
+#
+# sync_from_pco still chains all three, so every existing caller and test sees
+# exactly what it did before.
 
-    Each scheduled person is matched by their PCO team position name (for
-    example ``Vocal 1``), falling back to the configured note category and to an
-    ``[ID]`` in the person's name.  One position can resolve to several slots --
-    typically the mic channel and its matching IEM channel -- and every match
-    receives the person's name in ``extended_name``.
 
-    With ``dry_run=True`` nothing is written; the resolved mapping is returned so
-    the UI can show what a real sync would do.
+def begin_sync() -> Dict[str, Any]:
+    """Load the PCO config for a sync.
+
+    ⛔ May write config.json, so it belongs on the IOLoop rather than a worker.
     """
     try:
-        pco_cfg = get_pco_config()
+        return {"ok": True, "config": get_pco_config()}
     except PcoConfigError as exc:
         logger.warning('PCO sync aborted: %s', exc)
         return {"ok": False, "error": str(exc)}
 
+
+def resolve_sync(pco_cfg: Dict[str, Any], plan_id_override: Optional[str] = None) -> Dict[str, Any]:
+    """Fetch the plan and work out which slot each person belongs in.
+
+    Every network call lives here, and nothing here writes -- which is what
+    makes it safe to run away from the IOLoop.
+    """
     auth = pco_cfg['auth']
     headers = {
         'Authorization': _basic_auth_header(auth['token'], auth['secret'])
@@ -1190,6 +1206,35 @@ def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False)
     people = _dedupe_people(_flatten_plan_people(plan_people, category, team_filters))
     resolved, unmatched = resolve_assignments(people, options)
     conflicts = find_conflicts(resolved)
+
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "options": options,
+        "category": category,
+        "resolved": resolved,
+        "unmatched": unmatched,
+        "conflicts": conflicts,
+        "people": people,
+    }
+
+
+def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, Any]:
+    """Apply a resolution and describe what happened.
+
+    ⛔ `_apply_assignments` is the one thing in a sync that writes config.json,
+    so this belongs on the IOLoop beside every other writer of that file.
+    """
+    if not resolution or not resolution.get('ok'):
+        return resolution or {"ok": False, "error": "Unable to resolve the plan"}
+
+    options = resolution['options']
+    category = resolution['category']
+    resolved = resolution['resolved']
+    unmatched = resolution['unmatched']
+    conflicts = resolution['conflicts']
+    people = resolution['people']
+    plan_id = resolution['plan_id']
 
     updates = 0 if dry_run else _apply_assignments(resolved, options)
 
@@ -1233,6 +1278,30 @@ def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False)
             "slots": entry.get('slots') or [],
         } for entry in resolved],
     }
+
+
+def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False) -> Dict[str, Any]:
+    """Read the selected plan and map its people onto Wirelessboard slots.
+
+    Each scheduled person is matched by their PCO team position name (for
+    example ``Vocal 1``), falling back to the configured note category and to an
+    ``[ID]`` in the person's name.  One position can resolve to several slots --
+    typically the mic channel and its matching IEM channel -- and every match
+    receives the person's name in ``extended_name``.
+
+    With ``dry_run=True`` nothing is written; the resolved mapping is returned so
+    the UI can show what a real sync would do.
+
+    All three phases in order. The Tornado handler calls them separately so the
+    network half can leave the IOLoop (#79); everything else -- tests, any other
+    caller -- goes on using this and sees no change.
+    """
+    started = begin_sync()
+    if not started.get('ok'):
+        return started
+
+    resolution = resolve_sync(started['config'], plan_id_override)
+    return finish_sync(resolution, dry_run=dry_run)
 
 
 def preview_sync(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
