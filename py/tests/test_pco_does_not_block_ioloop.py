@@ -120,16 +120,10 @@ class PcoDoesNotBlockTheLoop(AsyncHTTPTestCase):
         # it before the tests get a chance to fail.
         assert tornado_server._PCO_EXECUTOR._max_workers == 1
 
-    def test_the_sync_handler_is_still_synchronous(self):
-        """Deliberate: sync_from_pco writes config.json.
-
-        Holding the IOLoop is what currently stops that racing the other
-        handlers that write the file. If this ever becomes async, the config
-        write path needs to be thread-safe first.
-        """
+    def test_every_pco_handler_is_off_the_loop(self):
         import inspect
 
-        assert not inspect.iscoroutinefunction(tornado_server.PcoSyncHandler.post)
+        assert inspect.iscoroutinefunction(tornado_server.PcoSyncHandler.post)
         for handler in (
             tornado_server.PcoPeopleHandler,
             tornado_server.PcoTeamsHandler,
@@ -139,3 +133,78 @@ class PcoDoesNotBlockTheLoop(AsyncHTTPTestCase):
             tornado_server.PcoPreviewHandler,
         ):
             assert inspect.iscoroutinefunction(handler.get), f'{handler.__name__}.get blocks the IOLoop'
+
+
+class SyncSplitsAcrossTheLoop(AsyncHTTPTestCase):
+    """A sync moves its network half off the loop and keeps its writes on it.
+
+    Moving the whole sync to a worker would have been easy and wrong: it writes
+    config.json, and a second thread in front of that file is the fault that
+    once left a server unable to start. So the split is load / resolve / apply,
+    and only the middle one -- every HTTP call, no writes -- is awaited off the
+    loop (#79). These pin which phase runs where, because getting it backwards
+    would look identical until the day two writers collided.
+    """
+
+    def get_app(self):
+        return web.Application([
+            (r'/api/pco/sync', tornado_server.PcoSyncHandler),
+            (r'/probe', Probe),
+        ])
+
+    @gen_test
+    async def test_the_slow_half_runs_on_a_worker_and_the_writing_half_does_not(self):
+        loop_thread = threading.current_thread().name
+        seen = {}
+
+        def begin():
+            seen['begin'] = threading.current_thread().name
+            return {"ok": True, "config": {'auth': {}, 'mapping': {}}}
+
+        def resolve(_cfg, _plan):
+            seen['resolve'] = threading.current_thread().name
+            time.sleep(0.6)          # stands in for the plan fetch
+            return {"ok": True, "resolved": []}
+
+        def finish(_resolution, dry_run=False):
+            seen['finish'] = threading.current_thread().name
+            return {"ok": True, "updates": 0, "dry_run": dry_run}
+
+        with mock.patch.object(tornado_server.pco, 'begin_sync', begin), \
+             mock.patch.object(tornado_server.pco, 'resolve_sync', resolve), \
+             mock.patch.object(tornado_server.pco, 'finish_sync', finish):
+            began = time.monotonic()
+            slow = self.http_client.fetch(self.get_url('/api/pco/sync'), method='POST', body=b'')
+            probe = self.http_client.fetch(self.get_url('/probe'))
+
+            probe_response = await probe
+            probe_elapsed = time.monotonic() - began
+            sync_response = await slow
+
+        assert probe_response.code == 200
+        assert json.loads(sync_response.body)['ok'] is True
+
+        # The two phases that can touch config.json stayed where every other
+        # writer runs; only the plan fetch left.
+        assert seen['begin'] == loop_thread, 'begin_sync ran off the IOLoop; it can save config.json'
+        assert seen['finish'] == loop_thread, 'finish_sync ran off the IOLoop; it writes config.json'
+        assert seen['resolve'] != loop_thread, 'the plan fetch still holds the IOLoop'
+
+        # And the board answered while the sync was out.
+        assert probe_elapsed < 0.3, f'the probe waited {probe_elapsed:.2f}s behind a sync'
+
+    @gen_test
+    async def test_a_config_error_still_answers_without_touching_the_network(self):
+        called = []
+
+        with mock.patch.object(tornado_server.pco, 'begin_sync',
+                               lambda: {"ok": False, "error": "PCO integration is disabled"}), \
+             mock.patch.object(tornado_server.pco, 'resolve_sync',
+                               lambda *a, **k: called.append(1)):
+            response = await self.http_client.fetch(
+                self.get_url('/api/pco/sync'), method='POST', body=b'')
+
+        body = json.loads(response.body)
+        assert body['ok'] is False
+        assert 'disabled' in body['error']
+        assert not called, 'a sync with no usable config should not reach the network'

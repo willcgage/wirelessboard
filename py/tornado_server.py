@@ -603,17 +603,37 @@ async def _run_pco(func, *args, **kwargs):
 
 
 class PcoSyncHandler(web.RequestHandler):
-    # ⚠️ Deliberately still on the IOLoop. sync_from_pco writes config.json, and
-    # holding the loop is what currently stops that racing the other handlers
-    # that write it. Moving this one needs the config write path made
-    # thread-safe first; see #73. A sync is operator-initiated and infrequent,
-    # unlike the read-only lookups above it, which is why it waits.
-    def post(self):
+    """Sync in three phases, so only the slow one leaves the IOLoop (#79).
+
+    A sync makes several API calls at 10s apiece, and while it ran the board
+    served nothing -- worst timing possible, since an operator syncs shortly
+    before a service. But it also writes config.json, and simply moving the
+    whole thing to a worker would put a second thread in front of the file whose
+    corruption once left a server that could not start.
+
+    ⛔ So the split is load / resolve / apply, and only `resolve` -- every HTTP
+    call, no writes -- is awaited off the loop. Both phases that can touch
+    config.json stay here, serialized against every other handler exactly as
+    before. Do not "simplify" this by awaiting the other two.
+    """
+
+    async def post(self):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_override = self.get_query_argument('plan', default=None)
         dry_run = self.get_query_argument('dry_run', default='').lower() in ('1', 'true', 'yes')
-        result = pco.sync_from_pco(plan_override, dry_run=dry_run)
+
+        # On the loop: may migrate credentials, which saves config.json.
+        started = pco.begin_sync()
+        if not started.get('ok'):
+            self.write(json.dumps(started))
+            return
+
+        # Off the loop: the plan fetch and the matching. Writes nothing.
+        resolution = await _run_pco(pco.resolve_sync, started['config'], plan_override)
+
+        # Back on the loop: the one write.
+        result = pco.finish_sync(resolution, dry_run=dry_run)
         self.write(json.dumps(result))
 
 
