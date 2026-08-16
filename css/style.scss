@@ -349,6 +349,25 @@ canvas.slotgraph {
   --tvmode-scale: 1;
   --tvmode-scale-clamped: clamp(0.65, var(--tvmode-scale), 1.25);
 
+  // The width a card actually gets, published by tv-layout.js. Defaulted here
+  // because the type sizing below reads it before the first layout pass runs.
+  --tvmode-card-width: var(--tvmode-slot-width);
+
+  // ⭐ What the text is sized against. The height alone used to answer this,
+  // which was sound while every card was --tvmode-slot-width across: the only
+  // variable was how tall the row was. The `row` and `column` arrangements
+  // broke that by letting cards narrow, and nothing told the type. One row of
+  // twelve gives a full-height row and ~155px cards, so the name was sized for
+  // a 1000px row and rendered into a 155px box, where .mic_name's overflow
+  // clipped it.
+  //
+  // Taking the smaller of the two means the narrower dimension wins, which is
+  // the one that actually runs out. The 1.6 relates a card's width to the row
+  // height it would have had at the same shape, so fit-to-page and grid --
+  // where the width is never reduced -- land on the height term exactly as
+  // before and are left unchanged.
+  --tvmode-type-basis: min(var(--tvmode-row-height), calc(var(--tvmode-card-width) * 1.6));
+
   #micboard,
   .wirelessboard-board {
     grid-template-columns: repeat(
@@ -393,17 +412,29 @@ canvas.slotgraph {
     height: 100%;
   }
 
+  // The floors are deliberately low. They exist to stop the type vanishing on a
+  // tiny row, and the basis above already prevents it going small on a card
+  // with room -- but a floor of 1.8rem in a 155px card is itself the clipping,
+  // so it cannot be the thing that holds the size up.
   .name {
-    font-size: clamp(1.8rem, calc(var(--tvmode-row-height) * 0.085), 4rem);
+    font-size: clamp(0.85rem, calc(var(--tvmode-type-basis) * 0.085), 4rem);
+    max-width: 100%;
+    // A long name in a narrow card wraps rather than running past the edge and
+    // being cut. Breaking mid-word is ugly; being silently truncated is worse.
+    overflow-wrap: anywhere;
   }
 
   .mic_id {
     position: absolute;
     top: 0;
-    font-size: clamp(1.4rem, calc(var(--tvmode-row-height) * 0.08), 3.4rem);
+    font-size: clamp(0.7rem, calc(var(--tvmode-type-basis) * 0.08), 3.4rem);
     background: rgba(0, 0, 0, 0.6);
     border-radius: 0.35rem;
     padding: 0.25rem 0.45rem;
+    // Absolutely positioned, so it does not inherit the column's width and
+    // would otherwise spill out of the card sideways.
+    max-width: calc(100% - 0.9rem);
+    overflow-wrap: anywhere;
   }
 
   .mic_name {
@@ -475,7 +506,7 @@ canvas.slotgraph {
   }
 
   p.device-name {
-    font-size: clamp(1.2rem, calc(var(--tvmode-row-height) * 0.06), 3rem);
+    font-size: clamp(0.7rem, calc(var(--tvmode-type-basis) * 0.06), 3rem);
     color: var(--color-white);
     opacity: 0.9;
     margin: calc(0.3rem * var(--tvmode-scale-clamped)) 0.75rem calc(0.15rem * var(--tvmode-scale-clamped));
@@ -488,6 +519,10 @@ canvas.slotgraph {
     line-height: clamp(1.1, var(--tvmode-scale-clamped) * 1.2, 1.35);
     white-space: normal;
     overflow: hidden;
+    // text-overflow only ellipsises a single non-wrapping line, and this one
+    // wraps, so a long device label needs somewhere to break or it is simply
+    // cut off at the card edge.
+    overflow-wrap: anywhere;
     text-overflow: ellipsis;
   }
 
