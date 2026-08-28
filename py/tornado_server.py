@@ -29,14 +29,56 @@ config = cast(Any, config_module)
 logger = logging.getLogger('micboard.web')
 
 
+# Which formats a background may be in. Kept in step with MEDIA_EXTENSIONS in
+# js/background-key.mjs: the board picks between them, this only decides what it
+# is offered. Every one of these renders in an <img>/<video> in the browsers the
+# board runs on, so the list is about what an operator is likely to have to hand
+# -- a phone photo, a screenshot, an export from a stock library -- rather than
+# about anything the frontend has to special-case.
+IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.webp')
+VIDEO_EXTENSIONS = ('.mp4', '.mov')
+
+
 # https://stackoverflow.com/questions/5899497/checking-file-extension
-def file_list(extension):
+def file_list(extensions, dir_list=None):
+    """Background files in the given formats, named as they are on disk.
+
+    ``extensions`` is one extension or several. Matching is case-insensitive --
+    a photo off a phone is as likely to be ``.JPG`` as ``.jpg`` -- but the name
+    is returned unchanged, because /bg/ serves these straight off the filesystem
+    and lowercasing here would 404 on any filesystem that cares.
+
+    ``dir_list`` lets a caller that needs several of these share one listing.
+    """
+    if isinstance(extensions, str):
+        extensions = (extensions,)
+    suffixes = tuple(ext.lower() for ext in extensions)
+
+    if dir_list is None:
+        dir_list = os.listdir(config.get_gif_dir())
+
     files = []
-    dir_list = os.listdir(config.get_gif_dir())
     for file in dir_list:
-        if file.lower().endswith(extension):
+        if file.lower().endswith(suffixes):
             files.append(file)
     return files
+
+
+def background_file_lists():
+    """The background folder, split by kind, off a single listing.
+
+    Deliberately one ``os.listdir``. This runs inside /data.json, which every
+    open board requests every five seconds, and a listing is a blocking call on
+    the same thread that serves the whole board -- the fault this project has
+    now hit three times. The folder is usually local and fast, but it can be a
+    network share, and there is no reason to walk it once per format.
+    """
+    dir_list = os.listdir(config.get_gif_dir())
+    return {
+        'gif': file_list('.gif', dir_list),
+        'image': file_list(IMAGE_EXTENSIONS, dir_list),
+        'video': file_list(VIDEO_EXTENSIONS, dir_list),
+    }
 
 # The last resolved address. Written only by the background refresh below;
 # localURL() reads it and never resolves anything itself.
@@ -132,9 +174,7 @@ def wirelessboard_json(network_devices):
     if offline_devices:
         data.append(offline_devices)
 
-    gifs = file_list('.gif')
-    jpgs = file_list('.jpg')
-    mp4s = file_list('.mp4')
+    media = background_file_lists()
     url = localURL()
 
     for device in discover.time_filterd_discovered_list():
@@ -143,9 +183,15 @@ def wirelessboard_json(network_devices):
     return json.dumps({
         'receivers': data,
         'url': url,
-        'gif': gifs,
-        'jpg': jpgs,
-        'mp4': mp4s,
+        'gif': media['gif'],
+        # 'image' and 'video' are every accepted format for each. 'jpg' and
+        # 'mp4' are what they were called when each was the only one, kept
+        # narrowed to their original meaning so anything reading this endpoint
+        # from outside the app does not break on the rename.
+        'image': media['image'],
+        'video': media['video'],
+        'jpg': file_list('.jpg', media['image']),
+        'mp4': file_list('.mp4', media['video']),
         'background_defaults': config.get_background_defaults(),
         'config': config.get_public_config_tree(),
         'discovered': discovered,

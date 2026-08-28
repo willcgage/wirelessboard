@@ -18,6 +18,8 @@ import {
   backgroundKey,
   backgroundFilenames,
   backgroundFilenameForMode,
+  backgroundExtensions,
+  findBackgroundFile,
 } from './background-key.mjs';
 
 test('the person wins over the device label', () => {
@@ -80,6 +82,119 @@ test('a mode showing no media yields no filename', () => {
 test('each mode picks its own extension', () => {
   assert.equal(backgroundFilenameForMode('Jane Smith', 'IMG'), 'jane smith.jpg');
   assert.equal(backgroundFilenameForMode('Jane Smith', 'MP4'), 'jane smith.mp4');
+});
+
+test('a capitalised or PascalCase file on disk is found', () => {
+  // The bug: the key is lowercased, the directory listing is not, and comparing
+  // them directly meant only an all-lowercase filename ever matched.
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['Jane Smith.jpg']), 'Jane Smith.jpg');
+  assert.equal(
+    findBackgroundFile('Jane Smith', 'IMG', ['JaneSmith.JPG', 'Jane Smith.JPG']),
+    'Jane Smith.JPG',
+  );
+  assert.equal(findBackgroundFile('jane smith', 'MP4', ['Jane Smith.Mp4']), 'Jane Smith.Mp4');
+});
+
+test('the directory spelling is returned, not the lowercased key', () => {
+  // /bg/<name> is served off disk, so asking for the lowercased form 404s on a
+  // case-sensitive filesystem even though the file is right there.
+  const found = findBackgroundFile('Jane Smith', 'IMG', ['Jane Smith.JPG']);
+
+  assert.notEqual(found, 'jane smith.jpg');
+  assert.equal(found, 'Jane Smith.JPG');
+});
+
+test('an exact match beats a differently-cased one', () => {
+  // Two files that differ only in case must resolve the same way every render
+  // rather than by whatever order the directory happened to list them in.
+  assert.equal(
+    findBackgroundFile('Jane Smith', 'IMG', ['Jane Smith.jpg', 'jane smith.jpg']),
+    'jane smith.jpg',
+  );
+});
+
+test('a missing file is still missing', () => {
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['sam reed.jpg']), '');
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', []), '');
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', null), '');
+  assert.equal(findBackgroundFile('', 'IMG', ['jane smith.jpg']), '');
+  // A mode that shows no media never matches, whatever is on disk.
+  assert.equal(findBackgroundFile('Jane Smith', 'NONE', ['jane smith.jpg']), '');
+});
+
+test('the image list cannot satisfy a video slot', () => {
+  assert.equal(findBackgroundFile('Jane Smith', 'MP4', ['Jane Smith.JPG']), '');
+});
+
+test('mov is accepted as video, at any capitalisation', () => {
+  // What a phone or a camera records, handed over without remuxing.
+  assert.equal(findBackgroundFile('Jane Smith', 'MP4', ['jane smith.mov']), 'jane smith.mov');
+  assert.equal(findBackgroundFile('Jane Smith', 'MP4', ['Jane Smith.MOV']), 'Jane Smith.MOV');
+});
+
+test('mp4 still wins over mov', () => {
+  // Same rule as the photo formats: what plays most reliably is preferred, and
+  // a board already showing an .mp4 cannot be displaced by adding a .mov.
+  assert.equal(
+    findBackgroundFile('Jane Smith', 'MP4', ['Jane Smith.MOV', 'jane smith.mp4']),
+    'jane smith.mp4',
+  );
+  assert.deepEqual(backgroundExtensions('MP4'), ['.mp4', '.mov']);
+});
+
+test('a video slot suggests .mp4 for a file that does not exist yet', () => {
+  assert.equal(backgroundFilenameForMode('Jane Smith', 'MP4'), 'jane smith.mp4');
+});
+
+test('the video list cannot satisfy an image slot', () => {
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['Jane Smith.MOV']), '');
+});
+
+test('jpeg, png and webp are all accepted', () => {
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['jane smith.jpeg']), 'jane smith.jpeg');
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['jane smith.png']), 'jane smith.png');
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['jane smith.webp']), 'jane smith.webp');
+});
+
+test('the extra formats are matched case-insensitively too', () => {
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['Jane Smith.PNG']), 'Jane Smith.PNG');
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['Jane Smith.WebP']), 'Jane Smith.WebP');
+});
+
+test('a format still not accepted stays unmatched', () => {
+  // .gif is listed by the server but is not an accepted background, and .bmp is
+  // not listed at all. Neither should be picked up by accident.
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['jane smith.gif']), '');
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['jane smith.bmp']), '');
+});
+
+test('format order decides, and it beats capitalisation', () => {
+  // The point of fixing the order: adding formats must not change which file an
+  // existing board picks. A jpg present anywhere in the folder still wins, even
+  // where the png is the one spelled exactly as suggested.
+  const folder = ['jane smith.png', 'Jane Smith.JPG'];
+
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', folder), 'Jane Smith.JPG');
+  assert.equal(
+    findBackgroundFile('Jane Smith', 'IMG', ['jane smith.webp', 'jane smith.jpeg']),
+    'jane smith.jpeg',
+  );
+});
+
+test('the suggested filename is the first accepted format', () => {
+  // What the guide prints for a slot with no file yet. It must stay .jpg: it is
+  // the one every camera and phone produces without being asked.
+  assert.equal(backgroundFilenameForMode('Jane Smith', 'IMG'), 'jane smith.jpg');
+  assert.deepEqual(backgroundExtensions('IMG'), ['.jpg', '.jpeg', '.png', '.webp']);
+  assert.equal(backgroundExtensions('IMG')[0], backgroundFilenameForMode('x', 'IMG').slice(1));
+});
+
+test('the extension list cannot be mutated by a caller', () => {
+  const extensions = backgroundExtensions('IMG');
+  extensions.push('.bmp');
+
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', ['jane smith.bmp']), '');
+  assert.deepEqual(backgroundExtensions('NONE'), []);
 });
 
 test('the guide and the renderer agree, which is the whole point', () => {

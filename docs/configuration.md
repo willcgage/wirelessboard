@@ -91,7 +91,9 @@ Use a dedicated group for each mic storage display.  Multiple **BLANK** boxes ca
   <img width="60%" src="img/tv_imagebg.png"><img width="40%" src="img/smb_folder.png">
 </p>
 
-Image and video<sup>[1](#mp4)</sup> backgrounds can be used with Wirelessboard. Files in the backgrounds folder are matched against the visible channel name: the name is lowercased and `.jpg` or `.mp4` is appended, so a slot labelled `Fatai` looks for `fatai.jpg`, while `HH01 Delwin` expects `hh01 delwin.mp4` when video mode is enabled. Wirelessboard renders those assets with dedicated `<img>` / `<video>` tags, so modern browsers (Chrome, Edge, Safari, Firefox) all display motion backgrounds provided the media is encoded in an HTML5-compatible format. The path is exposed over `/bg/<filename>`, so updates take effect as soon as the file is saved—no restart required.
+Image and video<sup>[1](#mp4)</sup> backgrounds can be used with Wirelessboard. Files in the backgrounds folder are matched against the visible channel name, ignoring case and surrounding spaces: a slot labelled `Fatai` looks for `fatai` with a photo extension, while `HH01 Delwin` expects `hh01 delwin.mp4` when video mode is enabled. `Fatai.JPG`, `fatai.jpg` and `FATAI.Jpg` are all the same file as far as the board is concerned.
+
+Photos may be `.jpg`, `.jpeg`, `.png` or `.webp`; video may be `.mp4` or `.mov`<sup>[1](#mp4)</sup>. Where a slot has more than one file of a kind in the folder, they are preferred in the order listed — so adding a `.png` never displaces a `.jpg` that is already working, and adding a `.mov` never displaces an `.mp4`. **Settings → Background Library** lists, per slot, the file the board has found or the name to give one that does not exist yet. Wirelessboard renders those assets with dedicated `<img>` / `<video>` tags, so modern browsers (Chrome, Edge, Safari, Firefox) all display motion backgrounds provided the media is encoded in an HTML5-compatible format. The path is exposed over `/bg/<filename>`, so updates take effect as soon as the file is saved—no restart required.
 
 ### Choosing the background folder
 
@@ -178,3 +180,5 @@ By default, Wirelessboard displays the IP address of the machine as the QR code.
 
 ## Notes
 <a name="mp4">1</a>: Use H.264/AAC MP4 files for best compatibility. Videos are rendered with muted, looping HTML5 players so they autostart across browsers.
+
+`.mov` is accepted so that a clip off a phone or a camera can be dropped in without being converted first, but it is the riskier of the two and that is why `.mp4` is preferred when a slot has both. What plays is decided by the codec inside the file rather than by the extension: a `.mov` containing H.264/AAC plays in the desktop app and in Chrome, Edge and Safari, while Firefox may refuse the QuickTime container outright. Recent iPhones set to **High Efficiency** record HEVC instead of H.264, which not every browser will decode. If a `.mov` background shows nothing but the slot's status colour, that is the reason — re-export it as H.264 MP4.
