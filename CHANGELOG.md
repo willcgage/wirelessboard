@@ -2,13 +2,23 @@
 
 ## [Unreleased]
 ### Added
-- **The channel text can be moved to the top, middle or bottom of the card.** Press <kbd>P</kbd> in TV mode to cycle it. This is mostly for boards using background photos: a face is rarely in the middle of the frame, and until now the text sat across the middle of the card with no way to move it off the subject. The photo itself does not move — it fills the card whichever placement you choose. Middle is the default and is exactly what the board did before, so nothing changes until you press the key. Like the arrangement and card shape controls, the choice is remembered on the machine and can be put in a link (`text=top`).
+- _Nothing yet._
 
 ### Changed
 - _Nothing yet._
 
 ### Fixed
 - _Nothing yet._
+
+## [1.13.0] - 2026-08-29
+One control, for boards that put photos on the channels.
+
+1.12.0 made those photos far easier to get onto the board. This is the other half of the same
+complaint: once a photo is up, the text sits across the middle of it, which is where the face
+usually is.
+
+### Added
+- **The channel text can be moved to the top, middle or bottom of the card.** Press <kbd>P</kbd> in TV mode to cycle it. This is mostly for boards using background photos: a face is rarely in the middle of the frame, and until now the text sat across the middle of the card with no way to move it off the subject. The photo itself does not move — it fills the card whichever placement you choose. Middle is the default and is exactly what the board did before, so nothing changes until you press the key. Like the arrangement and card shape controls, the choice is remembered on the machine and can be put in a link (`text=top`).
 
 ## [1.12.0] - 2026-08-28
 Backgrounds that were in the folder all along.
