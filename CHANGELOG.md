@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **The channel text can be moved to the top, middle or bottom of the card.** Press <kbd>P</kbd> in TV mode to cycle it. This is mostly for boards using background photos: a face is rarely in the middle of the frame, and until now the text sat across the middle of the card with no way to move it off the subject. The photo itself does not move — it fills the card whichever placement you choose. Middle is the default and is exactly what the board did before, so nothing changes until you press the key. Like the arrangement and card shape controls, the choice is remembered on the machine and can be put in a link (`text=top`).
 
 ### Changed
 - _Nothing yet._

@@ -35,6 +35,22 @@ export const ARRANGEMENTS = ['fit', 'row', 'column', 'grid'];
 export const CARD_SHAPES = ['auto', 'wide', 'tall'];
 
 /**
+ * Where the text block sits inside a card.
+ *
+ * A third vocabulary again, for the same reason as the second: this moves the
+ * text *within* a card, which is a different question from the card's shape or
+ * the grid's. ⛔ Deliberately not called "position" — the card's third line is
+ * the person's position in the service (#69), and reusing the word in the help
+ * overlay would make two unrelated things read as one.
+ *
+ * `middle` is first because it is the default and because it is what every
+ * board did before this existed: `.mic_name` has always been a centred flex
+ * column. Only TV mode can honour these — a desk-mode card hugs its content, so
+ * there is no slack to move the text within.
+ */
+export const TEXT_POSITIONS = ['middle', 'top', 'bottom'];
+
+/**
  * 1.11.0 shipped the old names and boards have them stored. Map rather than
  * discard: silently resetting somebody's wall display to the default because
  * the vocabulary changed is a worse greeting than a near-equivalent layout.
@@ -85,6 +101,10 @@ export function isArrangement(value) {
 
 export function isCardShape(value) {
   return CARD_SHAPES.includes(value);
+}
+
+export function isTextPosition(value) {
+  return TEXT_POSITIONS.includes(value);
 }
 
 /**

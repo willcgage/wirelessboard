@@ -4,7 +4,7 @@ import {
 } from './app.js';
 import {
   toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
-  cycleArrangement, cycleCardShape,
+  cycleArrangement, cycleCardShape, cycleTextPosition,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
@@ -91,6 +91,14 @@ function bindingTable() {
       keys: ['a'],
       hud: 'Card shape: auto, 16:9, 3:4 (TV mode).',
       run: () => cycleCardShape(),
+    },
+    {
+      // "Placement", not "position": the card's third line *is* a position --
+      // the person's in the service (#69) -- and the overlay would read as one
+      // control if both used the word.
+      keys: ['p'],
+      hud: 'Text placement: middle, top, bottom of the card (TV mode).',
+      run: () => cycleTextPosition(),
     },
     {
       keys: ['f'],
