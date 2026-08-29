@@ -2,13 +2,14 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **PNG, WebP and `.jpeg` photos can now be used as channel backgrounds.** Until now a photo had to be a `.jpg` — a screenshot, a logo with a transparent background, or anything exported from a design tool had to be converted first. All four formats are treated alike, so a file simply works where it used to be ignored. If a channel has more than one, the order of preference is `.jpg`, `.jpeg`, `.png`, `.webp`, which means adding a new file can never displace a photo that is already showing.
+- **`.mov` videos can be used as channel backgrounds**, so a clip recorded on a phone or a camera can go straight into the backgrounds folder. `.mp4` is still preferred where a channel has both, and is still the safer choice: what actually plays is the video format inside the file rather than the extension on it, and a `.mov` recorded by a recent iPhone in **High Efficiency** mode may show nothing at all. Re-exporting it as H.264 MP4 fixes that.
 
 ### Changed
-- _Nothing yet._
+- The background filename guide in **Settings → Background Library** now names the file it actually found for each channel, rather than always printing the name you would have to give a new one.
 
 ### Fixed
-- _Nothing yet._
+- **Photos and videos are now found whatever their capitalisation.** The board looks for media named after the person on the channel, and it matched that name case-insensitively — but then checked the background folder for the all-lowercase spelling only. So `Jane Smith.JPG` or `Jane Smith.jpg` sat in the folder unused, the channel showed no photo, and the filename guide in the settings pane reported the file as missing while it was plainly there. Any capitalisation now matches, including on the extension, and the guide lists the file as it is actually named on disk rather than telling you to rename one the board is already using.
 
 ## [1.11.3] - 2026-08-16
 The last of the freezes.

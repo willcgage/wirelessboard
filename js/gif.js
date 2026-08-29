@@ -1,5 +1,5 @@
 import { micboard } from './app.js';
-import { backgroundFilenameForMode } from './background-key.mjs';
+import { findBackgroundFile } from './background-key.mjs';
 
 const MEDIA_BASE_PATH = 'bg/';
 
@@ -88,14 +88,13 @@ export function updateBackground(slotEl) {
   // through background-key.mjs so this and the guide table in the photo/video
   // section cannot disagree about what the file is called.
   const rawName = nameEl.textContent || nameEl.innerText || nameEl.innerHTML || '';
-  const filename = backgroundFilenameForMode(rawName, micboard.backgroundMode);
-  if (!filename) {
-    removeMedia(slotEl);
-    return;
-  }
 
+  // Resolved against the directory listing rather than assumed, so `Jane
+  // Smith.JPG` matches and is then requested under that exact spelling -- /bg/
+  // is served off disk, where case matters.
   if (micboard.backgroundMode === 'MP4') {
-    if (Array.isArray(micboard.mp4_list) && micboard.mp4_list.indexOf(filename) > -1) {
+    const filename = findBackgroundFile(rawName, 'MP4', micboard.mp4_list);
+    if (filename) {
       const container = ensureMediaContainer(slotEl);
       mountVideo(container, filename);
       return;
@@ -105,7 +104,8 @@ export function updateBackground(slotEl) {
   }
 
   if (micboard.backgroundMode === 'IMG') {
-    if (Array.isArray(micboard.img_list) && micboard.img_list.indexOf(filename) > -1) {
+    const filename = findBackgroundFile(rawName, 'IMG', micboard.img_list);
+    if (filename) {
       const container = ensureMediaContainer(slotEl);
       mountImage(container, filename);
       return;

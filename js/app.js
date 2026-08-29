@@ -537,8 +537,12 @@ function initialMap(callback) {
 
       response.json().then((data) => {
         micboard.discovered = data.discovered;
-        micboard.mp4_list = data.mp4;
-        micboard.img_list = data.jpg;
+        // Every accepted format for each, not just the one each list used to
+        // hold. `jpg` and `mp4` are the older, narrower keys and are still
+        // sent; preferring them here would quietly drop png, webp and mov
+        // backgrounds.
+        micboard.mp4_list = data.video || data.mp4;
+        micboard.img_list = data.image || data.jpg;
         micboard.localURL = data.url;
         try { micboard.groups = groupTableBuilder(data); } catch (e) { micboard.groups = {}; }
         micboard.config = data.config;

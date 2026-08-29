@@ -3,7 +3,7 @@ import { Collapse, Modal } from 'bootstrap';
 import { postJSON } from './data.js';
 import { resolveSlotType } from './slot-rules.mjs';
 import { discoveryHint } from './discovery-hint.mjs';
-import { backgroundNameForSlot, backgroundFilenames } from './background-key.mjs';
+import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from './background-key.mjs';
 
 const noop = () => {};
 
@@ -1776,8 +1776,15 @@ export function renderBackgroundFilenameGuide() {
 
     const backgroundName = resolveBackgroundName(slotNumber, slotConfig);
     const { image: imgFilename, video: videoFilename } = backgroundFilenames(backgroundName);
-    const hasImg = !!(imgFilename && imgList.indexOf(imgFilename) > -1);
-    const hasVideo = !!(videoFilename && mp4List.indexOf(videoFilename) > -1);
+
+    // The file on disk if there is one, whatever its capitalisation. Showing
+    // that spelling rather than the suggested one is the point: the operator
+    // who named a photo `Jane Smith.JPG` should see it listed as available, not
+    // be told to rename a file the board is already using.
+    const imgOnDisk = findBackgroundFile(backgroundName, 'IMG', imgList);
+    const videoOnDisk = findBackgroundFile(backgroundName, 'MP4', mp4List);
+    const hasImg = !!imgOnDisk;
+    const hasVideo = !!videoOnDisk;
 
     const row = document.createElement('tr');
 
@@ -1796,11 +1803,11 @@ export function renderBackgroundFilenameGuide() {
     row.appendChild(nameCell);
 
     const imgCell = document.createElement('td');
-    decorateFilenameCell(imgCell, imgFilename, hasImg);
+    decorateFilenameCell(imgCell, imgOnDisk || imgFilename, hasImg);
     row.appendChild(imgCell);
 
     const videoCell = document.createElement('td');
-    decorateFilenameCell(videoCell, videoFilename, hasVideo);
+    decorateFilenameCell(videoCell, videoOnDisk || videoFilename, hasVideo);
     row.appendChild(videoCell);
 
     tbody.appendChild(row);
