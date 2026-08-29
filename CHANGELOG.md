@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.12.0] - 2026-08-28
+Backgrounds that were in the folder all along.
+
+Everything here is about one question: which file the board goes looking for when it puts a photo or
+a video behind a channel. It accepted a single spelling and a single format, and anything else sat
+in the backgrounds folder being ignored — in the worst case a file the settings pane had itself told
+you to create, listed as missing while it was plainly there.
+
+### Added
 - **PNG, WebP and `.jpeg` photos can now be used as channel backgrounds.** Until now a photo had to be a `.jpg` — a screenshot, a logo with a transparent background, or anything exported from a design tool had to be converted first. All four formats are treated alike, so a file simply works where it used to be ignored. If a channel has more than one, the order of preference is `.jpg`, `.jpeg`, `.png`, `.webp`, which means adding a new file can never displace a photo that is already showing.
 - **`.mov` videos can be used as channel backgrounds**, so a clip recorded on a phone or a camera can go straight into the backgrounds folder. `.mp4` is still preferred where a channel has both, and is still the safer choice: what actually plays is the video format inside the file rather than the extension on it, and a `.mov` recorded by a recent iPhone in **High Efficiency** mode may show nothing at all. Re-exporting it as H.264 MP4 fixes that.
 
