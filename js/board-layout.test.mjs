@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import {
-  ARRANGEMENTS, CARD_SHAPES, columnsFor, rowHeightFor, computeLayout, nextOption,
-  isArrangement, isCardShape, migrateArrangement, migrateCardShape,
+  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, columnsFor, rowHeightFor, computeLayout, nextOption,
+  isArrangement, isCardShape, isTextPosition, migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 
 const WIDE = { slotCount: 12, maxColumns: 12 };
@@ -127,9 +129,48 @@ test('nextOption cycles and wraps', () => {
   assert.equal(nextOption(CARD_SHAPES, 'tall'), 'auto');
 });
 
+test('text placement cycles through all three and returns to the default', () => {
+  assert.equal(nextOption(TEXT_POSITIONS, 'middle'), 'top');
+  assert.equal(nextOption(TEXT_POSITIONS, 'top'), 'bottom');
+  assert.equal(nextOption(TEXT_POSITIONS, 'bottom'), 'middle');
+});
+
+test('the default text placement is the centred card the board has always had', () => {
+  // First in the list is the default and the value the cycle starts from, which
+  // is the convention the other two controls follow.
+  assert.equal(TEXT_POSITIONS[0], 'middle');
+  assert.equal(TEXT_POSITIONS.length, 3);
+});
+
+test('every text placement has a stylesheet rule to act on', () => {
+  // Unlike arrangement and card shape -- whose classes exist only to make the
+  // state legible, the geometry arriving as custom properties -- text placement
+  // is done entirely in CSS. So a value added here with no matching rule would
+  // cycle, store itself and change the URL while the text never moved, which is
+  // the kind of nothing that is hard to spot.
+  const scss = readFileSync(
+    fileURLToPath(new URL('../css/style.scss', import.meta.url)),
+    'utf8',
+  );
+
+  TEXT_POSITIONS.forEach((position) => {
+    assert.ok(
+      scss.includes(`&.text-${position} .mic_name`),
+      `css/style.scss has no rule for text-${position}`,
+    );
+  });
+});
+
 test('the validators accept exactly the supported values', () => {
   ['fit', 'row', 'column', 'grid'].forEach((v) => assert.ok(isArrangement(v), v));
   ['auto', 'wide', 'tall'].forEach((v) => assert.ok(isCardShape(v), v));
+  ['middle', 'top', 'bottom'].forEach((v) => assert.ok(isTextPosition(v), v));
+
+  // This one reaches a CSS class name straight off a link, so it has to refuse
+  // anything it does not recognise rather than pass it through.
+  ['centre', 'center', 'middle ', '', null, undefined, 'top; }'].forEach((v) => {
+    assert.equal(isTextPosition(v), false, String(v));
+  });
 
   // The old vocabulary is no longer valid on its own; it has to be migrated.
   ['landscape', 'portrait', 'auto', '', null, undefined, 'sideways'].forEach((v) => {

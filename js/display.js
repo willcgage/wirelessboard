@@ -2,9 +2,11 @@ import { micboard, updateHash } from './app.js';
 
 import { updateGIFBackgrounds } from './gif.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
-import { ARRANGEMENTS, CARD_SHAPES, nextOption } from './board-layout.mjs';
 import {
-  writePref, safeStorage, ARRANGEMENT_KEY, CARD_SHAPE_KEY,
+  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, nextOption,
+} from './board-layout.mjs';
+import {
+  writePref, safeStorage, ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY,
 } from './view-prefs.mjs';
 
 function swapClass(selector, currentClass, newClass) {
@@ -47,8 +49,13 @@ export function setDisplayMode(mode) {
 }
 
 /**
- * Reflect the two view choices onto the container, so CSS can key off them and
- * so the current state is legible in the DOM rather than only in a variable.
+ * Reflect the view choices onto the container, so CSS can key off them and so
+ * the current state is legible in the DOM rather than only in a variable.
+ *
+ * Arrangement and card shape are read here by JS rather than CSS -- the
+ * geometry is arithmetic and arrives as custom properties -- but text placement
+ * really is only presentation, so `text-*` is the one of the three that a
+ * stylesheet rule actually acts on.
  */
 function applyViewClasses() {
   const container = document.getElementById('container');
@@ -57,8 +64,10 @@ function applyViewClasses() {
   }
   ARRANGEMENTS.forEach((a) => container.classList.remove(`arrangement-${a}`));
   CARD_SHAPES.forEach((s) => container.classList.remove(`card-${s}`));
+  TEXT_POSITIONS.forEach((p) => container.classList.remove(`text-${p}`));
   container.classList.add(`arrangement-${micboard.arrangement}`);
   container.classList.add(`card-${micboard.cardShape}`);
+  container.classList.add(`text-${micboard.textPosition}`);
 }
 
 export function applyBoardLayout() {
@@ -84,6 +93,14 @@ export function cycleCardShape() {
   applyBoardLayout();
   updateHash();
   return micboard.cardShape;
+}
+
+export function cycleTextPosition() {
+  micboard.textPosition = nextOption(TEXT_POSITIONS, micboard.textPosition);
+  writePref({ storage: safeStorage(), key: TEXT_POSITION_KEY, value: micboard.textPosition });
+  applyBoardLayout();
+  updateHash();
+  return micboard.textPosition;
 }
 
 export function toggleDisplayMode() {

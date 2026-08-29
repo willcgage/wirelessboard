@@ -23,6 +23,10 @@
 export const ARRANGEMENT_KEY = 'wirelessboard.gridOrientation';
 export const CARD_SHAPE_KEY = 'wirelessboard.slotAspect';
 
+// New in this build, so unlike the two above it is free to be named for what it
+// holds and needs no value migration -- nothing has ever written it.
+export const TEXT_POSITION_KEY = 'wirelessboard.textPosition';
+
 export function safeStorage() {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {

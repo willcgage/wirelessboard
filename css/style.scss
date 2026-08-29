@@ -449,6 +449,25 @@ canvas.slotgraph {
     min-height: 0;
   }
 
+  // Where the text block sits in the card, set by P. Only the text moves: the
+  // media layer below is absolutely positioned to `inset: 0` and covers the
+  // whole card whatever this says.
+  //
+  // `middle` restates the rule above rather than relying on it. It costs one
+  // declaration and means the three placements are read and changed together,
+  // instead of one of them being an absence somewhere else in the file.
+  &.text-middle .mic_name {
+    justify-content: center;
+  }
+
+  &.text-top .mic_name {
+    justify-content: flex-start;
+  }
+
+  &.text-bottom .mic_name {
+    justify-content: flex-end;
+  }
+
   .mic_name .name {
     width: 100%;
     text-align: center;

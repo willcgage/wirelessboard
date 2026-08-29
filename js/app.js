@@ -15,10 +15,10 @@ import {
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
-  isArrangement, isCardShape, migrateArrangement, migrateCardShape,
+  isArrangement, isCardShape, isTextPosition, migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 import {
-  resolvePref, safeStorage, ARRANGEMENT_KEY, CARD_SHAPE_KEY,
+  resolvePref, safeStorage, ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY,
 } from './view-prefs.mjs';
 
 import '../css/colors.scss';
@@ -34,10 +34,11 @@ micboard.MIC_MODELS = ['uhfr', 'qlxd', 'ulxd', 'axtd'];
 micboard.IEM_MODELS = ['p10t'];
 micboard.url = [];
 micboard.displayMode = 'deskmode';
-// Both default to 'auto', which is the fit-to-page board this has always been.
+// These defaults are the fit-to-page, centred-text board this has always been.
 // Resolved properly in readURLParameters once the hash and storage are known.
 micboard.arrangement = 'fit';
 micboard.cardShape = 'auto';
+micboard.textPosition = 'middle';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -398,6 +399,7 @@ function readURLParameters() {
   micboard.url.bgmode = getUrlParameter('bgmode');
   micboard.url.layout = getUrlParameter('layout');
   micboard.url.aspect = getUrlParameter('aspect');
+  micboard.url.text = getUrlParameter('text');
 
   // hash beats what the device remembers, which beats the default. A wall
   // display that has just come back from a power cut has no hash and nobody
@@ -419,6 +421,15 @@ function readURLParameters() {
     isValid: isCardShape,
     migrate: migrateCardShape,
     fallback: 'auto',
+  });
+  // No migrate: this preference is new, so there is no older vocabulary that
+  // could be sitting in storage or in a link somebody was handed.
+  micboard.textPosition = resolvePref({
+    hashValue: micboard.url.text,
+    storage,
+    key: TEXT_POSITION_KEY,
+    isValid: isTextPosition,
+    fallback: 'middle',
   });
 
   if (micboard.url.settings === 'logs') {
@@ -450,6 +461,9 @@ export function updateHash() {
   }
   if (micboard.cardShape && micboard.cardShape !== 'auto') {
     hash += `&aspect=${micboard.cardShape}`;
+  }
+  if (micboard.textPosition && micboard.textPosition !== 'middle') {
+    hash += `&text=${micboard.textPosition}`;
   }
   if (micboard.settingsMode === 'CONFIG') {
     if (micboard.configTab === 'logs') {
