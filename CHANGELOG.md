@@ -5,10 +5,8 @@
 - _Nothing yet._
 
 ### Changed
-- _Nothing yet._
-
-### Fixed
-- _Nothing yet._
+- **The channel text is much more compact.** On a typical board the three lines took over half the card's height — and most of that was not text. It was padding, gaps, and a stray paragraph margin the TV view never overrode, plus a channel label stretched into a bar the full width of the card to hold four characters. The same three lines at the same size now take under a third of the card. Nothing was made smaller to achieve it.
+- **Moving the text to the top or bottom keeps the photo whole again.** 1.14.0 gave the text its own band and shrank the picture to sit beside it, which removed the overlap but cost about a third of every photo. The photo now fills the card again at every placement, and the shading that keeps the text readable is gathered at the text's own edge instead of dimming the whole picture — so with the text at the bottom, the top two-thirds of every photo is clear, undimmed and full size.
 
 ## [1.14.0] - 2026-08-30
 Finishing what 1.13.0 started.

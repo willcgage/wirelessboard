@@ -463,24 +463,55 @@ canvas.slotgraph {
     align-items: center;
     position: relative;
     overflow: hidden;
-    padding: calc(1.4rem * var(--tvmode-scale-clamped)) 0.75rem calc(1rem * var(--tvmode-scale-clamped));
-    gap: calc(0.45rem * var(--tvmode-scale-clamped));
+    padding: calc(0.55rem * var(--tvmode-scale-clamped)) 0.6rem calc(0.5rem * var(--tvmode-scale-clamped));
+    gap: calc(0.2rem * var(--tvmode-scale-clamped));
     min-height: 0;
   }
 
-  // Where the text sits, set by P.
+  // ⭐⭐ The text block was mostly not text. Measured on a 356px card: 100px of
+  // actual type inside a 192px block -- the other 92px was card padding, flex
+  // gaps, and 32px of browser-default `<p>` bottom margins that TV mode never
+  // overrode. With a photo behind, that is half the card given to whitespace.
   //
-  // ⭐ The first release of this only moved the text, and that was not enough:
-  // the media layer is `inset: 0`, so the photo IS the card and the text landed
-  // on it wherever it went. All P could choose was which part of the picture to
-  // cover, which is not what was asked for.
+  // These three are `<p>`, so they arrive with a 1rem bottom margin nobody
+  // asked for. Desk mode still wants its own spacing, hence the .tvmode scope.
+  .mic_name .name,
+  .mic_name .mic_id,
+  .mic_name p.device-name {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  // ⛔ The base rule stretches this to the card width -- it is written for desk
+  // mode, where the line is right-aligned across the card. Here it is a pill
+  // around a four-character channel label, and stretching gave it a 372px bar
+  // to sit in. `display: inline-block` below was already trying to say this and
+  // could not, because align-self outranks it in a flex container.
+  .mic_name p.device-name {
+    align-self: center;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  // Where the text sits, set by P. The photo always fills the card; what moves
+  // is the text, and with it the scrim that keeps the text readable.
   //
-  // So the three placements are now two kinds of thing, deliberately:
-  //   middle      photo full-bleed, text over it -- what the board always did
-  //   top/bottom  text gets a band, the photo takes the rest, no overlap
+  // ⭐ Two earlier attempts are worth knowing about, because both look
+  // reasonable on paper:
   //
-  // `middle` restates the base rule rather than relying on it, so the three are
-  // read and changed together instead of one being an absence elsewhere.
+  // 1.13.0 moved the text alone. That could never work -- the media layer is
+  // `inset: 0`, so the photo IS the card, and all P could choose was which part
+  // of the picture to cover.
+  //
+  // 1.14.0 gave the text its own band and shrank the photo to fit beside it.
+  // That did remove the overlap, but on the real board it cost about a third of
+  // every picture, and the text sitting in the band was mostly padding anyway.
+  //
+  // ⛔ So: do not "fix" this by shrinking the photo again. The answer was to
+  // make the text small enough that overlaying it is cheap (see the compaction
+  // above -- 192px of text block became 106px without changing a font size) and
+  // to gather the scrim where the text actually is, instead of dimming the
+  // whole picture to light three lines at one edge.
   &.text-middle .mic_name {
     justify-content: center;
   }
@@ -493,52 +524,29 @@ canvas.slotgraph {
     justify-content: flex-end;
   }
 
-  // The banded placements: the media stops being an overlay and becomes a flex
-  // item, so it takes exactly the room the text is not using. `order` puts it
-  // after the text for `top` and before it for `bottom` -- the text children
-  // keep the default 0.
-  //
-  // ⛔ Scoped to `.is-active`. With no photo showing there is nothing to make
-  // room for, so the rules above apply alone and P moves the text exactly as it
-  // did before -- which is still the right behaviour on a board without media.
-  &.text-top .mic_name .slot-media.is-active,
-  &.text-bottom .mic_name .slot-media.is-active {
-    position: relative;
-    inset: auto;
-    flex: 1 1 0;
-    min-height: 0;
-    // Out to the card edges, past the padding that is there for the text.
-    margin-left: calc(-0.75rem);
-    margin-right: calc(-0.75rem);
-    width: calc(100% + 1.5rem);
-
-    img,
-    video {
-      // ⭐ The box is wide and short now (about 2:1), so `cover` is showing a
-      // horizontal strip of an upright photo and *which* strip is the whole
-      // question. Measured against a headshot whose head runs from 16% to 59%
-      // of the frame: `center` starts below the eyes and keeps the chin and
-      // shoulders; `top` cuts the face off at the mouth. 25% holds the whole
-      // head. It is a heuristic about where people put faces in portraits, not
-      // a law -- but it is right far more often than either default.
-      object-position: center 25%;
-    }
-
-    // The scrim exists to hold text legible over the picture. Nothing is over
-    // the picture here, so darkening it is pure loss.
-    &::after {
-      opacity: 0;
-    }
+  // The scrim follows the text. `middle` keeps the even full-card wash, which
+  // is right when the text is across the centre; the edge placements clear the
+  // far half of the picture entirely, which is what keeps the photo bright.
+  &.text-bottom .mic_name .slot-media.is-active::after {
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.92) 0%,
+      rgba(0, 0, 0, 0.78) 22%,
+      rgba(0, 0, 0, 0.25) 38%,
+      rgba(0, 0, 0, 0) 52%
+    );
+    opacity: 1;
   }
 
-  &.text-top .mic_name .slot-media.is-active {
-    order: 1;
-    margin-bottom: calc(-1rem * var(--tvmode-scale-clamped));
-  }
-
-  &.text-bottom .mic_name .slot-media.is-active {
-    order: -1;
-    margin-top: calc(-1.4rem * var(--tvmode-scale-clamped));
+  &.text-top .mic_name .slot-media.is-active::after {
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.92) 0%,
+      rgba(0, 0, 0, 0.78) 22%,
+      rgba(0, 0, 0, 0.25) 38%,
+      rgba(0, 0, 0, 0) 52%
+    );
+    opacity: 1;
   }
 
   .mic_name .name {

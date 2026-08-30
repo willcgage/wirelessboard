@@ -97,7 +97,7 @@ function bindingTable() {
       // the person's in the service (#69) -- and the overlay would read as one
       // control if both used the word.
       keys: ['p'],
-      hud: 'Text placement: over the photo, or in a band above or below it (TV mode).',
+      hud: 'Text placement: middle, top, bottom of the card (TV mode).',
       run: () => cycleTextPosition(),
     },
     {

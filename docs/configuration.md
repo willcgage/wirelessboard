@@ -120,16 +120,11 @@ Four controls in TV mode, all listed in the help overlay (`?`):
 | `P` | Text placement | Middle, top, bottom of the card |
 | `Z` | Text size | Medium, small, large |
 
-**Text placement** decides how the channel's text and its background photo share the card, and the three options are two different arrangements rather than three positions:
+**Text placement** moves the channel's text to the middle, top or bottom of the card. The background photo always fills the whole card; what moves is the text, and with it the shading that keeps the text readable. Put the text at whichever edge your photos are emptiest — with the text at the bottom, the top two-thirds of every picture is left clear and undimmed.
 
-- **Middle** — the photo fills the whole card and the text sits over the centre of it, darkened behind so it stays readable. This is what the board has always done.
-- **Top** and **bottom** — the text gets a band of its own at that edge and the photo takes the rest of the card. They do not overlap at all.
+**Text size** scales all three lines together, on top of the size the layout already derives from the card. Smaller text covers less of the photo.
 
-With no photo on a channel, all three simply move the text within the card.
-
-In the banded placements the photo is in a wide, short box, so it is cropped to fill it. The crop is anchored towards the top of the picture rather than its centre, which is where faces usually are in an upright photo — a portrait cropped from the centre tends to lose the top of the head.
-
-**Text size** scales all three lines together, on top of the size the layout already derives from the card. Use it to trade text against picture: smaller text leaves a larger photo in the banded placements, and covers less of it in the middle placement.
+The text is deliberately compact: on a typical board the three lines occupy under a third of the card's height, so moving them to an edge leaves most of the picture untouched.
 
 This is all TV-mode only, because only there does a card have room to spare; a desk-mode card is the height of its own text.
 
