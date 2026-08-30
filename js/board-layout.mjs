@@ -53,13 +53,6 @@ export const TEXT_POSITIONS = ['middle', 'top', 'bottom'];
 /**
  * How large the card text is, as a multiplier on the sizes the layout derives.
  *
- * ⭐ The two placements are not the same kind of thing, which is deliberate and
- * was the operator's call. `middle` keeps the photo full-bleed with the text
- * over it; `top` and `bottom` give the text its own band and the photo takes
- * what is left, so they do not overlap at all. The first release of `P` moved
- * the text but could not stop it landing on the picture, because the picture is
- * the whole card -- which is the report this answers.
- *
  * `medium` is first: the default, and the sizes the board already had.
  */
 export const TYPE_SIZES = ['medium', 'small', 'large'];
@@ -125,8 +118,11 @@ export function isTypeSize(value) {
   return TYPE_SIZES.includes(value);
 }
 
-/** Whether a placement gives the text its own band rather than overlaying it. */
-export function isBandedPlacement(value) {
+/**
+ * Whether a placement puts the text against an edge, and so wants a scrim
+ * gathered at that edge rather than spread over the whole picture.
+ */
+export function isEdgePlacement(value) {
   return value === 'top' || value === 'bottom';
 }
 

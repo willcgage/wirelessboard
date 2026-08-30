@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES,
   columnsFor, rowHeightFor, computeLayout, nextOption,
-  isArrangement, isCardShape, isTextPosition, isTypeSize, isBandedPlacement,
+  isArrangement, isCardShape, isTextPosition, isTypeSize, isEdgePlacement,
   migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 
@@ -158,13 +158,13 @@ test('the size validator refuses anything it does not know', () => {
   });
 });
 
-test('only top and bottom band the text; middle overlays it', () => {
-  // The distinction the second attempt turns on: middle keeps the photo
-  // full-bleed with the text over it, the other two give the text its own room.
-  assert.equal(isBandedPlacement('top'), true);
-  assert.equal(isBandedPlacement('bottom'), true);
-  assert.equal(isBandedPlacement('middle'), false);
-  assert.equal(isBandedPlacement('nonsense'), false);
+test('top and bottom put the text against an edge; middle does not', () => {
+  // Which placements want the scrim gathered at one edge rather than washed
+  // evenly over the whole picture.
+  assert.equal(isEdgePlacement('top'), true);
+  assert.equal(isEdgePlacement('bottom'), true);
+  assert.equal(isEdgePlacement('middle'), false);
+  assert.equal(isEdgePlacement('nonsense'), false);
 });
 
 test('the type ranking keeps the name above the channel id', () => {
@@ -208,18 +208,24 @@ test('every text size has a stylesheet rule to act on', () => {
   });
 });
 
-test('the banded placements each reshape the media layer', () => {
-  // Without these the placement would move the text and leave the photo
-  // covering the whole card -- which is exactly the bug being fixed, so it is
-  // worth failing loudly rather than shipping the same nothing twice.
+test('each edge placement gathers the scrim at its own edge', () => {
+  // The text is readable over the photo only because of these, and a scrim
+  // pointing the wrong way is worse than none: it dims the half of the picture
+  // the text is not on and leaves the text on the bright half.
   const scss = readFileSync(
     fileURLToPath(new URL('../css/style.scss', import.meta.url)),
     'utf8',
   );
-  TEXT_POSITIONS.filter(isBandedPlacement).forEach((position) => {
+  // `bottom` gathers at the bottom, so the gradient runs `to top`, and vice
+  // versa -- the direction is the far edge, which is easy to write backwards.
+  const direction = { bottom: 'to top', top: 'to bottom' };
+
+  TEXT_POSITIONS.filter(isEdgePlacement).forEach((position) => {
+    const rule = scss.split(`&.text-${position} .mic_name .slot-media.is-active::after`)[1];
+    assert.ok(rule, `css/style.scss has no scrim rule for text-${position}`);
     assert.ok(
-      scss.includes(`&.text-${position} .mic_name .slot-media.is-active`),
-      `css/style.scss does not reshape the media layer for text-${position}`,
+      rule.split('}')[0].includes(direction[position]),
+      `the text-${position} scrim should run ${direction[position]}`,
     );
   });
 });
