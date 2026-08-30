@@ -301,6 +301,29 @@ def _forget_missing_plan(plan_id) -> None:
         _MISSING_PLANS.pop(str(plan_id), None)
 
 
+def _short_circuit_missing(plan_id, force: bool) -> bool:
+    """Whether to answer "gone" from memory instead of asking Planning Center.
+
+    â­ The cache exists to stop *polling* re-paying two 404s for a plan that has
+    rolled off the schedule (#73). It was never meant to answer an operator.
+
+    That distinction was missing, and it is the whole of the bug reported from a
+    board on 2026-08-30: pick a plan, press Load People, get "that plan no
+    longer exists" -- and press it again, and again, and get the same answer
+    without a single request leaving the machine, because the entry is consulted
+    before the network and lasts five minutes. Nothing the operator could do
+    cleared it. Restarting did, which is why it read as "Wirelessboard has to be
+    restarted to load a new plan's people".
+
+    So an explicit request forgets what it thinks it knows and goes and looks. A
+    poll still gets the cheap answer.
+    """
+    if force:
+        _forget_missing_plan(plan_id)
+        return False
+    return _plan_is_known_missing(plan_id)
+
+
 def _fetch_error(default: str) -> str:
     """Explain the last failure rather than only reporting that there was one.
 
@@ -472,7 +495,7 @@ def _get_plan_people_with_service(service_type_id: int, plan_id: str, headers: D
     return _http_get(url, headers, params)
 
 
-def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]:
+def list_people_for_plan(plan_id: str, service_type_value=None, force: bool = False) -> Dict[str, Any]:
     """Return the scheduled assignments on a plan, one row per person *per position*.
 
     A row is (name, team, position) rather than one row per person: somebody
@@ -480,7 +503,9 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
     and may need a channel for each. Rows are still collapsed across service
     times, so a person scheduled morning and evening appears once.
 
-    ``service_type`` is optional and only avoids a redirect.
+    ``service_type`` is optional and only avoids a redirect. ``force`` marks the
+    request as an operator's, which skips the missing-plan memory -- see
+    `_short_circuit_missing`.
     """
     try:
         pco_cfg = get_pco_config()
@@ -491,7 +516,7 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
     auth = pco_cfg['auth']
     headers = { 'Authorization': _basic_auth_header(auth['token'], auth['secret']) }
 
-    if _plan_is_known_missing(plan_id):
+    if _short_circuit_missing(plan_id, force):
         return {"ok": False, "error": PLAN_GONE_ERROR}
 
     plan_people = None
@@ -654,7 +679,7 @@ def list_people_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any
     return {"ok": True, "plan_id": plan_id, "people": people_list, "note_categories": sorted(cat_names)}
 
 
-def list_teams_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]:
+def list_teams_for_plan(plan_id: str, service_type_value=None, force: bool = False) -> Dict[str, Any]:
     """Return every team scheduled on a plan, with how many people are on each.
 
     Deliberately ignores ``mapping.team_name_filter``.  This is what populates
@@ -674,7 +699,7 @@ def list_teams_for_plan(plan_id: str, service_type_value=None) -> Dict[str, Any]
     auth = pco_cfg['auth']
     headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
 
-    if _plan_is_known_missing(plan_id):
+    if _short_circuit_missing(plan_id, force):
         return {"ok": False, "error": PLAN_GONE_ERROR}
 
     stid = _resolve_service_type_id(service_type_value, headers) if service_type_value is not None else None
@@ -1156,10 +1181,10 @@ def _dedupe_people(people: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 #
 #   begin_sync    loads config. MAY WRITE config.json -- ensure_credentials
 #                 migrates credentials into the keyring through a save callback.
-#                 ⛔ Caller must run this on the IOLoop.
+#                 â›” Caller must run this on the IOLoop.
 #   resolve_sync  every HTTP call and all the matching. Writes nothing.
-#                 ✅ Safe on a worker, and the only slow part.
-#   finish_sync   applies the result. The single write. ⛔ IOLoop.
+#                 âœ… Safe on a worker, and the only slow part.
+#   finish_sync   applies the result. The single write. â›” IOLoop.
 #
 # sync_from_pco still chains all three, so every existing caller and test sees
 # exactly what it did before.
@@ -1168,7 +1193,7 @@ def _dedupe_people(people: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def begin_sync() -> Dict[str, Any]:
     """Load the PCO config for a sync.
 
-    ⛔ May write config.json, so it belongs on the IOLoop rather than a worker.
+    â›” May write config.json, so it belongs on the IOLoop rather than a worker.
     """
     try:
         return {"ok": True, "config": get_pco_config()}
@@ -1222,7 +1247,7 @@ def resolve_sync(pco_cfg: Dict[str, Any], plan_id_override: Optional[str] = None
 def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, Any]:
     """Apply a resolution and describe what happened.
 
-    ⛔ `_apply_assignments` is the one thing in a sync that writes config.json,
+    â›” `_apply_assignments` is the one thing in a sync that writes config.json,
     so this belongs on the IOLoop beside every other writer of that file.
     """
     if not resolution or not resolution.get('ok'):

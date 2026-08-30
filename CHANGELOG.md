@@ -8,7 +8,8 @@
 - _Nothing yet._
 
 ### Fixed
-- _Nothing yet._
+- **Loading a new plan's people no longer needs Wirelessboard restarted.** When a plan lookup failed, Wirelessboard remembered that plan as gone for five minutes and answered every later request from memory without asking Planning Center again. That was meant to stop the board wasting requests on a plan that had rolled off the schedule, but it also answered *you*: pick the plan, press Load People, and you got "that plan no longer exists" however many times you pressed it, because nothing was being sent. Restarting cleared it, which is why it looked like a restart was required. Pressing Load People, or changing the plan, now always asks Planning Center — the shortcut is kept only for the board's own background checks.
+- **Changing the plan now clears the previous plan's people.** The people table and the assignment list below it stayed on screen after you picked a different plan, so the old service's names sat there looking like the new plan had loaded. They are now cleared as soon as the plan changes, and the assignment panel says to press Load People.
 
 ## [1.15.0] - 2026-08-30
 More card, less furniture.

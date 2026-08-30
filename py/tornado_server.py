@@ -756,7 +756,10 @@ class PcoPeopleHandler(web.RequestHandler):
             return
         # service is no longer required; keep optional for backward compatibility
         service = self.get_query_argument('service', default=None)
-        result = await _run_pco(pco.list_people_for_plan, plan_id, service)
+        # `refresh` marks the request as the operator's rather than a poll's, so
+        # it is not answered from the missing-plan memory. See pco._short_circuit_missing.
+        force = self.get_query_argument('refresh', default='').lower() in ('1', 'true', 'yes')
+        result = await _run_pco(pco.list_people_for_plan, plan_id, service, force)
         self.write(json.dumps(result))
 
 
@@ -770,7 +773,8 @@ class PcoTeamsHandler(web.RequestHandler):
             self.write('{"ok": false, "error": "Missing plan query param"}')
             return
         service = self.get_query_argument('service', default=None)
-        result = await _run_pco(pco.list_teams_for_plan, plan_id, service)
+        force = self.get_query_argument('refresh', default='').lower() in ('1', 'true', 'yes')
+        result = await _run_pco(pco.list_teams_for_plan, plan_id, service, force)
         self.write(json.dumps(result))
 
 

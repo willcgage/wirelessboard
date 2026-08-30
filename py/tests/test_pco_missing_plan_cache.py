@@ -123,13 +123,13 @@ def test_the_memory_expires(monkeypatch, creds):
     assert fail.calls == 2
 
 
-def test_while_cached_the_plan_is_not_re_requested_even_if_it_would_now_work(monkeypatch, creds):
+def test_a_poll_inside_the_ttl_is_answered_from_memory(monkeypatch, creds):
     """The deliberate cost of the cache, pinned so it is a decision not a surprise.
 
-    The guard returns before any request, so a plan that comes back to life
-    inside the TTL is still reported gone. That is the accepted trade: the
-    alternative is paying two round trips to find out, every poll, for as long
-    as the plan stays dead -- which is the fault being fixed.
+    For an unforced lookup the guard returns before any request, so a plan that
+    comes back to life inside the TTL is still reported gone. That is the
+    accepted trade for polling: the alternative is paying two round trips to
+    find out, every poll, for as long as the plan stays dead -- the #73 fault.
     """
     live = Counter(None)
 
@@ -143,7 +143,60 @@ def test_while_cached_the_plan_is_not_re_requested_even_if_it_would_now_work(mon
 
     result = pco.list_people_for_plan('89808074')
     assert result['ok'] is False
-    assert live.calls == 0, 'the cache should short-circuit before the network'
+    assert live.calls == 0, 'an unforced lookup should short-circuit before the network'
+
+
+def test_an_operator_request_is_never_answered_from_memory(monkeypatch, creds):
+    """The bug reported from a board on 2026-08-30.
+
+    Pick a plan, press Load People, get "that plan no longer exists" -- and keep
+    getting it, without a request leaving the machine, because the entry is
+    consulted before the network and lasts five minutes. Nothing the operator
+    could press cleared it; restarting did, which is why it was reported as
+    "Wirelessboard has to be restarted for a new plan's people to load".
+
+    The cache was built to spare *polls*, never to answer a person.
+    """
+    live = Counter(None)
+
+    def would_succeed(*_args, **_kwargs):
+        live.calls += 1
+        pco._LAST_HTTP_ERROR = None
+        return PLAN_PEOPLE
+
+    monkeypatch.setattr(pco, '_get_plan_people_any', would_succeed)
+    pco._remember_missing_plan('89808074')
+
+    result = pco.list_people_for_plan('89808074', force=True)
+
+    assert live.calls == 1, 'the operator asked; the network should have been used'
+    assert result['ok'] is True
+    assert pco._plan_is_known_missing('89808074') is False, (
+        'a forced lookup must also clear the entry, or the next poll still lies')
+
+
+def test_a_forced_teams_lookup_clears_it_too(monkeypatch, creds):
+    # The team chooser reloads whenever the plan changes, so it is an operator
+    # action by the same argument -- and it shares the one memory.
+    monkeypatch.setattr(pco, '_get_plan_people_any', lambda *_a, **_k: PLAN_PEOPLE)
+    pco._remember_missing_plan('89808074')
+
+    teams = pco.list_teams_for_plan('89808074', force=True)
+
+    assert teams['ok'] is True
+    assert pco._plan_is_known_missing('89808074') is False
+
+
+def test_forcing_still_records_a_plan_that_really_is_gone(monkeypatch, creds):
+    # Bypassing the memory must not stop it being written: a genuinely dead plan
+    # found the hard way should still spare the next poll.
+    fail = Counter(404)
+    monkeypatch.setattr(pco, '_get_plan_people_any', fail)
+
+    result = pco.list_people_for_plan('89808074', force=True)
+
+    assert result['error'] == pco.PLAN_GONE_ERROR
+    assert pco._plan_is_known_missing('89808074') is True
 
 
 def test_a_success_after_expiry_clears_the_memory(monkeypatch, creds):
