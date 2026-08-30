@@ -63,6 +63,7 @@ Wirelessboard is primarily controlled with keyboard shortcuts
 * <kbd>v</kbd> - Toggle video backgrounds
 * <kbd>p</kbd> - Move the card text: middle, top, bottom
 * <kbd>z</kbd> - Card text size: medium, small, large
+* <kbd>h</kbd> - Show or hide the top bar
 * <kbd>n</kbd> - Extended Name editor
 * <kbd>s</kbd> - Device configuration editor
 * <kbd>q</kbd> - Show QR code
@@ -120,6 +121,14 @@ Four controls in TV mode, all listed in the help overlay (`?`):
 | `P` | Text placement | Middle, top, bottom of the card |
 | `Z` | Text size | Medium, small, large |
 
+And one that applies in both modes:
+
+| Key | Setting | Options |
+| --- | --- | --- |
+| `H` | Top bar | Shown, hidden |
+
+**The top bar** is the strip across the top of the page carrying the Wirelessboard name and the Menu button. It sits outside the board rather than inside it, so it takes the same slice of height in desk mode and TV mode alike; hiding it gives that height to the channels. Note that the Menu is the only way to reach the settings panes with a mouse, so with the bar hidden the keyboard is the way in — `S` for the config view, `?` for the shortcut list, `H` again to bring the bar back.
+
 **Text placement** moves the channel's text to the middle, top or bottom of the card. The background photo always fills the whole card; what moves is the text, and with it the shading that keeps the text readable. Put the text at whichever edge your photos are emptiest — with the text at the bottom, the top two-thirds of every picture is left clear and undimmed.
 
 **Text size** scales all three lines together, on top of the size the layout already derives from the card. Smaller text covers less of the photo.
@@ -130,7 +139,7 @@ This is all TV-mode only, because only there does a card have room to spare; a d
 
 Fit to page, Auto, Middle and Medium are the defaults and reproduce the original board exactly. A named card shape derives the card's height from its width, so the board scrolls when the channels no longer fit rather than squashing them; Auto always divides the available height instead, which is why one row with Auto gives tall narrow cards and `A` is the natural companion to it.
 
-All four choices are remembered on the machine, so a display that loses power returns to the layout it was left in. A link that names a layout still overrides what is remembered — the parameters are `layout`, `aspect`, `text` and `type`.
+All five choices are remembered on the machine, so a display that loses power returns to the layout it was left in. A link that names a layout still overrides what is remembered — the parameters are `layout`, `aspect`, `text`, `type` and `topbar`.
 
 ### Recommended image dimensions
 

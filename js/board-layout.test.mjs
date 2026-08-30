@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import {
   ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES,
   columnsFor, rowHeightFor, computeLayout, nextOption,
-  isArrangement, isCardShape, isTextPosition, isTypeSize, isEdgePlacement,
+  TOP_BAR_STATES,
+  isArrangement, isCardShape, isTextPosition, isTypeSize, isEdgePlacement, isTopBarState,
   migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 
@@ -206,6 +207,38 @@ test('every text size has a stylesheet rule to act on', () => {
       `css/style.scss has no rule for type-${size}`,
     );
   });
+});
+
+test('the top bar toggles, and starts shown', () => {
+  assert.equal(TOP_BAR_STATES[0], 'shown');
+  assert.equal(nextOption(TOP_BAR_STATES, 'shown'), 'hidden');
+  assert.equal(nextOption(TOP_BAR_STATES, 'hidden'), 'shown');
+  ['shown', 'hidden'].forEach((v) => assert.ok(isTopBarState(v), v));
+  ['visible', 'true', '', null, undefined].forEach((v) => {
+    assert.equal(isTopBarState(v), false, String(v));
+  });
+});
+
+test('the top bar is hidden from body, not from the container', () => {
+  // ⛔ The whole point. `.tvmode .navbar` sat in the stylesheet for years
+  // looking like TV mode hid the bar; it never did, because `tvmode` is a class
+  // on #container and the bar is a sibling of it. A rule scoped to the
+  // container cannot reach the bar, so this one must not be.
+  const scss = readFileSync(
+    fileURLToPath(new URL('../css/style.scss', import.meta.url)),
+    'utf8',
+  );
+
+  assert.match(scss, /body\.topbar-hidden \.navbar/, 'the hide rule should hang off body');
+
+  // Comments stripped first: this file now *discusses* the dead rule at length,
+  // and prose about it should not read as the rule itself.
+  const rules = scss.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.doesNotMatch(
+    rules,
+    /\.tvmode[^{}]*\.navbar\s*\{[^}]*display:\s*none/,
+    'a container-scoped rule cannot reach the top bar; it would be dead code again',
+  );
 });
 
 test('the slot and the position share one row, at opposite ends', () => {
