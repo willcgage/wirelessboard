@@ -368,6 +368,16 @@ canvas.slotgraph {
   // before and are left unchanged.
   --tvmode-type-basis: min(var(--tvmode-row-height), calc(var(--tvmode-card-width) * 1.6));
 
+  // Operator override on top of the derived size, set by Z. The basis above
+  // answers "how much room is there"; this answers "how much of it do you want
+  // spent on text", which is a taste question the geometry cannot know.
+  --tvmode-type-scale: 1;
+  --tvmode-type: calc(var(--tvmode-type-basis) * var(--tvmode-type-scale));
+
+  &.type-medium { --tvmode-type-scale: 1; }
+  &.type-small { --tvmode-type-scale: 0.78; }
+  &.type-large { --tvmode-type-scale: 1.25; }
+
   #micboard,
   .wirelessboard-board {
     grid-template-columns: repeat(
@@ -416,8 +426,17 @@ canvas.slotgraph {
   // tiny row, and the basis above already prevents it going small on a card
   // with room -- but a floor of 1.8rem in a 155px card is itself the clipping,
   // so it cannot be the thing that holds the size up.
+  // ⭐ The three multipliers are a ranking, not three independent numbers. The
+  // person's name is what the board is for and stays the largest; the device
+  // line is context; the channel id is a label you glance at. They used to be
+  // 0.085 / 0.06 / 0.08, which put the channel id within a whisker of the name
+  // and spent a third of the text block's height on it -- with a photo behind,
+  // that was most of the overlap for the least useful line.
+  //
+  // The ceilings scale with the operator's choice too, or `large` would do
+  // nothing on a big card where the derived size already reaches them.
   .name {
-    font-size: clamp(0.85rem, calc(var(--tvmode-type-basis) * 0.085), 4rem);
+    font-size: clamp(0.85rem, calc(var(--tvmode-type) * 0.078), calc(4rem * var(--tvmode-type-scale)));
     max-width: 100%;
     // A long name in a narrow card wraps rather than running past the edge and
     // being cut. Breaking mid-word is ugly; being silently truncated is worse.
@@ -427,7 +446,7 @@ canvas.slotgraph {
   .mic_id {
     position: absolute;
     top: 0;
-    font-size: clamp(0.7rem, calc(var(--tvmode-type-basis) * 0.08), 3.4rem);
+    font-size: clamp(0.7rem, calc(var(--tvmode-type) * 0.05), calc(3.4rem * var(--tvmode-type-scale)));
     background: rgba(0, 0, 0, 0.6);
     border-radius: 0.35rem;
     padding: 0.25rem 0.45rem;
@@ -449,13 +468,19 @@ canvas.slotgraph {
     min-height: 0;
   }
 
-  // Where the text block sits in the card, set by P. Only the text moves: the
-  // media layer below is absolutely positioned to `inset: 0` and covers the
-  // whole card whatever this says.
+  // Where the text sits, set by P.
   //
-  // `middle` restates the rule above rather than relying on it. It costs one
-  // declaration and means the three placements are read and changed together,
-  // instead of one of them being an absence somewhere else in the file.
+  // ⭐ The first release of this only moved the text, and that was not enough:
+  // the media layer is `inset: 0`, so the photo IS the card and the text landed
+  // on it wherever it went. All P could choose was which part of the picture to
+  // cover, which is not what was asked for.
+  //
+  // So the three placements are now two kinds of thing, deliberately:
+  //   middle      photo full-bleed, text over it -- what the board always did
+  //   top/bottom  text gets a band, the photo takes the rest, no overlap
+  //
+  // `middle` restates the base rule rather than relying on it, so the three are
+  // read and changed together instead of one being an absence elsewhere.
   &.text-middle .mic_name {
     justify-content: center;
   }
@@ -466,6 +491,54 @@ canvas.slotgraph {
 
   &.text-bottom .mic_name {
     justify-content: flex-end;
+  }
+
+  // The banded placements: the media stops being an overlay and becomes a flex
+  // item, so it takes exactly the room the text is not using. `order` puts it
+  // after the text for `top` and before it for `bottom` -- the text children
+  // keep the default 0.
+  //
+  // ⛔ Scoped to `.is-active`. With no photo showing there is nothing to make
+  // room for, so the rules above apply alone and P moves the text exactly as it
+  // did before -- which is still the right behaviour on a board without media.
+  &.text-top .mic_name .slot-media.is-active,
+  &.text-bottom .mic_name .slot-media.is-active {
+    position: relative;
+    inset: auto;
+    flex: 1 1 0;
+    min-height: 0;
+    // Out to the card edges, past the padding that is there for the text.
+    margin-left: calc(-0.75rem);
+    margin-right: calc(-0.75rem);
+    width: calc(100% + 1.5rem);
+
+    img,
+    video {
+      // ⭐ The box is wide and short now (about 2:1), so `cover` is showing a
+      // horizontal strip of an upright photo and *which* strip is the whole
+      // question. Measured against a headshot whose head runs from 16% to 59%
+      // of the frame: `center` starts below the eyes and keeps the chin and
+      // shoulders; `top` cuts the face off at the mouth. 25% holds the whole
+      // head. It is a heuristic about where people put faces in portraits, not
+      // a law -- but it is right far more often than either default.
+      object-position: center 25%;
+    }
+
+    // The scrim exists to hold text legible over the picture. Nothing is over
+    // the picture here, so darkening it is pure loss.
+    &::after {
+      opacity: 0;
+    }
+  }
+
+  &.text-top .mic_name .slot-media.is-active {
+    order: 1;
+    margin-bottom: calc(-1rem * var(--tvmode-scale-clamped));
+  }
+
+  &.text-bottom .mic_name .slot-media.is-active {
+    order: -1;
+    margin-top: calc(-1.4rem * var(--tvmode-scale-clamped));
   }
 
   .mic_name .name {
@@ -525,7 +598,7 @@ canvas.slotgraph {
   }
 
   p.device-name {
-    font-size: clamp(0.7rem, calc(var(--tvmode-type-basis) * 0.06), 3rem);
+    font-size: clamp(0.7rem, calc(var(--tvmode-type) * 0.055), calc(3rem * var(--tvmode-type-scale)));
     color: var(--color-white);
     opacity: 0.9;
     margin: calc(0.3rem * var(--tvmode-scale-clamped)) 0.75rem calc(0.15rem * var(--tvmode-scale-clamped));

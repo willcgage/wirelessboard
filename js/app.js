@@ -15,10 +15,12 @@ import {
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
-  isArrangement, isCardShape, isTextPosition, migrateArrangement, migrateCardShape,
+  isArrangement, isCardShape, isTextPosition, isTypeSize,
+  migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 import {
-  resolvePref, safeStorage, ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY,
+  resolvePref, safeStorage,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY,
 } from './view-prefs.mjs';
 
 import '../css/colors.scss';
@@ -39,6 +41,7 @@ micboard.displayMode = 'deskmode';
 micboard.arrangement = 'fit';
 micboard.cardShape = 'auto';
 micboard.textPosition = 'middle';
+micboard.typeSize = 'medium';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -400,6 +403,7 @@ function readURLParameters() {
   micboard.url.layout = getUrlParameter('layout');
   micboard.url.aspect = getUrlParameter('aspect');
   micboard.url.text = getUrlParameter('text');
+  micboard.url.type = getUrlParameter('type');
 
   // hash beats what the device remembers, which beats the default. A wall
   // display that has just come back from a power cut has no hash and nobody
@@ -430,6 +434,13 @@ function readURLParameters() {
     key: TEXT_POSITION_KEY,
     isValid: isTextPosition,
     fallback: 'middle',
+  });
+  micboard.typeSize = resolvePref({
+    hashValue: micboard.url.type,
+    storage,
+    key: TYPE_SIZE_KEY,
+    isValid: isTypeSize,
+    fallback: 'medium',
   });
 
   if (micboard.url.settings === 'logs') {
@@ -464,6 +475,9 @@ export function updateHash() {
   }
   if (micboard.textPosition && micboard.textPosition !== 'middle') {
     hash += `&text=${micboard.textPosition}`;
+  }
+  if (micboard.typeSize && micboard.typeSize !== 'medium') {
+    hash += `&type=${micboard.typeSize}`;
   }
   if (micboard.settingsMode === 'CONFIG') {
     if (micboard.configTab === 'logs') {

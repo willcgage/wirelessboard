@@ -3,10 +3,11 @@ import { micboard, updateHash } from './app.js';
 import { updateGIFBackgrounds } from './gif.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, nextOption,
+  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, nextOption,
 } from './board-layout.mjs';
 import {
-  writePref, safeStorage, ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY,
+  writePref, safeStorage,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY,
 } from './view-prefs.mjs';
 
 function swapClass(selector, currentClass, newClass) {
@@ -65,9 +66,13 @@ function applyViewClasses() {
   ARRANGEMENTS.forEach((a) => container.classList.remove(`arrangement-${a}`));
   CARD_SHAPES.forEach((s) => container.classList.remove(`card-${s}`));
   TEXT_POSITIONS.forEach((p) => container.classList.remove(`text-${p}`));
+  TYPE_SIZES.forEach((s) => container.classList.remove(`type-${s}`));
   container.classList.add(`arrangement-${micboard.arrangement}`);
   container.classList.add(`card-${micboard.cardShape}`);
   container.classList.add(`text-${micboard.textPosition}`);
+  // `type-`, not `textsize-`: near-identical class prefixes on the same element
+  // are a reading trap, and the variable these drive is already --tvmode-type-*.
+  container.classList.add(`type-${micboard.typeSize}`);
 }
 
 export function applyBoardLayout() {
@@ -101,6 +106,14 @@ export function cycleTextPosition() {
   applyBoardLayout();
   updateHash();
   return micboard.textPosition;
+}
+
+export function cycleTypeSize() {
+  micboard.typeSize = nextOption(TYPE_SIZES, micboard.typeSize);
+  writePref({ storage: safeStorage(), key: TYPE_SIZE_KEY, value: micboard.typeSize });
+  applyBoardLayout();
+  updateHash();
+  return micboard.typeSize;
 }
 
 export function toggleDisplayMode() {
