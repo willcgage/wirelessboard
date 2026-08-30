@@ -3,11 +3,11 @@ import { micboard, updateHash } from './app.js';
 import { updateGIFBackgrounds } from './gif.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, nextOption,
+  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES, nextOption,
 } from './board-layout.mjs';
 import {
   writePref, safeStorage,
-  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY,
 } from './view-prefs.mjs';
 
 function swapClass(selector, currentClass, newClass) {
@@ -75,8 +75,26 @@ function applyViewClasses() {
   container.classList.add(`type-${micboard.typeSize}`);
 }
 
+/**
+ * The top bar's class goes on <body>, not on #container.
+ *
+ * ⛔ It has to. The bar is a sibling of #container, not a child, so a class on
+ * the container cannot reach it -- which is exactly why the stylesheet's old
+ * `.tvmode .navbar { display: none }` never hid anything in TV mode despite
+ * looking like it would.
+ */
+function applyTopBarClass() {
+  const { body } = document;
+  if (!body) {
+    return;
+  }
+  TOP_BAR_STATES.forEach((state) => body.classList.remove(`topbar-${state}`));
+  body.classList.add(`topbar-${micboard.topBar}`);
+}
+
 export function applyBoardLayout() {
   applyViewClasses();
+  applyTopBarClass();
   requestTvLayoutUpdate();
 }
 
@@ -114,6 +132,15 @@ export function cycleTypeSize() {
   applyBoardLayout();
   updateHash();
   return micboard.typeSize;
+}
+
+/** Two states, so cycling is a toggle -- same shape as the controls above. */
+export function cycleTopBar() {
+  micboard.topBar = nextOption(TOP_BAR_STATES, micboard.topBar);
+  writePref({ storage: safeStorage(), key: TOP_BAR_KEY, value: micboard.topBar });
+  applyBoardLayout();
+  updateHash();
+  return micboard.topBar;
 }
 
 export function toggleDisplayMode() {

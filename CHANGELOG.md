@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **The Wirelessboard bar across the top of the page can be hidden.** Press <kbd>H</kbd> to hide or show it. The bar sits outside the board, so it takes the same strip of height whichever mode you are in, and hiding it gives that height back to the channels. Bear in mind the Menu button on that bar is the only way to reach the settings with a mouse — with the bar hidden, <kbd>S</kbd> opens the config view, <kbd>?</kbd> lists the shortcuts, and <kbd>H</kbd> brings the bar back. Remembered per machine and shareable as `topbar=hidden`.
 
 ### Changed
 - **The channel text is much more compact.** On a typical board the three lines took over half the card's height — and most of that was not text. It was padding, gaps, and a stray paragraph margin the TV view never overrode, plus a channel label stretched into a bar the full width of the card to hold four characters. Nothing was made smaller to fix it.

@@ -4,7 +4,7 @@ import {
 } from './app.js';
 import {
   toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
-  cycleArrangement, cycleCardShape, cycleTextPosition, cycleTypeSize,
+  cycleArrangement, cycleCardShape, cycleTextPosition, cycleTypeSize, cycleTopBar,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
@@ -104,6 +104,13 @@ function bindingTable() {
       keys: ['z'],
       hud: 'Text size: medium, small, large (TV mode).',
       run: () => cycleTypeSize(),
+    },
+    {
+      // Not TV-mode only: the bar is outside the board and takes the same strip
+      // of height in both modes.
+      keys: ['h'],
+      hud: 'Show or hide the Wirelessboard bar across the top.',
+      run: () => cycleTopBar(),
     },
     {
       keys: ['f'],

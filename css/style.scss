@@ -784,9 +784,11 @@ canvas.slotgraph {
     right: 5px;
   }
 
-  .navbar {
-    display: none;
-  }
+  // ⛔ There was a `.navbar { display: none }` here, which read as "TV mode
+  // hides the top bar". It never did: `tvmode` is a class on #container and the
+  // bar is a *sibling* of that, so the descendant selector could not reach it.
+  // Hiding the bar is now an explicit choice on H -- see `body.topbar-hidden`
+  // near the end of this file, which is on <body> for exactly that reason.
 }
 
 /* browser mode */
@@ -1468,6 +1470,19 @@ canvas.slotgraph {
 .navbar {
   padding-left: 0px;
   padding-right: 0px;
+}
+
+/* The top bar, hidden by H.
+
+   ⛔ On <body> on purpose. The bar is a sibling of #container, so the class the
+   other view controls use -- which lives on #container -- cannot reach it. A
+   `.tvmode .navbar` rule used to sit in the TV block looking like it hid this;
+   it could never have worked, and it is gone.
+
+   The bar carries the only pointer route to the settings panes, so hiding it
+   leaves the keyboard as the way in: S for config, ? for the shortcut list. */
+body.topbar-hidden .navbar {
+  display: none;
 }
 
 .navbar-toggler {

@@ -58,6 +58,22 @@ export const TEXT_POSITIONS = ['middle', 'top', 'bottom'];
 export const TYPE_SIZES = ['medium', 'small', 'large'];
 
 /**
+ * Whether the Wirelessboard bar across the top of the page is shown.
+ *
+ * ⛔ Not a TV-mode-only control, unlike the four above. The bar sits outside
+ * `#container` -- it is a sibling of it, not a child -- so it is on screen in
+ * both modes and eats the same strip of height in both.
+ *
+ * That sibling relationship is also why the stylesheet's own
+ * `.tvmode .navbar { display: none }` never did anything: `tvmode` is a class on
+ * `#container`, so a descendant selector cannot reach the bar. It read like
+ * this feature already existed. It did not, and that rule is gone.
+ *
+ * `shown` is first: the default, and what every board does today.
+ */
+export const TOP_BAR_STATES = ['shown', 'hidden'];
+
+/**
  * 1.11.0 shipped the old names and boards have them stored. Map rather than
  * discard: silently resetting somebody's wall display to the default because
  * the vocabulary changed is a worse greeting than a near-equivalent layout.
@@ -116,6 +132,10 @@ export function isTextPosition(value) {
 
 export function isTypeSize(value) {
   return TYPE_SIZES.includes(value);
+}
+
+export function isTopBarState(value) {
+  return TOP_BAR_STATES.includes(value);
 }
 
 /**
