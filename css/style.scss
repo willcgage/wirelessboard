@@ -456,16 +456,47 @@ canvas.slotgraph {
     overflow-wrap: anywhere;
   }
 
+  // ⭐ Two rows, not three. The name gets a line to itself; the slot label and
+  // the position share the one below it, pushed to opposite edges. They are
+  // both short tags -- a channel id and a role -- so stacking them spent a
+  // whole line each on about six characters, and the card only has so many
+  // lines before it is covering the photo.
+  //
+  // A grid rather than a flex column because that row is the whole point: two
+  // items, one at each end, on a line the name spans. `align-content` is what
+  // P moves now -- the grid equivalent of the `justify-content` a column used.
   .mic_name {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "name name"
+      "slot position";
+    align-content: center;
+    justify-items: center;
     position: relative;
     overflow: hidden;
     padding: calc(0.55rem * var(--tvmode-scale-clamped)) 0.6rem calc(0.5rem * var(--tvmode-scale-clamped));
     gap: calc(0.2rem * var(--tvmode-scale-clamped));
     min-height: 0;
+  }
+
+  .mic_name .name {
+    grid-area: name;
+  }
+
+  // text-align matters only when one of these is long enough to wrap: the cell
+  // is already pushed to its edge, but without this the wrapped lines ragged
+  // the wrong way and the pair stops looking like a pair.
+  .mic_name p.device-name {
+    grid-area: slot;
+    justify-self: start;
+    text-align: left;
+  }
+
+  .mic_name .mic_id {
+    grid-area: position;
+    justify-self: end;
+    text-align: right;
   }
 
   // ⭐⭐ The text block was mostly not text. Measured on a 356px card: 100px of
@@ -488,7 +519,6 @@ canvas.slotgraph {
   // to sit in. `display: inline-block` below was already trying to say this and
   // could not, because align-self outranks it in a flex container.
   .mic_name p.device-name {
-    align-self: center;
     margin-left: 0;
     margin-right: 0;
   }
@@ -513,15 +543,15 @@ canvas.slotgraph {
   // to gather the scrim where the text actually is, instead of dimming the
   // whole picture to light three lines at one edge.
   &.text-middle .mic_name {
-    justify-content: center;
+    align-content: center;
   }
 
   &.text-top .mic_name {
-    justify-content: flex-start;
+    align-content: start;
   }
 
   &.text-bottom .mic_name {
-    justify-content: flex-end;
+    align-content: end;
   }
 
   // The scrim follows the text. `middle` keeps the even full-card wash, which
@@ -554,9 +584,11 @@ canvas.slotgraph {
     text-align: center;
   }
 
+  // Placed by `justify-self: end` above. It used to be pinned left with a
+  // margin; it now sits at the far end of the row from the slot label, which is
+  // the arrangement that lets the two share one line.
   .mic_name .mic_id {
-    align-self: flex-start;
-    margin-left: 0.5rem;
+    margin-left: 0;
   }
 
   .mic_name > :not(.slot-media) {
