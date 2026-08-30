@@ -208,6 +208,35 @@ test('every text size has a stylesheet rule to act on', () => {
   });
 });
 
+test('the slot and the position share one row, at opposite ends', () => {
+  // Two rows, not three: the name has a line, and the two short tags share the
+  // one below it. Stacking them cost a whole line each for about six
+  // characters, and lines are what the photo pays for.
+  const scss = readFileSync(
+    fileURLToPath(new URL('../css/style.scss', import.meta.url)),
+    'utf8',
+  );
+
+  const areas = scss.split('grid-template-areas:')[1].split(';')[0];
+  assert.match(areas, /"name name"/, 'the name should span the row above');
+  assert.match(areas, /"slot position"/, 'slot and position should share one row');
+
+  // These selectors each appear more than once, so scan the blocks rather than
+  // assuming the first one is the placement rule.
+  const declares = (selector, pattern) => scss
+    .split(selector).slice(1)
+    .some((chunk) => pattern.test(chunk.split('}')[0]));
+
+  assert.ok(
+    declares('.mic_name p.device-name {', /justify-self:\s*start/),
+    'the slot label should sit at the start of its row',
+  );
+  assert.ok(
+    declares('.mic_name .mic_id {', /justify-self:\s*end/),
+    'the position should sit at the end of its row',
+  );
+});
+
 test('each edge placement gathers the scrim at its own edge', () => {
   // The text is readable over the photo only because of these, and a scrim
   // pointing the wrong way is worse than none: it dims the half of the picture

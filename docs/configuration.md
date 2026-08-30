@@ -124,7 +124,7 @@ Four controls in TV mode, all listed in the help overlay (`?`):
 
 **Text size** scales all three lines together, on top of the size the layout already derives from the card. Smaller text covers less of the photo.
 
-The text is deliberately compact: on a typical board the three lines occupy under a third of the card's height, so moving them to an edge leaves most of the picture untouched.
+The text is deliberately compact. It is laid out in two rows rather than three: the person's name has a row to itself, and the slot label and the position share the row below it, pushed to opposite edges. Both are short tags, so giving each its own line spent a line on a handful of characters. On a typical board the whole block occupies under a quarter of the card's height, so moving it to an edge leaves most of the picture untouched.
 
 This is all TV-mode only, because only there does a card have room to spare; a desk-mode card is the height of its own text.
 
