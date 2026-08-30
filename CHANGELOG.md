@@ -2,14 +2,30 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.14.0] - 2026-08-30
+Finishing what 1.13.0 started.
+
+1.13.0 added a control for moving the channel text around the card, meant for boards with photos
+behind the channels. It did not do the job: the photo covers the whole card, so moving the text only
+changed which part of the picture it sat on. This gives the text somewhere to go that is not on top
+of the photo, and makes it smaller and better proportioned while it is there.
+
+If you are on 1.13.0 and pressing <kbd>P</kbd> did not seem to help, this is why.
+
+### Added
 - **The card text can be sized up or down.** Press <kbd>Z</kbd> in TV mode to cycle medium, small and large. It scales all three lines together, on top of the size the layout already works out from the card, so it is a way to trade text against picture: smaller text leaves more room for the photo. Medium is the default and is the size the board already used. Remembered per machine and shareable as `type=small`, like the other view controls.
 
 ### Changed
 - **Moving the card text to the top or bottom now moves the photo out of its way.** In 1.13.0 the text moved but the picture did not, because the picture is the whole card — so the text simply landed on a different part of the same face. Top and bottom now give the text a band of its own and let the photo take the rest of the card, so the two do not overlap at all. Middle is unchanged: the photo still fills the card with the text over the centre of it, which is the right answer when you want the picture whole. On a channel with no photo, all three placements behave exactly as before.
 - **The channel text is better proportioned.** The channel id (`HH01`) was set at very nearly the same size as the person's name and took about a third of the text's height, which with a photo behind it was a lot of picture covered for the least useful line. The name is now clearly the largest, the device line sits below it and the channel id is smaller again. On a typical board the text takes about a fifth less room than it did.
-
-### Fixed
-- _Nothing yet._
 
 ## [1.13.0] - 2026-08-29
 One control, for boards that put photos on the channels.
