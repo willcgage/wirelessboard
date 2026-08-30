@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.15.0] - 2026-08-30
+More card, less furniture.
+
+Photographs from a board in use showed the text taking over half of every card, most of it not
+actually text but spacing, and the picture squeezed into what was left. This is the answer to that:
+the text is now well under half the height it was, the photo is back to filling the card, and the
+bar across the top of the page can be got rid of entirely.
+
+Nothing here was achieved by making anything smaller to read. The type is the same size it was; what
+went was padding, a wasted line, and a strip of page furniture.
+
+### Added
 - **The Wirelessboard bar across the top of the page can be hidden.** Press <kbd>H</kbd> to hide or show it. The bar sits outside the board, so it takes the same strip of height whichever mode you are in, and hiding it gives that height back to the channels. Bear in mind the Menu button on that bar is the only way to reach the settings with a mouse — with the bar hidden, <kbd>S</kbd> opens the config view, <kbd>?</kbd> lists the shortcuts, and <kbd>H</kbd> brings the bar back. Remembered per machine and shareable as `topbar=hidden`.
 
 ### Changed
