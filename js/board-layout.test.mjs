@@ -4,8 +4,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, columnsFor, rowHeightFor, computeLayout, nextOption,
-  isArrangement, isCardShape, isTextPosition, migrateArrangement, migrateCardShape,
+  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES,
+  columnsFor, rowHeightFor, computeLayout, nextOption,
+  isArrangement, isCardShape, isTextPosition, isTypeSize, isBandedPlacement,
+  migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 
 const WIDE = { slotCount: 12, maxColumns: 12 };
@@ -140,6 +142,86 @@ test('the default text placement is the centred card the board has always had', 
   // is the convention the other two controls follow.
   assert.equal(TEXT_POSITIONS[0], 'middle');
   assert.equal(TEXT_POSITIONS.length, 3);
+});
+
+test('text size cycles through all three and returns to the default', () => {
+  assert.equal(nextOption(TYPE_SIZES, 'medium'), 'small');
+  assert.equal(nextOption(TYPE_SIZES, 'small'), 'large');
+  assert.equal(nextOption(TYPE_SIZES, 'large'), 'medium');
+  assert.equal(TYPE_SIZES[0], 'medium');
+});
+
+test('the size validator refuses anything it does not know', () => {
+  ['medium', 'small', 'large'].forEach((v) => assert.ok(isTypeSize(v), v));
+  ['tiny', 'MEDIUM', '', null, undefined, '1.25'].forEach((v) => {
+    assert.equal(isTypeSize(v), false, String(v));
+  });
+});
+
+test('only top and bottom band the text; middle overlays it', () => {
+  // The distinction the second attempt turns on: middle keeps the photo
+  // full-bleed with the text over it, the other two give the text its own room.
+  assert.equal(isBandedPlacement('top'), true);
+  assert.equal(isBandedPlacement('bottom'), true);
+  assert.equal(isBandedPlacement('middle'), false);
+  assert.equal(isBandedPlacement('nonsense'), false);
+});
+
+test('the type ranking keeps the name above the channel id', () => {
+  // The complaint that produced the rebalance: the channel id was 0.08 against
+  // the name's 0.085 -- near-identical, and a third of the text block's height
+  // for the least useful line. The ordering matters more than the numbers, so
+  // it is the ordering that is pinned.
+  const scss = readFileSync(
+    fileURLToPath(new URL('../css/style.scss', import.meta.url)),
+    'utf8',
+  );
+  // Block-aware: these selectors appear more than once -- p.device-name leads a
+  // shared text-shadow rule before it gets its own -- so take the first block
+  // after the selector that actually sets a size.
+  const multiplier = (selector) => {
+    for (const chunk of scss.split(selector).slice(1)) {
+      const found = chunk.split('}')[0].match(/--tvmode-type\)\s*\*\s*([0-9.]+)/);
+      if (found) return Number(found[1]);
+    }
+    return null;
+  };
+
+  const name = multiplier('\n  .name {');
+  const micId = multiplier('\n  .mic_id {');
+  const device = multiplier('\n  p.device-name {');
+
+  assert.ok(name > device, `name ${name} should outrank the device line ${device}`);
+  assert.ok(device > micId, `device line ${device} should outrank the channel id ${micId}`);
+});
+
+test('every text size has a stylesheet rule to act on', () => {
+  const scss = readFileSync(
+    fileURLToPath(new URL('../css/style.scss', import.meta.url)),
+    'utf8',
+  );
+  TYPE_SIZES.forEach((size) => {
+    assert.ok(
+      scss.includes(`&.type-${size} {`),
+      `css/style.scss has no rule for type-${size}`,
+    );
+  });
+});
+
+test('the banded placements each reshape the media layer', () => {
+  // Without these the placement would move the text and leave the photo
+  // covering the whole card -- which is exactly the bug being fixed, so it is
+  // worth failing loudly rather than shipping the same nothing twice.
+  const scss = readFileSync(
+    fileURLToPath(new URL('../css/style.scss', import.meta.url)),
+    'utf8',
+  );
+  TEXT_POSITIONS.filter(isBandedPlacement).forEach((position) => {
+    assert.ok(
+      scss.includes(`&.text-${position} .mic_name .slot-media.is-active`),
+      `css/style.scss does not reshape the media layer for text-${position}`,
+    );
+  });
 });
 
 test('every text placement has a stylesheet rule to act on', () => {

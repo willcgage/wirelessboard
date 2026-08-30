@@ -62,6 +62,7 @@ Wirelessboard is primarily controlled with keyboard shortcuts
 * <kbd>g</kbd> - Toggle image backgrounds
 * <kbd>v</kbd> - Toggle video backgrounds
 * <kbd>p</kbd> - Move the card text: middle, top, bottom
+* <kbd>z</kbd> - Card text size: medium, small, large
 * <kbd>n</kbd> - Extended Name editor
 * <kbd>s</kbd> - Device configuration editor
 * <kbd>q</kbd> - Show QR code
@@ -110,19 +111,31 @@ That width is a **maximum**, not a guarantee, in the two arrangements that delib
 
 ### Arranging the board
 
-Three controls in TV mode, all listed in the help overlay (`?`):
+Four controls in TV mode, all listed in the help overlay (`?`):
 
 | Key | Setting | Options |
 | --- | --- | --- |
 | `O` | Arrangement | Fit to page, one row, one column, balanced grid |
 | `A` | Card shape | Auto, 16:9, 3:4 |
 | `P` | Text placement | Middle, top, bottom of the card |
+| `Z` | Text size | Medium, small, large |
 
-Text placement moves the channel's three lines within the card without changing the card itself. It is most useful with a background photo: a face is rarely in the middle of the frame, so moving the text to the top or the bottom is what keeps it off the subject. The photo is unaffected either way — it fills the whole card regardless. This is a TV-mode control because only there does a card have room to spare; a desk-mode card is the height of its own text.
+**Text placement** decides how the channel's text and its background photo share the card, and the three options are two different arrangements rather than three positions:
 
-Fit to page, Auto and Middle are the defaults and reproduce the original board exactly. A named card shape derives the card's height from its width, so the board scrolls when the channels no longer fit rather than squashing them; Auto always divides the available height instead, which is why one row with Auto gives tall narrow cards and `A` is the natural companion to it.
+- **Middle** — the photo fills the whole card and the text sits over the centre of it, darkened behind so it stays readable. This is what the board has always done.
+- **Top** and **bottom** — the text gets a band of its own at that edge and the photo takes the rest of the card. They do not overlap at all.
 
-All three choices are remembered on the machine, so a display that loses power returns to the layout it was left in. A link that names a layout still overrides what is remembered — the parameters are `layout`, `aspect` and `text`.
+With no photo on a channel, all three simply move the text within the card.
+
+In the banded placements the photo is in a wide, short box, so it is cropped to fill it. The crop is anchored towards the top of the picture rather than its centre, which is where faces usually are in an upright photo — a portrait cropped from the centre tends to lose the top of the head.
+
+**Text size** scales all three lines together, on top of the size the layout already derives from the card. Use it to trade text against picture: smaller text leaves a larger photo in the banded placements, and covers less of it in the middle placement.
+
+This is all TV-mode only, because only there does a card have room to spare; a desk-mode card is the height of its own text.
+
+Fit to page, Auto, Middle and Medium are the defaults and reproduce the original board exactly. A named card shape derives the card's height from its width, so the board scrolls when the channels no longer fit rather than squashing them; Auto always divides the available height instead, which is why one row with Auto gives tall narrow cards and `A` is the natural companion to it.
+
+All four choices are remembered on the machine, so a display that loses power returns to the layout it was left in. A link that names a layout still overrides what is remembered — the parameters are `layout`, `aspect`, `text` and `type`.
 
 ### Recommended image dimensions
 
