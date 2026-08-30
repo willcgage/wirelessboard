@@ -2994,8 +2994,10 @@ function loadPcoTeams() {
   }
 
   host.innerHTML = '<span class="text-muted small">Loading teams…</span>';
+  // Only ever called because the operator picked a plan or a service type, so
+  // it carries refresh=1 for the same reason the people lookup does.
   const q = `plan=${encodeURIComponent(planId)}${serviceId ? `&service=${encodeURIComponent(serviceId)}` : ''}`;
-  fetch(`api/pco/teams?${q}&_=${Date.now()}`, { cache: 'no-store' })
+  fetch(`api/pco/teams?${q}&refresh=1&_=${Date.now()}`, { cache: 'no-store' })
     .then((r) => r.json())
     .then((resp) => {
       if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load teams');
@@ -3603,6 +3605,27 @@ function refreshPlansList(options = {}) {
     });
 }
 
+/**
+ * Drop everything belonging to a plan that is no longer selected.
+ *
+ * The people table, the assignment builder below it and the summaries all
+ * describe one plan, and none of them reload on their own.
+ */
+function clearLoadedPlanPeople() {
+  const tbody = document.querySelector('#pco-people-table tbody');
+  if (tbody) tbody.innerHTML = '';
+  const tblWrap = document.getElementById('pco-people-table');
+  if (tblWrap) tblWrap.style.display = 'none';
+  const summary = document.getElementById('pco-people-summary');
+  if (summary) summary.textContent = '';
+  const assignBody = document.querySelector('#pco-assign-table tbody');
+  if (assignBody) assignBody.innerHTML = '';
+  const assignSummary = document.getElementById('pco-assign-summary');
+  if (assignSummary) {
+    assignSummary.textContent = 'Press Load People to read this plan from Planning Center.';
+  }
+}
+
 function loadPeopleForSelectedService() {
   const planSel = document.getElementById('pco-plan-select');
   const planId = planSel ? (planSel.value || '') : '';
@@ -3619,7 +3642,10 @@ function loadPeopleForSelectedService() {
   if (tbody) tbody.innerHTML = '';
   if (tblWrap) tblWrap.style.display = 'none';
   appendPcoLog(`Loading people for plan ${planId}...`);
-  fetch(`api/pco/people?plan=${encodeURIComponent(planId)}&_=${Date.now()}`, { cache: 'no-store' })
+  // refresh=1: this is the operator asking, so it must not be answered from the
+  // server's missing-plan memory. Without it a plan cached as gone kept
+  // reporting gone for five minutes however many times the button was pressed.
+  fetch(`api/pco/people?plan=${encodeURIComponent(planId)}&refresh=1&_=${Date.now()}`, { cache: 'no-store' })
     .then((r) => r.json())
     .then((resp) => {
       if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load people');
@@ -3757,6 +3783,12 @@ document.addEventListener('change', (e) => {
   if (t.id === 'pco-plan-select') {
     const loadBtn = document.getElementById('pco-load-people');
     if (loadBtn) loadBtn.disabled = !(t.value);
+    // ⛔ Clear what the previous plan left behind before anything else. The
+    // people table and the assignment list are not reloaded until the operator
+    // presses Load People, so leaving them up means a new plan shows the old
+    // plan's names — which reads as "the new plan loaded" when nothing has been
+    // fetched at all, and as "nothing happened" when a load then fails.
+    clearLoadedPlanPeople();
     // Teams are a property of the chosen plan, so re-read them whenever it changes.
     loadPcoTeams();
   }
