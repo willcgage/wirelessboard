@@ -82,12 +82,7 @@ def SocketService():
                 rx.socket_disconnect()
                 break
 
-            d = '>'
-            if rx.type == 'uhfr':
-                d = '*'
-            data = [e+d for e in data.split(d) if e]
-
-            for line in data:
+            for line in rx.adapter.frame(rx.type, data):
                 DeviceMessageQueue.put((rx, line))
 
             rx.socket_watchdog = int(time.perf_counter())
@@ -98,10 +93,7 @@ def SocketService():
             string = rx.writeQueue.get()
             logger.debug('TX write', extra={'context': {'ip': rx.ip, 'payload': string}})
             try:
-                if rx.type in ['qlxd', 'ulxd', 'axtd', 'p10t']:
-                    rx.f.sendall(bytearray(string, 'UTF-8'))
-                elif rx.type == 'uhfr':
-                    rx.f.sendto(bytearray(string, 'UTF-8'), (rx.ip, 2202))
+                rx.adapter.send(rx.f, rx.type, rx.ip, string)
             except Exception:
                 logger.warning('TX error', extra={'context': {'ip': rx.ip, 'payload': string}}, exc_info=True)
 

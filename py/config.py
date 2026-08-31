@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import shure
 import offline
+import vendor
 
 from logging_utils import (
     LOG_FILENAME,
@@ -977,7 +978,9 @@ def read_json_config(file):
             slots = []
 
         for chan in slots:
-            if chan['type'] in ['uhfr', 'qlxd', 'ulxd', 'axtd', 'p10t']:
+            # The model list lives with the adapter that speaks for it (#91),
+            # so adding a manufacturer does not mean editing this line.
+            if chan['type'] in vendor.supported_types():
                 netDev = shure.check_add_network_device(chan['ip'], chan['type'])
                 netDev.add_channel_device(chan)
 

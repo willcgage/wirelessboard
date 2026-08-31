@@ -4,17 +4,23 @@ import socket
 from collections import defaultdict
 import logging
 
-from device_config import BASE_CONST
+import vendor
 from iem import IEM
 from mic import WirelessMic
 
 logger = logging.getLogger('micboard.device')
 
 
-PORT = 2202
-
-
 class ShureNetworkDevice:
+    """One receiver on the network.
+
+    ⭐ Holds no protocol knowledge of its own any more: the port, the grammar,
+    the commands and the framing all come from `self.adapter`, which
+    `py/vendor.py` picks from the device type (#91). The class keeps its name
+    for now because renaming it touches every caller and would bury this change
+    in churn; it is no longer accurate and is worth fixing separately.
+    """
+
     def __init__(self, ip, type):
         self.ip = ip
         self.type = type
@@ -24,17 +30,17 @@ class ShureNetworkDevice:
         self.f = None
         self.socket_watchdog = int(time.perf_counter())
         self.raw = defaultdict(dict)
-        self.BASECONST = BASE_CONST[self.type]['base_const']
+        self.adapter = vendor.adapter_for(type)
 
     def socket_connect(self):
         try:
-            if BASE_CONST[self.type]['PROTOCOL'] == 'TCP':
+            if self.adapter.transport(self.type) == 'TCP':
                 self.f = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #TCP
                 self.f.settimeout(.2)
-                self.f.connect((self.ip, PORT))
+                self.f.connect((self.ip, self.adapter.PORT))
 
 
-            elif BASE_CONST[self.type]['PROTOCOL'] == 'UDP':
+            elif self.adapter.transport(self.type) == 'UDP':
                 self.f = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) #UDP
 
             self.set_rx_com_status('CONNECTING')
@@ -65,33 +71,16 @@ class ShureNetworkDevice:
         self.rx_com_status = status
 
     def add_channel_device(self, cfg):
-        if BASE_CONST[self.type]['DEVICE_CLASS'] == 'WirelessMic':
+        if self.adapter.device_class(self.type) == 'WirelessMic':
             self.channels.append(WirelessMic(self, cfg))
-        elif BASE_CONST[self.type]['DEVICE_CLASS'] == 'IEM':
+        elif self.adapter.device_class(self.type) == 'IEM':
             self.channels.append(IEM(self, cfg))
 
     def get_device_by_channel(self, channel):
         return next((x for x in self.channels if x.channel == int(channel)), None)
 
     def parse_raw_rx(self, data):
-        data = data.strip('< >').strip('* ')
-        data = data.replace('{', '').replace('}', '')
-        data = data.rstrip()
-        split = data.split()
-        if data:
-            try:
-                if split[0] in ['REP', 'REPORT', 'SAMPLE'] and split[1] in ['1', '2', '3', '4']:
-                    ch = self.get_device_by_channel(int(split[1]))
-                    if ch is None:
-                        logger.warning('Received data for unknown channel %s', split[1], extra={'context': {'data': data, 'ip': self.ip}})
-                    else:
-                        ch.parse_raw_ch(data)
-
-                elif split[0] in ['REP', 'REPORT']:
-                    self.raw[split[1]]['value'] = ' '.join(split[2:])
-            except Exception:
-                logger.warning('Index error while parsing RX payload', extra={'context': {'data': data, 'ip': self.ip}})
-
+        self.adapter.parse(self, data)
 
     def get_channels(self):
         channels = []
@@ -100,33 +89,18 @@ class ShureNetworkDevice:
         return channels
 
     def get_all(self):
-        ret = []
-        for channel in self.get_channels():
-            for s in self.BASECONST['getAll']:
-                ret.append(s.format(channel))
-
-        return ret
+        return self.adapter.get_all(self.type, self.get_channels())
 
     def get_query_strings(self):
-        ret = []
-        for channel in self.get_channels():
-            for s in self.BASECONST['query']:
-                ret.append(s.format(channel))
-
-        return ret
-
+        return self.adapter.query(self.type, self.get_channels())
 
     def enable_metering(self, interval):
-        if self.type in ['qlxd', 'ulxd', 'axtd', 'p10t']:
-            for i in self.get_channels():
-                self.writeQueue.put('< SET {} METER_RATE {:05d} >'.format(i, int(interval * 1000)))
-        elif self.type == 'uhfr':
-            for i in self.get_channels():
-                self.writeQueue.put('* METER {} ALL {:03d} *'.format(i, int(interval/30 * 1000)))
+        for command in self.adapter.meter_start(self.type, self.get_channels(), interval):
+            self.writeQueue.put(command)
 
     def disable_metering(self):
-        for i in self.get_channels():
-            self.writeQueue.put(self.BASECONST['meter_stop'].format(i))
+        for command in self.adapter.meter_stop(self.type, self.get_channels()):
+            self.writeQueue.put(command)
 
     def net_json(self):
         ch_data = []
