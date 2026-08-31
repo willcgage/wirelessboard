@@ -2,13 +2,26 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [1.16.0] - 2026-08-30
+Two more receivers.
+
+The first new hardware Wirelessboard has learned to talk to since it was forked. Everything else
+here follows from that: being able to pick the new models, and being able to tell which model is
+which in the list.
+
+### Added
 - **SLX-D and SLX-D+ receivers are now supported.** They speak the same control protocol as ULX-D on the same network port, so they slot in beside the receivers Wirelessboard already drives: channel name, battery bars, battery runtime, audio and RF meters, and frequency all appear as usual. Two things to know. ⚠️ **SLX-D blocks third-party control by default** — you have to allow it on the receiver under *Advanced Settings → Controller Access*, or Wirelessboard will connect and then sit there receiving nothing. And these models simply do not report antenna, channel quality, transmitter offset or power lock, so those parts of the info drawer stay empty for them — that is the receiver, not a missing feature. They also do not appear in network discovery yet; add them by IP address for now.
 
 ### Changed
 - **The device type list now names the devices.** The Type dropdown on the configuration page used to show `axtd`, `p10t`, `uhfr` and so on, which told you nothing unless you already knew. It now reads "Axient Digital (AD4D / AD4Q)", "PSM 1000 (IEM)", "UHF-R" and the rest. Existing configurations are unaffected — only the label changed, not what is stored.
-
-### Fixed
-- **SLX-D and SLX-D+ can actually be selected.** They were added to the engine but not to the Type dropdown on the configuration page, so the only way to add one was to edit `config.json` by hand.
 
 ## [1.15.2] - 2026-08-30
 The other half of what 1.15.1 fixed.
