@@ -8,6 +8,15 @@
 - _Nothing yet._
 
 ### Fixed
+- _Nothing yet._
+
+## [1.15.2] - 2026-08-30
+The other half of what 1.15.1 fixed.
+
+1.15.1 stopped Wirelessboard answering you from its own memory when you asked for a plan's people.
+This stops the wrong answer getting into that memory in the first place.
+
+### Fixed
 - **A plan with nobody scheduled on it yet is no longer reported as deleted.** When Wirelessboard could not read a plan's people it searched every service type in the account before giving up, then judged the plan from whichever search happened to be tried last. A plan that simply has no one rostered ends that search the same way a deleted plan does, so a perfectly good plan could be written off as gone — and remembered that way for five minutes. It now asks Planning Center about the plan itself before saying it no longer exists, and if the plan is there you get a message that says so and suggests what to check, rather than being told to pick a different one.
 
 ## [1.15.1] - 2026-08-30
