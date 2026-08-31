@@ -263,6 +263,60 @@ def test_the_top_bit_of_the_audio_bitmap_is_the_peak_flag():
 # SAMPLE field positions -- pure positional protocol knowledge
 # --------------------------------------------------------------------------
 
+def test_slxd_sample_positions_differ_from_ulxd():
+    """⛔ The trap in adding SLX-D.
+
+    Its SAMPLE is `< SAMPLE ch ALL audPeak audRms rfRssi >`, so slots 3/4/5 mean
+    something entirely different from ULX-D's antenna/rf/audio. Parsing it with
+    the ULX-D branch would put an audio level in the antenna field and RF where
+    audio belongs -- wrong in a way that still renders.
+
+    Documented values: both audio and RSSI are reported 000-120, real value is
+    the reported number minus 120 (dBFS and dBm respectively).
+    """
+    for type_ in ('slxd', 'slxdplus'):
+        m = mic(type_)
+        m.parse_raw_ch('SAMPLE 1 ALL 114 060 120')
+
+        assert m.audio_level == 50, type_       # 060 of 120 full scale
+        assert m.rf_level == 100, type_         # 120 of 120
+        assert m.antenna == 'XX', 'SLX-D reports no antenna; it must stay unset'
+
+
+def test_slxd_battery_and_runtime_use_the_shared_semantics():
+    # TX_BATT_BARS is 000-005 with 255 unknown, and TX_BATT_MINS is the same
+    # 0-65532 window ULX-D uses -- so these need no per-model handling at all.
+    m = mic('slxd')
+    m.parse_raw_ch('REP 1 TX_BATT_BARS 004')
+    assert m.battery == 4
+
+    m.parse_raw_ch('REP 1 TX_BATT_MINS 00125')
+    assert m.runtime == '2:05'
+
+    m.parse_raw_ch('REP 1 TX_BATT_MINS 65535')
+    assert m.runtime == '', 'unknown/calculating must not render as a duration'
+
+
+def test_slxd_is_a_mic_on_the_shure_adapter():
+    import shure_protocol
+    import vendor
+
+    for type_ in ('slxd', 'slxdplus'):
+        assert vendor.adapter_for(type_) is shure_protocol, type_
+        assert isinstance(mic(type_), WirelessMic), type_
+        assert device(type_).get_all() == ['< GET 1 ALL >'], type_
+
+
+def test_slxd_metering_uses_the_five_digit_form():
+    rx = device('slxd')
+    rx.enable_metering(0.1)
+    rx.disable_metering()
+    assert list(rx.writeQueue.queue) == [
+        '< SET 1 METER_RATE 00100 >',
+        '< SET 1 METER_RATE 00000 >',
+    ]
+
+
 def test_sample_field_positions_per_model():
     # ⛔ These offsets are the protocol. Any adapter must keep reading the same
     # field from the same place, so they are spelled out rather than derived.

@@ -24,7 +24,7 @@ import shure_protocol  # noqa: E402
 import vendor  # noqa: E402
 
 
-SHURE_TYPES = ['uhfr', 'qlxd', 'ulxd', 'axtd', 'p10t']
+SHURE_TYPES = ['uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus', 'p10t']
 
 
 class FakeAdapter:

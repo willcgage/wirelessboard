@@ -57,6 +57,12 @@ class WirelessMic(ChannelDevice):
         if self.rx.type == 'axtd':
             audio_level = audio_level - 20
 
+        # SLX-D reports dBFS as 000-120, where the real value is the reported
+        # number minus 120. The board's meter is a 0-100 bar, so the useful
+        # conversion is the reported number as a percentage of full scale.
+        if self.rx.type in ['slxd', 'slxdplus']:
+            audio_level = int(audio_level * (100. / 120))
+
         if self.rx.type == 'uhfr':
             audio_level = int(ceil(MSB(audio_level) * (100./8)))
 
@@ -81,6 +87,11 @@ class WirelessMic(ChannelDevice):
 
         if self.rx.type == 'uhfr':
             rf_level = 100 * ((100 - rf_level) / 80)
+
+        # Same encoding as its audio: dBm reported as 000-120, real value is
+        # reported minus 120.
+        if self.rx.type in ['slxd', 'slxdplus']:
+            rf_level = rf_level * (100. / 120)
 
         self.rf_level = int(rf_level)
 
@@ -175,7 +186,20 @@ class WirelessMic(ChannelDevice):
         }
 
     def parse_sample(self, split):
-        if self.rx.type in ['qlxd', 'ulxd']:
+        # ⛔ SLX-D first: its SAMPLE is `< SAMPLE ch ALL audPeak audRms rfRssi >`,
+        # so positions 3/4/5 mean something completely different from ULX-D's
+        # antenna/rf/audio. Reading it with the ULX-D branch would put an audio
+        # level in the antenna field and RF where audio belongs -- wrong in a way
+        # that still renders, which is the worst kind.
+        #
+        # audPeak is deliberately unused: it would drive the AUDIO_PEAK card
+        # colour, and the threshold for "peaking" in dBFS is a judgement nobody
+        # has made against real hardware yet. Better no peak flag than a wrong one.
+        if self.rx.type in ['slxd', 'slxdplus']:
+            self.set_audio_level(split[4])
+            self.set_rf_level(split[5])
+
+        elif self.rx.type in ['qlxd', 'ulxd']:
             self.set_antenna(split[3])
             self.set_rf_level(split[4])
             self.set_audio_level(split[5])

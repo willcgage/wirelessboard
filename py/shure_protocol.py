@@ -31,7 +31,7 @@ NAME = 'shure'
 
 # Every model this adapter speaks for. ⛔ The one list -- `config.py` and the
 # registry read it from here rather than repeating it.
-TYPES = ('uhfr', 'qlxd', 'ulxd', 'axtd', 'p10t')
+TYPES = ('uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus', 'p10t')
 
 # Shure's control port, the same across every model above.
 PORT = 2202

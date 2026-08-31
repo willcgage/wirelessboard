@@ -13,8 +13,11 @@ reads no global config, so every rule below is unit-testable in isolation.
 import re
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-# Shure receiver types that carry a wireless microphone / bodypack channel.
-MIC_SLOT_TYPES = frozenset({'uhfr', 'qlxd', 'ulxd', 'axtd'})
+# Receiver types that carry a wireless microphone / bodypack channel.
+# ⚠️ Duplicates knowledge the vendor adapter now holds -- `device_class(type)`
+# answers this -- and every new model has to be added here too or PCO silently
+# stops matching it. Folding the two together is part of #91.
+MIC_SLOT_TYPES = frozenset({'uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus'})
 
 # Shure PSM1000 transmitter -- an in-ear monitor channel.
 IEM_SLOT_TYPES = frozenset({'p10t'})
