@@ -31,7 +31,7 @@ export const dataURL = 'data.json';
 
 export const micboard = [];
 export const wirelessboard = micboard;
-micboard.MIC_MODELS = ['uhfr', 'qlxd', 'ulxd', 'axtd'];
+micboard.MIC_MODELS = ['uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus'];
 
 micboard.IEM_MODELS = ['p10t'];
 micboard.url = [];

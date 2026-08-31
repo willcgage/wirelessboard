@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **SLX-D and SLX-D+ receivers are now supported.** They speak the same control protocol as ULX-D on the same network port, so they slot in beside the receivers Wirelessboard already drives: channel name, battery bars, battery runtime, audio and RF meters, and frequency all appear as usual. Two things to know. ⚠️ **SLX-D blocks third-party control by default** — you have to allow it on the receiver under *Advanced Settings → Controller Access*, or Wirelessboard will connect and then sit there receiving nothing. And these models simply do not report antenna, channel quality, transmitter offset or power lock, so those parts of the info drawer stay empty for them — that is the receiver, not a missing feature. They also do not appear in network discovery yet; add them by IP address for now.
 
 ### Changed
 - _Nothing yet._

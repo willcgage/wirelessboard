@@ -128,6 +128,66 @@ BASE_CONST['axtd'] = {
     }
 }
 
+# SLX-D and SLX-D+ speak the same command grammar as ULX-D on the same port, but
+# report a different set of properties and -- the trap -- a different SAMPLE
+# layout. See `parse_sample` in mic.py.
+#
+# ⛔ Neither reports antenna/diversity, channel quality, TX offset or power lock:
+# those properties simply do not exist in their command set, so the card's info
+# drawer will show less for these than for a ULX-D. That is the device, not a
+# gap in this table.
+#
+# ⚠️ SLX-D blocks third-party command strings **by default**. The operator has to
+# allow them in Advanced Settings > Controller Access or the receiver will
+# connect and then answer nothing.
+#
+# Documented at https://www.shure.com/en-US/docs/commandstrings/SLXD
+_SLXD_CH_CONST = {
+    'battery': 'TX_BATT_BARS',      # 000-005, 255 unknown -- same semantics as ULX-D bars
+    'runtime': 'TX_BATT_MINS',      # 00000-65532 minutes; 65533/4/5 are warning/calculating/unknown
+    'name': 'CHAN_NAME',            # SET takes 8 chars; the device always REPs 31, space padded
+    'frequency': 'FREQUENCY',
+    'audio_level': 'AUDIO_LEVEL_RMS',
+    'rf_level': 'RSSI',
+    'quality': 'NOTSUPPORTED',
+    'antenna': 'NOTSUPPORTED',
+    'tx_offset': 'NOTSUPPORTED',
+    'power_lock': 'NOTSUPPORTED',
+}
+
+_SLXD_BASE_CONST = {
+    'getAll': ['< GET {} ALL >'],
+    'query': [
+        '< GET {} CHAN_NAME >',
+        '< GET {} TX_BATT_BARS >'
+    ],
+    # 5 digits, as the SLX-D documentation writes it.
+    'meter_stop': '< SET {} METER_RATE 00000 >'
+}
+
+BASE_CONST['slxd'] = {
+    'DEVICE_CLASS': 'WirelessMic',
+    'PROTOCOL': 'TCP',
+    'ch_const': dict(_SLXD_CH_CONST),
+    'base_const': dict(_SLXD_BASE_CONST),
+    # ⏳ Empty on purpose: the DCID model strings a real SLX-D announces are not
+    # known, and guessing them would make discovery claim receivers it cannot
+    # drive. Add to a slot by IP until one has been seen on a network.
+    'DCID_MODEL': {}
+}
+
+# Separate type because it is a separate product (the Make/Model design in #91
+# treats `type` as the model). Identical for everything the board reads today;
+# SLX-D+ additionally exposes encryption, interference and link properties, and
+# goes up to four channels where SLX-D has two.
+BASE_CONST['slxdplus'] = {
+    'DEVICE_CLASS': 'WirelessMic',
+    'PROTOCOL': 'TCP',
+    'ch_const': dict(_SLXD_CH_CONST),
+    'base_const': dict(_SLXD_BASE_CONST),
+    'DCID_MODEL': {}
+}
+
 BASE_CONST['p10t'] = {
     'DEVICE_CLASS' : 'IEM',
     'PROTOCOL': 'TCP',
