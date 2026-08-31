@@ -277,6 +277,38 @@ PLAN_GONE_ERROR = (
     'board will keep using the channel names it already has until you do.'
 )
 
+# The plan is there; its roster is not readable. Overwhelmingly the ordinary
+# cause is that nobody has been scheduled on it yet, which is not an error and
+# must not be reported as a missing plan.
+PLAN_PEOPLE_UNREADABLE_ERROR = (
+    'Planning Center has this plan, but no scheduled people could be read from '
+    'it. If nobody is scheduled on it yet, that is expected -- add them in '
+    'Planning Center. Otherwise check that this token can see the plan\'s '
+    'service type.'
+)
+
+
+def _plan_is_really_gone(plan_id: str, headers: Dict[str, str]) -> bool:
+    """Ask about the plan itself, instead of trusting the people sweep.
+
+    ⛔ **The sweep is not evidence.** `_get_plan_people_any` tries the generic
+    path, then the plan's own service type, then *every* service type over three
+    endpoints each, then generic team_members. Whatever `_LAST_HTTP_ERROR` holds
+    afterwards is the status of whichever probe happened to run last, and a 404
+    from that only says the last endpoint had nothing. A plan with nobody
+    scheduled on it ends the sweep exactly the same way as a deleted plan.
+
+    Treating those two as one is how a live plan got recorded as gone -- and the
+    answer is remembered for five minutes (#73), so the mistake stuck. Until #90
+    it was also served straight back to the operator, which is what made a new
+    plan look like it needed a restart to load.
+
+    One request, only on the failure path, and only when the sweep's last word
+    was a 404: a timeout or a 500 is not evidence of anything either.
+    """
+    _http_get(f"{BASE_URL}/plans/{plan_id}", headers, params={})
+    return _LAST_HTTP_ERROR == 404
+
 
 def _plan_is_known_missing(plan_id) -> bool:
     if plan_id is None:
@@ -529,9 +561,13 @@ def list_people_for_plan(plan_id: str, service_type_value=None, force: bool = Fa
         # Try generic, then robust fallback across all service types
         plan_people = _get_plan_people_any(plan_id, headers)
     if not plan_people:
+        # Only a 404 is worth a second look; anything else stays a plain failure
+        # and costs no extra request.
         if _LAST_HTTP_ERROR == 404:
-            _remember_missing_plan(plan_id)
-            return {"ok": False, "error": PLAN_GONE_ERROR}
+            if _plan_is_really_gone(plan_id, headers):
+                _remember_missing_plan(plan_id)
+                return {"ok": False, "error": PLAN_GONE_ERROR}
+            return {"ok": False, "error": PLAN_PEOPLE_UNREADABLE_ERROR}
         return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
 
     _forget_missing_plan(plan_id)
@@ -707,9 +743,13 @@ def list_teams_for_plan(plan_id: str, service_type_value=None, force: bool = Fal
     if not plan_people:
         plan_people = _get_plan_people_any(plan_id, headers)
     if not plan_people:
+        # Same rule as the people lookup: the sweep's trailing 404 is not
+        # evidence about the plan, so ask the plan itself before condemning it.
         if _LAST_HTTP_ERROR == 404:
-            _remember_missing_plan(plan_id)
-            return {"ok": False, "error": PLAN_GONE_ERROR}
+            if _plan_is_really_gone(plan_id, headers):
+                _remember_missing_plan(plan_id)
+                return {"ok": False, "error": PLAN_GONE_ERROR}
+            return {"ok": False, "error": PLAN_PEOPLE_UNREADABLE_ERROR}
         return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
 
     _forget_missing_plan(plan_id)

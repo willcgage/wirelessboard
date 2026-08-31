@@ -53,7 +53,25 @@ class Counter:
         return None
 
 
-def test_a_404_is_remembered_so_the_second_lookup_costs_nothing(monkeypatch, creds):
+@pytest.fixture
+def plan_is_gone(monkeypatch):
+    """The plan resource itself answers 404 -- the plan really has been deleted.
+
+    Needed by every test whose sweep ends in a 404. The sweep's trailing
+    status is no longer enough to condemn a plan; `_plan_is_really_gone` asks
+    Planning Center about the plan itself, and without this stub these tests
+    would reach the real network.
+    """
+    monkeypatch.setattr(pco, '_plan_is_really_gone', lambda *_a, **_k: True)
+
+
+@pytest.fixture
+def plan_is_alive(monkeypatch):
+    """The plan resource answers -- it exists, its roster just could not be read."""
+    monkeypatch.setattr(pco, '_plan_is_really_gone', lambda *_a, **_k: False)
+
+
+def test_a_404_is_remembered_so_the_second_lookup_costs_nothing(monkeypatch, creds, plan_is_gone):
     fail = Counter(404)
     monkeypatch.setattr(pco, '_get_plan_people_any', fail)
 
@@ -67,7 +85,7 @@ def test_a_404_is_remembered_so_the_second_lookup_costs_nothing(monkeypatch, cre
     assert fail.calls == 1, 'a plan already known to be gone was requested again'
 
 
-def test_the_teams_lookup_shares_the_same_memory(monkeypatch, creds):
+def test_the_teams_lookup_shares_the_same_memory(monkeypatch, creds, plan_is_gone):
     # Both panels ask about the same plan; one of them learning it is gone
     # should spare the other.
     fail = Counter(404)
@@ -105,7 +123,7 @@ def test_a_500_is_not_cached(monkeypatch, creds):
     assert fail.calls == 2
 
 
-def test_the_memory_expires(monkeypatch, creds):
+def test_the_memory_expires(monkeypatch, creds, plan_is_gone):
     fail = Counter(404)
     monkeypatch.setattr(pco, '_get_plan_people_any', fail)
 
@@ -121,6 +139,80 @@ def test_the_memory_expires(monkeypatch, creds):
 
     pco.list_people_for_plan('89808074')
     assert fail.calls == 2
+
+
+def test_a_live_plan_with_an_empty_roster_is_not_recorded_as_gone(monkeypatch, creds, plan_is_alive):
+    """The misclassification behind the report, and the reason the entry existed.
+
+    `_get_plan_people_any` sweeps the generic path, the plan's own service type,
+    then every service type over three endpoints each, then generic
+    team_members. Whatever `_LAST_HTTP_ERROR` holds at the end is the status of
+    whichever probe ran last -- so a plan nobody is scheduled on yet finishes
+    the sweep looking exactly like a deleted one.
+
+    Condemning it on that evidence put a live plan in a five-minute cache, and
+    until #90 the operator was then answered from it.
+    """
+    fail = Counter(404)
+    monkeypatch.setattr(pco, '_get_plan_people_any', fail)
+
+    result = pco.list_people_for_plan('89808074')
+
+    assert result['ok'] is False
+    assert result['error'] == pco.PLAN_PEOPLE_UNREADABLE_ERROR
+    assert result['error'] != pco.PLAN_GONE_ERROR
+    assert pco._plan_is_known_missing('89808074') is False, (
+        'a plan Planning Center still has must never be cached as gone')
+
+    # And because nothing was cached, the next look actually looks.
+    pco.list_people_for_plan('89808074')
+    assert fail.calls == 2
+
+
+def test_the_teams_lookup_makes_the_same_distinction(monkeypatch, creds, plan_is_alive):
+    fail = Counter(404)
+    monkeypatch.setattr(pco, '_get_plan_people_any', fail)
+
+    teams = pco.list_teams_for_plan('89808074')
+
+    assert teams['error'] == pco.PLAN_PEOPLE_UNREADABLE_ERROR
+    assert pco._plan_is_known_missing('89808074') is False
+
+
+def test_the_plan_itself_is_what_decides(monkeypatch, creds):
+    """`_plan_is_really_gone` asks about the plan, and reads only that answer."""
+    asked = []
+
+    def fake_get(url, _headers, params=None):
+        asked.append(url)
+        pco._LAST_HTTP_ERROR = 404
+        return None
+
+    monkeypatch.setattr(pco, '_http_get', fake_get)
+    assert pco._plan_is_really_gone('89808074', {}) is True
+    assert asked == ['{}/plans/89808074'.format(pco.BASE_URL)], (
+        'the plan resource is the only thing worth asking')
+
+    def found(url, _headers, params=None):
+        asked.append(url)
+        pco._LAST_HTTP_ERROR = None
+        return {'data': {'id': '89808074'}}
+
+    monkeypatch.setattr(pco, '_http_get', found)
+    assert pco._plan_is_really_gone('89808074', {}) is False
+
+
+def test_a_transient_failure_costs_no_extra_request(monkeypatch, creds):
+    """Only a 404 earns the second look; a timeout or a 500 is evidence of nothing."""
+    probe = Counter(None)
+    monkeypatch.setattr(pco, '_plan_is_really_gone', probe)
+
+    for status in (None, 500):
+        pco._MISSING_PLANS.clear()
+        monkeypatch.setattr(pco, '_get_plan_people_any', Counter(status))
+        pco.list_people_for_plan('89808074')
+
+    assert probe.calls == 0, 'the plan was asked about on a failure that proves nothing'
 
 
 def test_a_poll_inside_the_ttl_is_answered_from_memory(monkeypatch, creds):
@@ -187,7 +279,7 @@ def test_a_forced_teams_lookup_clears_it_too(monkeypatch, creds):
     assert pco._plan_is_known_missing('89808074') is False
 
 
-def test_forcing_still_records_a_plan_that_really_is_gone(monkeypatch, creds):
+def test_forcing_still_records_a_plan_that_really_is_gone(monkeypatch, creds, plan_is_gone):
     # Bypassing the memory must not stop it being written: a genuinely dead plan
     # found the hard way should still spare the next poll.
     fail = Counter(404)
@@ -211,7 +303,7 @@ def test_a_success_after_expiry_clears_the_memory(monkeypatch, creds):
     assert pco._plan_is_known_missing('89808074') is False
 
 
-def test_one_dead_plan_does_not_block_another(monkeypatch, creds):
+def test_one_dead_plan_does_not_block_another(monkeypatch, creds, plan_is_gone):
     seen = []
 
     def selective(plan_id, *_args, **_kwargs):
