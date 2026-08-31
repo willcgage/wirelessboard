@@ -22,6 +22,25 @@ Wirelessboard classifies receivers by consulting Shure's Device ID database. If 
 
 Devices on networks that are unreachable from the Wirelessboard host still need to be added manually. Select a device type, input an IP, and select a channel.
 
+### Device types
+
+| Type | Device | Channels |
+| --- | --- | --- |
+| Axient Digital | Shure AD4D / AD4Q | 2 / 4 |
+| ULX-D | Shure ULX-D | 1, 2 or 4 |
+| QLX-D | Shure QLX-D | 1 |
+| SLX-D+ | Shure SLX-D+ | up to 4 |
+| SLX-D | Shure SLX-D | 1 or 2 |
+| UHF-R | Shure UHF-R | 1 or 2 |
+| PSM 1000 | Shure PSM 1000 in-ear transmitter | 2 |
+| Offline placeholder | Not a receiver — holds a slot open on the board | — |
+
+One slot per wireless channel: a single-channel QLX-D receiver uses one slot, a ULXD4Q uses four.
+
+⚠️ **SLX-D and SLX-D+ block third-party control by default.** On the receiver, go to **Advanced Settings → Controller Access** and allow it. Without that, Wirelessboard connects to the receiver and the channel simply never reports anything, which looks like a network fault but is not one.
+
+These two models also do not report antenna, channel quality, transmitter offset or power lock at all, so those rows stay empty in the info drawer — that is what the receiver makes available, not a gap in Wirelessboard. They do not appear in discovery yet either; add them by IP.
+
 Press Save to apply the configuration.
 
 
