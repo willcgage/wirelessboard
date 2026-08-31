@@ -12,6 +12,7 @@ with no angle brackets anywhere -- and the receiver drives it correctly without
 """
 
 import os
+import re
 import sys
 
 import pytest
@@ -117,6 +118,35 @@ def test_offline_is_not_a_vendor():
 
 def test_supported_types_is_where_the_model_list_lives():
     assert sorted(vendor.supported_types()) == sorted(SHURE_TYPES)
+
+
+def test_every_supported_type_is_offered_in_the_config_ui():
+    """⛔ A type the adapter drives but the UI never offers is unreachable.
+
+    SLX-D shipped exactly like that: the adapter, the tests and PCO matching all
+    knew about it, while the slot Type dropdown in demo.html was a hand-written
+    list that had not been touched. The only way to add one was editing
+    config.json by hand.
+
+    The dropdown's `value` is the stored slot type, so it is checkable.
+    """
+    demo = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        'demo.html')
+    with open(demo, 'r', encoding='utf-8') as handle:
+        markup = handle.read()
+
+    select = markup.split('class="form-control cfg-type"')[1].split('</select>')[0]
+    offered = set(re.findall(r'<option value="([^"]*)"', select))
+
+    missing = set(vendor.supported_types()) - offered
+    assert not missing, 'types the board can drive but nobody can select: {}'.format(
+        sorted(missing))
+
+    # `offline` is not a vendor type but is a real choice; anything else offered
+    # and unsupported would be a dead option that saves a slot nothing can drive.
+    unknown = offered - set(vendor.supported_types()) - {'', 'offline'}
+    assert not unknown, 'options for types no adapter handles: {}'.format(sorted(unknown))
 
 
 def test_registering_an_adapter_is_all_it_takes(fake):

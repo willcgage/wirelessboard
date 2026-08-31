@@ -27,14 +27,21 @@ A visual monitoring tool for network enabled Shure devices.  Wirelessboard simpl
 ![wirelessboard storage](docs/img/tv_imagebg.png)
 
 ## Compatible Devices
-Wirelessboard supports the following devices -
-* Shure UHF-R
-* Shure QLX-D<sup>[1](#qlxd)</sup>
-* Shure ULX-D
-* Shure Axient Digital
-* Shure PSM 1000
+Wirelessboard supports stage wireless systems — handheld and bodypack transmitters on a rack receiver, and in-ear monitor transmitters. Conferencing systems are not supported.
+
+| Device | Notes |
+| --- | --- |
+| Shure Axient Digital | AD4D / AD4Q |
+| Shure ULX-D | |
+| Shure QLX-D | See [QLX-D Firmware](docs/qlxd.md) |
+| Shure SLX-D+ | Up to four channels |
+| Shure SLX-D | <sup>[1](#slxd)</sup> Third-party control is **off by default** on the receiver |
+| Shure UHF-R | |
+| Shure PSM 1000 | In-ear monitor transmitter |
 
 Wirelessboard uses IP addresses to connect to RF devices.  RF devices can be addressed through static or reserved IPs.  They just need to be consistent.
+
+SLX-D and SLX-D+ do not appear in network discovery yet — add them by IP address on the configuration page.
 
 
 ## Key Features
@@ -88,3 +95,5 @@ The GitHub Actions workflow builds platform installers named with the new versio
 
 ## Known Issues
 <a name="qlxd">1</a>: [QLX-D Firmware](docs/qlxd.md)
+
+<a name="slxd">1</a>: SLX-D and SLX-D+ block third-party control by default. On the receiver, go to **Advanced Settings → Controller Access** and allow it, otherwise Wirelessboard connects but the channel never reports anything. These models also do not report antenna, channel quality, transmitter offset or power lock — those parts of the info drawer stay empty, which is the receiver rather than a missing feature.

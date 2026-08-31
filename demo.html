@@ -849,14 +849,19 @@
 
         <div class="col col-md-2 col-6 cfg-row-form">
           <label class="form-label text-light small">Type</label>
+          <!-- The value is the stored slot type and must not change; the label is
+               what an operator actually recognises. "axtd" and "p10t" told nobody
+               anything. -->
           <select class="form-control cfg-type">
             <option value=""></option>
-            <option>axtd</option>
-            <option>ulxd</option>
-            <option>qlxd</option>
-            <option>uhfr</option>
-            <option>p10t</option>
-            <option>offline</option>
+            <option value="axtd">Axient Digital (AD4D / AD4Q)</option>
+            <option value="ulxd">ULX-D</option>
+            <option value="qlxd">QLX-D</option>
+            <option value="slxdplus">SLX-D+</option>
+            <option value="slxd">SLX-D</option>
+            <option value="uhfr">UHF-R</option>
+            <option value="p10t">PSM 1000 (IEM)</option>
+            <option value="offline">Offline placeholder</option>
           </select>
         </div>
 
