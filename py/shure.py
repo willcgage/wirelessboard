@@ -82,7 +82,7 @@ def SocketService():
                 rx.socket_disconnect()
                 break
 
-            for line in rx.adapter.frame(rx.type, data):
+            for line in rx.frame_messages(data):
                 DeviceMessageQueue.put((rx, line))
 
             rx.socket_watchdog = int(time.perf_counter())

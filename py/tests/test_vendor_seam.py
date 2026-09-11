@@ -26,6 +26,11 @@ import vendor  # noqa: E402
 
 
 SHURE_TYPES = ['uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus', 'p10t']
+AUDIO_TECHNICA_TYPES = [
+    'atw-r5220', 'atw-r5220dan',
+    'atw-dr3120', 'atw-dr3120dan',
+    'atw-r3210n',
+]
 
 
 class FakeAdapter:
@@ -117,7 +122,7 @@ def test_offline_is_not_a_vendor():
 
 
 def test_supported_types_is_where_the_model_list_lives():
-    assert sorted(vendor.supported_types()) == sorted(SHURE_TYPES)
+    assert sorted(vendor.supported_types()) == sorted(SHURE_TYPES + AUDIO_TECHNICA_TYPES)
 
 
 def test_every_supported_type_is_offered_in_the_config_ui():

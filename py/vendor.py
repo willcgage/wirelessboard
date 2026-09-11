@@ -26,12 +26,14 @@ An adapter is a plain module exposing:
 
 A module rather than a class because there is no per-instance state: an adapter
 is a body of knowledge about a protocol, and every function already takes the
-type it is being asked about.
+type it is being asked about. Shure and Audio-Technica currently use this seam;
+Sennheiser support is tracked in #92.
 """
 
+import audio_technica_protocol
 import shure_protocol
 
-ADAPTERS = (shure_protocol,)
+ADAPTERS = (shure_protocol, audio_technica_protocol)
 
 
 def adapter_for(type_):

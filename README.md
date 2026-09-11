@@ -4,7 +4,7 @@
 
 <h1 align="center">Wirelessboard</h1>
 
-A visual monitoring tool for network enabled Shure devices.  Wirelessboard simplifies microphone monitoring and storage for artists, engineers, and volunteers.  View battery, audio, and RF levels from any device on the network.
+A visual monitoring tool for network-enabled wireless systems. Wirelessboard simplifies microphone monitoring and storage for artists, engineers, and volunteers. View battery, audio, and RF levels from supported receivers on the network.
 
 > Wirelessboard is the new name for the project previously released as **Micboard**.  Existing configurations, environment variables, and automation targeting Micboard continue to work, and migration tips are documented throughout this repo.
 
@@ -38,8 +38,13 @@ Wirelessboard supports stage wireless systems — handheld and bodypack transmit
 | Shure SLX-D | <sup>[1](#slxd)</sup> Third-party control is **off by default** on the receiver |
 | Shure UHF-R | |
 | Shure PSM 1000 | In-ear monitor transmitter |
+| Audio-Technica ATW-R5220 / ATW-R5220DAN | Configure by IP address; hardware validation requested |
+| Audio-Technica ATW-DR3120 / ATW-DR3120DAN | Configure by IP address; hardware validation requested |
+| Audio-Technica ATW-R3210N | Network-enabled `N` model only; configure by IP address; hardware validation requested |
 
 Wirelessboard uses IP addresses to connect to RF devices.  RF devices can be addressed through static or reserved IPs.  They just need to be consistent.
+
+Audio-Technica support uses the receiver's documented TCP control port (17300) and polls the channel name, battery, audio level, RF level, selected antenna, transmitter lock and frequency. Automatic discovery and UDP level notifications are not enabled yet.
 
 SLX-D and SLX-D+ do not appear in network discovery yet — add them by IP address on the configuration page.
 
