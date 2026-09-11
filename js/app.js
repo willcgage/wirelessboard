@@ -31,7 +31,10 @@ export const dataURL = 'data.json';
 
 export const micboard = [];
 export const wirelessboard = micboard;
-micboard.MIC_MODELS = ['uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus'];
+micboard.MIC_MODELS = [
+  'uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus',
+  'atw-r5220', 'atw-r5220dan', 'atw-dr3120', 'atw-dr3120dan', 'atw-r3210n',
+];
 
 micboard.IEM_MODELS = ['p10t'];
 micboard.url = [];
