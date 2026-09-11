@@ -135,7 +135,10 @@ function invokeUpdateHash() {
   }
 }
 
-const NET_DEVICE_TYPES = ['axtd', 'ulxd', 'qlxd', 'uhfr', 'p10t'];
+const NET_DEVICE_TYPES = [
+  'axtd', 'ulxd', 'qlxd', 'uhfr', 'slxd', 'slxdplus', 'p10t',
+  'atw-r5220', 'atw-r5220dan', 'atw-dr3120', 'atw-dr3120dan', 'atw-r3210n',
+];
 
 const DISCOVERY_DEFAULTS = {
   auto: true,

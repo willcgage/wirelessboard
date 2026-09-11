@@ -1,6 +1,44 @@
 BASE_CONST = {}
 
 
+_AUDIO_TECHNICA_CH_CONST = {
+    # Audio-Technica parsing is handled by its adapter.  These names keep the
+    # current ChannelDevice data model usable until #91 moves it behind the
+    # adapter seam completely.
+    'battery': 'BATT_POWER',
+    'quality': 'NOTSUPPORTED',
+    'frequency': 'FREQUENCY',
+    'audio_level': 'TX_LEVEL',
+    'rf_level': 'RSSI_METER',
+    'name': 'RX_NAME',
+    'antenna': 'ANT_SELECT',
+    'tx_offset': 'NOTSUPPORTED',
+    'power_lock': 'TX_LOCK',
+    'runtime': 'NOTSUPPORTED',
+}
+
+_AUDIO_TECHNICA_BASE_CONST = {
+    'getAll': [],
+    'query': [],
+    'meter_stop': '',
+}
+
+for _model in (
+    'atw-r5220', 'atw-r5220dan',
+    'atw-dr3120', 'atw-dr3120dan',
+    'atw-r3210n',
+):
+    BASE_CONST[_model] = {
+        'DEVICE_CLASS': 'WirelessMic',
+        'PROTOCOL': 'TCP',
+        'ch_const': dict(_AUDIO_TECHNICA_CH_CONST),
+        'base_const': dict(_AUDIO_TECHNICA_BASE_CONST),
+        # No discovery signature has been verified.  Configure these models by
+        # IP address, as the issue's minimum release specifies.
+        'DCID_MODEL': {},
+    }
+
+
 BASE_CONST['uhfr'] = {
     'DEVICE_CLASS' : 'WirelessMic',
     'PROTOCOL': 'UDP',

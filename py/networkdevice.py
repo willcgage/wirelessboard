@@ -28,6 +28,7 @@ class ShureNetworkDevice:
         self.rx_com_status = 'DISCONNECTED'
         self.writeQueue = queue.Queue()
         self.f = None
+        self.frame_remainder = ''
         self.socket_watchdog = int(time.perf_counter())
         self.raw = defaultdict(dict)
         self.adapter = vendor.adapter_for(type)
@@ -58,6 +59,7 @@ class ShureNetworkDevice:
         if self.f is not None:
             self.f.close()
             self.f = None
+        self.frame_remainder = ''
         self.set_rx_com_status('DISCONNECTED')
         self.socket_watchdog = int(time.perf_counter())
 
@@ -81,6 +83,14 @@ class ShureNetworkDevice:
 
     def parse_raw_rx(self, data):
         self.adapter.parse(self, data)
+
+    def frame_messages(self, data):
+        buffered = getattr(self.adapter, 'frame_buffered', None)
+        if buffered is None:
+            return self.adapter.frame(self.type, data)
+        messages, self.frame_remainder = buffered(
+            self.type, data, self.frame_remainder)
+        return messages
 
     def get_channels(self):
         channels = []
