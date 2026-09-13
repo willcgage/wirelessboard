@@ -135,7 +135,11 @@ function invokeUpdateHash() {
   }
 }
 
-const NET_DEVICE_TYPES = ['axtd', 'ulxd', 'qlxd', 'uhfr', 'p10t'];
+// ⛔ Every receiver type the server can drive must be here, or a save drops the
+// slot's IP and channel. SLX-D shipped in 1.16.0 missing from this list, and a
+// save wrote a slot the loader could not read. py/tests/test_vendor_seam.py
+// checks it against vendor.supported_types().
+const NET_DEVICE_TYPES = ['axtd', 'ulxd', 'qlxd', 'uhfr', 'slxd', 'slxdplus', 'p10t'];
 
 const DISCOVERY_DEFAULTS = {
   auto: true,

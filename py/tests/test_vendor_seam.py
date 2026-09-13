@@ -149,6 +149,28 @@ def test_every_supported_type_is_offered_in_the_config_ui():
     assert not unknown, 'options for types no adapter handles: {}'.format(sorted(unknown))
 
 
+def test_every_supported_type_keeps_its_ip_when_saved():
+    """⛔ The config page only sends IP and channel for types in NET_DEVICE_TYPES.
+
+    SLX-D shipped in 1.16.0 missing from that list: selectable in the dropdown
+    (the test above), but saved with no address, which the loader then could
+    not read. The dropdown test could not catch it because this list is in
+    JavaScript, not the HTML.
+    """
+    source = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        'js', 'config.js')
+    with open(source, 'r', encoding='utf-8') as handle:
+        script = handle.read()
+
+    declaration = re.search(r'const NET_DEVICE_TYPES = \[([^\]]*)\]', script)
+    assert declaration, 'NET_DEVICE_TYPES not found in js/config.js'
+    listed = set(re.findall(r"'([^']+)'", declaration.group(1)))
+
+    missing = set(vendor.supported_types()) - listed
+    assert not missing, 'types saved without their IP address: {}'.format(sorted(missing))
+
+
 def test_registering_an_adapter_is_all_it_takes(fake):
     assert vendor.adapter_for('fakemic') is fake
     assert 'fakemic' in vendor.supported_types()

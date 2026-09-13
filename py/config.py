@@ -981,6 +981,17 @@ def read_json_config(file):
             # The model list lives with the adapter that speaks for it (#91),
             # so adding a manufacturer does not mean editing this line.
             if chan['type'] in vendor.supported_types():
+                # A receiver slot with no address cannot be connected, but it is
+                # not a reason to refuse the whole file: 1.16.0's config page
+                # saved SLX-D slots exactly like that, and the KeyError here broke
+                # every load after. The slot stays in the tree, so it still shows
+                # on the config page for the operator to give an IP.
+                if not chan.get('ip'):
+                    logger.warning(
+                        'Slot %s (%s) has no IP address; it will not connect until '
+                        'one is set on the configuration page.',
+                        chan.get('slot'), chan['type'])
+                    continue
                 netDev = shure.check_add_network_device(chan['ip'], chan['type'])
                 netDev.add_channel_device(chan)
 

@@ -60,6 +60,30 @@ def test_a_config_without_slots_still_loads(tmp_path, monkeypatch):
     assert config.config_tree.get('slots', []) == []
 
 
+def test_a_receiver_slot_without_an_ip_does_not_break_the_load(tmp_path, monkeypatch):
+    """The file 1.16.0's config page wrote for an SLX-D: a type and no address.
+
+    Loading it raised KeyError: 'ip', which failed the save and left a config.json
+    every later start refused. The slot must be skipped for connecting but kept
+    in the tree, so the operator can still see it and give it an IP.
+    """
+    import shure
+
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps({'slots': [
+        {'slot': 1, 'type': 'slxd', 'extended_name': 'Jane'},
+        {'slot': 2, 'type': 'ulxd', 'ip': '10.0.0.5', 'channel': 1},
+    ]}))
+    monkeypatch.setattr(config, 'get_gif_dir', lambda: str(tmp_path))
+    monkeypatch.setattr(config, 'get_version_number', lambda: '1.16.1')
+    monkeypatch.setattr(shure, 'NetworkDevices', [])
+
+    config.read_json_config(str(path))
+
+    assert [slot['slot'] for slot in config.config_tree['slots']] == [1, 2]
+    assert [rx.ip for rx in shure.NetworkDevices] == ['10.0.0.5']
+
+
 def test_a_config_without_slots_is_not_rewritten(tmp_path, monkeypatch):
     """Loading a damaged file must leave it damaged, not paper over it.
 
