@@ -8,7 +8,7 @@
 - _Nothing yet._
 
 ### Fixed
-- _Nothing yet._
+- **Saving a board with an SLX-D or SLX-D+ slot no longer breaks the configuration.** In 1.16.0 the configuration page saved those slots without their IP address and channel, and Wirelessboard then could not read the file it had just written: the save failed, and the next start came up on defaults in recovery mode. Both halves are fixed — the page now keeps the address for these models, and a receiver slot with no address is skipped with a warning instead of stopping the whole configuration from loading. ⚠️ If you hit this on 1.16.0, open the configuration page after updating and re-enter the IP address for your SLX-D slots; nothing else was lost. A test now checks that every supported model keeps its address on save, so a future model cannot ship the same way.
 
 ## [1.16.0] - 2026-08-30
 Two more receivers.
