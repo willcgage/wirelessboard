@@ -682,6 +682,7 @@ class PcoSyncHandler(web.RequestHandler):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_override = self.get_query_argument('plan', default=None)
+        profile_override = self.get_query_argument('profile', default=None)
         dry_run = self.get_query_argument('dry_run', default='').lower() in ('1', 'true', 'yes')
 
         # On the loop: may migrate credentials, which saves config.json.
@@ -691,7 +692,8 @@ class PcoSyncHandler(web.RequestHandler):
             return
 
         # Off the loop: the plan fetch and the matching. Writes nothing.
-        resolution = await _run_pco(pco.resolve_sync, started['config'], plan_override)
+        resolution = await _run_pco(
+            pco.resolve_sync, started['config'], plan_override, profile_override)
 
         # Back on the loop: the one write.
         result = pco.finish_sync(resolution, dry_run=dry_run)
@@ -705,7 +707,8 @@ class PcoPreviewHandler(web.RequestHandler):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_override = self.get_query_argument('plan', default=None)
-        result = await _run_pco(pco.preview_sync, plan_override)
+        profile_override = self.get_query_argument('profile', default=None)
+        result = await _run_pco(pco.preview_sync, plan_override, profile_override)
         self.write(json.dumps(result))
 
     async def post(self):
@@ -792,6 +795,34 @@ class PcoConnectHandler(web.RequestHandler):
 
         # On the loop: writes config.json, serialized with every other writer.
         self.write(json.dumps(pco.store_credentials(token, secret, checked)))
+
+
+class PcoScheduleHandler(web.RequestHandler):
+    """Upcoming plans and the rules each will get (#140). Read-only."""
+
+    async def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        try:
+            limit = int(self.get_query_argument('limit', default='10'))
+        except (TypeError, ValueError):
+            limit = 10
+        result = await _run_pco(pco.plan_schedule, max(1, min(limit, 50)))
+        self.write(json.dumps(result))
+
+
+class PcoActivePlanHandler(web.RequestHandler):
+    """Has the plan on the board changed since it was synced? (#140)
+
+    ⛔ Reports only, and never syncs. Whether a change is applied automatically
+    or waits for an admin is the operator's decision, not this endpoint's.
+    """
+
+    async def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        result = await _run_pco(pco.check_active_plan)
+        self.write(json.dumps(result))
 
 
 class PcoNextPlanHandler(web.RequestHandler):
@@ -1228,6 +1259,8 @@ def twisted():
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
         (r'/api/pco/next-plan', PcoNextPlanHandler),
+        (r'/api/pco/schedule', PcoScheduleHandler),
+        (r'/api/pco/active-plan', PcoActivePlanHandler),
         (r'/api/pco/connect', PcoConnectHandler),
         (r'/api/pco/people', PcoPeopleHandler),
         (r'/api/pco/teams', PcoTeamsHandler),

@@ -8,6 +8,7 @@ import requests
 
 import config
 import pco_mapping
+import pco_profiles
 from pco_credentials import CredentialError, ensure_credentials
 
 logger = logging.getLogger('micboard.pco')
@@ -361,6 +362,78 @@ def _plan_is_really_gone(plan_id: str, headers: Dict[str, str]) -> bool:
     return _LAST_HTTP_ERROR == 404
 
 
+# Where a service type sits in the Services folder tree (#120 profiles).
+#
+# ⭐ Cached because the shape of a church's folders changes about never, while a
+# sync asks for it every time -- and the walk is one request per level, on the
+# path an operator is waiting on. Ten minutes is long enough that a Sunday's
+# syncs pay for it once and short enough that reorganising folders does not
+# need a restart.
+_FOLDER_CHAIN: Dict[str, Tuple[float, Tuple[str, ...]]] = {}
+_FOLDER_CHAIN_TTL_SECONDS = 600
+
+# ⛔ A folder tree should be a handful deep. The limit is not a tuning knob, it
+# is a guard against a cycle in the data turning a sync into an infinite loop
+# of HTTP calls -- which on a single-threaded server is the whole board gone.
+_FOLDER_CHAIN_MAX_DEPTH = 12
+
+
+def _parent_folder_id(payload: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The Folder a service type or folder hangs from, if any.
+
+    Reads `relationships.parent` and accepts it only when it really is a
+    Folder: a service type's parent is a Folder, but nothing promises that
+    stays true, and silently treating some other resource as a folder would
+    match profiles to the wrong plans.
+    """
+    if not payload:
+        return None
+    rel = ((payload.get('data') or {}).get('relationships') or {})
+    for key in ('parent', 'folder'):
+        data = (rel.get(key) or {}).get('data') or {}
+        if not data:
+            continue
+        if str(data.get('type') or '').lower() != 'folder':
+            continue
+        folder_id = data.get('id')
+        if folder_id is not None:
+            return str(folder_id)
+    return None
+
+
+def folder_chain(service_type_id: Any, headers: Dict[str, str]) -> Tuple[str, ...]:
+    """Folder ids above a service type, nearest first, then its ancestors.
+
+    Empty when the service type sits at the top level, which is the common case
+    for a church that never made folders.
+    """
+    stid = str(service_type_id or '').strip()
+    if not stid:
+        return ()
+
+    cached = _FOLDER_CHAIN.get(stid)
+    if cached and time.monotonic() < cached[0]:
+        return cached[1]
+
+    chain: List[str] = []
+    current = _parent_folder_id(_http_get(f"{BASE_URL}/service_types/{stid}", headers))
+    seen = set()
+    while current and current not in seen and len(chain) < _FOLDER_CHAIN_MAX_DEPTH:
+        chain.append(current)
+        seen.add(current)
+        current = _parent_folder_id(_http_get(f"{BASE_URL}/folders/{current}", headers))
+
+    result = tuple(chain)
+    _FOLDER_CHAIN[stid] = (time.monotonic() + _FOLDER_CHAIN_TTL_SECONDS, result)
+    return result
+
+
+def forget_folder_chains() -> None:
+    """Drop the folder cache. For tests, and for a config save that may have
+    changed which service type is in play."""
+    _FOLDER_CHAIN.clear()
+
+
 def _plan_is_known_missing(plan_id) -> bool:
     if plan_id is None:
         return False
@@ -639,6 +712,59 @@ def _plan_label(attrs: Dict[str, Any]) -> str:
     """
     parts = [attrs.get('short_dates') or attrs.get('dates'), attrs.get('title')]
     return ' — '.join(part.strip() for part in parts if part and part.strip())
+
+
+def plan_schedule(limit: int = 10) -> Dict[str, Any]:
+    """The upcoming plans and which rules each one will get (#140).
+
+    ⭐ The only way to check a rule set *before* a service rather than after.
+    "What will the board do on Sunday" is otherwise unanswerable without
+    actually syncing, which writes.
+
+    ⚠️ Read-only and deliberately cheap. The plans list already carries each
+    plan's `service_type_id`, so resolving a profile per plan costs nothing
+    beyond the folder walk -- and that is cached per service type, so a church
+    with four of them pays four walks per ten minutes however many plans are
+    listed.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        logger.warning('PCO schedule aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+
+    services = pco_cfg.get('services', {})
+    st_raw = services.get('service_type') if 'service_type' in services else services.get('service_type_id')
+    listed = list_plans_for_service(st_raw) if st_raw else list_plans()
+    if not listed.get('ok'):
+        return listed
+
+    walk = pco_profiles.binds_anywhere(pco_cfg)
+    entries = []
+    for plan in (listed.get('plans') or [])[:max(0, int(limit or 0))]:
+        stid = plan.get('service_type_id')
+        folders = ()
+        if walk and stid and not pco_profiles.profiles_for_service_type(pco_cfg, stid):
+            folders = folder_chain(stid, headers)
+
+        profile, reason, _error = pco_profiles.select_profile(pco_cfg, stid, None, folders)
+        entries.append({
+            "plan_id": plan.get('id'),
+            "label": _plan_label(plan) or plan.get('short_dates') or plan.get('dates') or '',
+            "sort_date": plan.get('sort_date'),
+            "service_type_id": stid,
+            "service_type_name": plan.get('service_type_name') or '',
+            "profile": _profile_report(profile, reason),
+        })
+
+    return {
+        "ok": True,
+        "plans": entries,
+        "profile_conflicts": pco_profiles.binding_conflicts(pco_cfg),
+    }
 
 
 def next_plan() -> Dict[str, Any]:
@@ -1232,6 +1358,107 @@ def _get_plan_people_any(plan_id: str, headers: Dict[str, str]) -> Optional[Dict
     return None
 
 
+# What the board last synced, so a change in Planning Center can be noticed
+# (#140). In memory on purpose: it describes this run of the server, not the
+# configuration, and writing it would mean a config save per sync -- on the one
+# file whose corruption once left a server that could not start.
+_LAST_SYNC: Dict[str, Any] = {}
+
+
+def plan_updated_at(plan_id: str, headers: Dict[str, str]) -> Optional[str]:
+    """Planning Center's own `updated_at` for a plan.
+
+    ⭐ One request, and it answers *whether* something changed without any
+    diffing. What changed is a separate question, and `preview_sync` already
+    answers it -- including which people a re-sync would take off the board.
+    """
+    if not plan_id:
+        return None
+    data = _http_get(f"{BASE_URL}/plans/{plan_id}", headers)
+    if not data:
+        return None
+    attrs = (data.get('data') or {}).get('attributes') or {}
+    return (attrs.get('updated_at') or '').strip() or None
+
+
+def record_sync(plan_id: Optional[str], updated_at: Optional[str], profile_id: Optional[str]) -> None:
+    """Remember what was synced, for change detection to compare against."""
+    if not plan_id:
+        return
+    _LAST_SYNC.clear()
+    _LAST_SYNC.update({
+        'plan_id': str(plan_id),
+        'updated_at': updated_at or '',
+        'profile_id': profile_id or '',
+        'at': time.time(),
+    })
+
+
+def last_sync() -> Dict[str, Any]:
+    """What the board last put on screen. Empty before the first sync."""
+    return dict(_LAST_SYNC)
+
+
+def forget_last_sync() -> None:
+    _LAST_SYNC.clear()
+
+
+def _watching_active_plan(pco_cfg: Dict[str, Any]) -> bool:
+    """Whether the board should notice the active plan changing (#140).
+
+    ⛔ Off by default. It costs a request per sync plus a poll, and it exists to
+    support a policy -- notify, or re-sync automatically -- that #120 settled as
+    the operator's to choose rather than the board's to assume.
+    """
+    return (pco_cfg or {}).get('watch_active_plan', False) is True
+
+
+def check_active_plan() -> Dict[str, Any]:
+    """Has the plan on the board changed in Planning Center since it was synced?
+
+    ⚠️ Answers about the plan the board **last synced**, not the plan nearest
+    today. Those differ exactly when somebody syncs early, and the honest
+    question is "is what is on screen still right", not "is there a newer plan".
+
+    ⛔ Reports. Never syncs. Whether a change is applied automatically or waits
+    for an admin is a policy decision made above this, and #120's rule that a
+    sync is the operator's action is only reversed where the operator has asked
+    for it.
+    """
+    remembered = last_sync()
+    if not remembered.get('plan_id'):
+        return {"ok": True, "known": False, "changed": False,
+                "reason": "Nothing has been synced yet this run."}
+
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+
+    current = plan_updated_at(remembered['plan_id'], headers)
+    if current is None:
+        # Could not ask. Not the same as "unchanged", and saying so stops a
+        # dead network reading as a quiet all-clear.
+        return {"ok": False, "known": True, "plan_id": remembered['plan_id'],
+                "error": _fetch_error('Unable to check the plan')}
+
+    was = remembered.get('updated_at') or ''
+    changed = bool(was) and current != was
+    return {
+        "ok": True,
+        "known": True,
+        "changed": changed,
+        "plan_id": remembered['plan_id'],
+        "synced_at": remembered.get('at'),
+        "profile_id": remembered.get('profile_id') or None,
+        "updated_at": current,
+        "previous_updated_at": was or None,
+    }
+
+
 def _get_plan_service_type_id(plan_id: str, headers: Dict[str, str]) -> Optional[int]:
     """Resolve the service_type id for a given plan id by querying the plan resource.
     Uses relationships and included service_type if available.
@@ -1441,7 +1668,11 @@ def begin_sync() -> Dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-def resolve_sync(pco_cfg: Dict[str, Any], plan_id_override: Optional[str] = None) -> Dict[str, Any]:
+def resolve_sync(
+    pco_cfg: Dict[str, Any],
+    plan_id_override: Optional[str] = None,
+    profile_override: Optional[str] = None,
+) -> Dict[str, Any]:
     """Fetch the plan and work out which slot each person belongs in.
 
     Every network call lives here, and nothing here writes -- which is what
@@ -1452,16 +1683,56 @@ def resolve_sync(pco_cfg: Dict[str, Any], plan_id_override: Optional[str] = None
         'Authorization': _basic_auth_header(auth['token'], auth['secret'])
     }
 
-    mapping = pco_cfg.get('mapping', {})
-    options = _mapping_options(mapping)
-    category = mapping.get('note_category') or 'Mic / IEM Assignments'
-    team_filters = [t.strip().lower() for t in (mapping.get('team_name_filter') or []) if t and t.strip()]
-
     stid, plan_id, error = _select_plan(pco_cfg.get('services', {}), headers, plan_id_override)
     if error:
         return {"ok": False, "error": error}
     if not plan_id:
         return {"ok": False, "error": "No plan selected or upcoming plan found"}
+
+    # ⭐ The rules have to be chosen before anything is read, because they
+    # decide which note category and which teams are read in the first place.
+    #
+    # ⚠️ An explicitly chosen plan arrives without its service type, so
+    # matching a bound profile costs one extra lookup. Only on that path, only
+    # when a binding could actually apply, and it is off the IOLoop like every
+    # other call here.
+    if stid is None and not profile_override and pco_profiles.profiles_of(pco_cfg):
+        stid = _get_plan_service_type_id(plan_id, headers)
+
+    # ⚠️ The folder walk is one request per level. Only taken when some profile
+    # actually binds to a folder and nothing more specific could already have
+    # won -- a board whose profiles are all service-type-bound or hand-picked
+    # pays nothing for a feature it is not using.
+    folders: Tuple[str, ...] = ()
+    if (
+        stid is not None
+        and not profile_override
+        and not pco_profiles.profiles_for_service_type(pco_cfg, stid)
+        and pco_profiles.binds_anywhere(pco_cfg)
+    ):
+        folders = folder_chain(stid, headers)
+
+    profile, profile_reason, profile_error = pco_profiles.select_profile(
+        pco_cfg, stid, profile_override, folders)
+    if profile_error:
+        return {"ok": False, "error": profile_error}
+
+    mapping = pco_profiles.effective_mapping(pco_cfg, profile)
+
+    # ⛔ `get_pco_config` validates the board's own mapping, but a profile can
+    # override `strategy` and `note_source` and never passes through it. An
+    # unsupported strategy produces no labels at all, so every person comes
+    # back unmatched and the board looks like it simply found nobody -- the
+    # failure that is hardest to tell from a real empty plan. Checked here,
+    # where the profile that caused it can be named, and only for the profile
+    # actually in force.
+    mapping_error = _validate_mapping(mapping, profile)
+    if mapping_error:
+        return {"ok": False, "error": mapping_error}
+
+    options = _mapping_options(mapping)
+    category = mapping.get('note_category') or 'Mic / IEM Assignments'
+    team_filters = [t.strip().lower() for t in (mapping.get('team_name_filter') or []) if t and t.strip()]
 
     plan_people = _fetch_plan_people(stid, plan_id, headers)
     if not plan_people:
@@ -1474,12 +1745,68 @@ def resolve_sync(pco_cfg: Dict[str, Any], plan_id_override: Optional[str] = None
     return {
         "ok": True,
         "plan_id": plan_id,
+        "service_type_id": stid,
+        # ⚠️ Captured only when the board is actually watching for changes.
+        # It is one more request on the path an operator is waiting on, and a
+        # board that never asks "has this plan changed" must not pay for the
+        # answer -- the same rule the folder walk follows.
+        "plan_updated_at": (
+            plan_updated_at(plan_id, headers) if _watching_active_plan(pco_cfg) else None
+        ),
         "options": options,
         "category": category,
+        "profile": _profile_report(profile, profile_reason),
+        "profile_conflicts": pco_profiles.binding_conflicts(pco_cfg),
         "resolved": resolved,
         "unmatched": unmatched,
         "conflicts": conflicts,
         "people": people,
+    }
+
+
+def _validate_mapping(mapping: Dict[str, Any], profile: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Reject rules that would silently match nobody. Returns an error or None."""
+    where = 'the board settings'
+    if profile:
+        where = 'profile "{}"'.format(profile.get('name') or profile.get('id'))
+
+    strategy = mapping.get('strategy') or DEFAULT_STRATEGY
+    if strategy not in SUPPORTED_STRATEGIES:
+        return 'Unsupported strategy "{}" in {} (expected one of {})'.format(
+            strategy, where, ', '.join(SUPPORTED_STRATEGIES))
+
+    note_source = mapping.get('note_source') or 'auto'
+    if note_source not in ('person', 'plan', 'auto'):
+        return 'Unsupported note source "{}" in {}'.format(note_source, where)
+
+    return None
+
+
+def _profile_binding(profile: Optional[Dict[str, Any]]) -> Optional[str]:
+    """How a profile is attached, for the panel to show beside its name."""
+    if not profile:
+        return None
+    if profile.get('service_type_id'):
+        return 'service_type'
+    if profile.get('folder_id'):
+        return 'folder'
+    return None
+
+
+def _profile_report(profile: Optional[Dict[str, Any]], reason: str) -> Dict[str, Any]:
+    """What the board says about which rules it used.
+
+    ⚠️ Always present, even when no profile applied. "Using the board
+    settings." is a real answer; an absent field would leave the operator to
+    infer it, and the whole point of profiles is that which rules ran is no
+    longer obvious from the screen.
+    """
+    return {
+        "id": (profile or {}).get('id') or None,
+        "name": (profile or {}).get('name') or (profile or {}).get('id') or None,
+        "reason": reason,
+        "bound_to": _profile_binding(profile),
+        "description": pco_profiles.describe_selection(profile, reason),
     }
 
 
@@ -1494,6 +1821,7 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
 
     options = resolution['options']
     category = resolution['category']
+    profile = resolution.get('profile') or {}
     resolved = resolution['resolved']
     unmatched = resolution['unmatched']
     conflicts = resolution['conflicts']
@@ -1535,6 +1863,17 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
             conflict['winner'],
         )
 
+    if profile.get('description'):
+        logger.info('PCO sync: %s', profile['description'])
+
+    for clash in (resolution.get('profile_conflicts') or []):
+        logger.warning(
+            'PCO profiles: service type %s is claimed by %s -- "%s" wins',
+            clash.get('service_type_id'),
+            ', '.join(clash.get('profiles') or []),
+            clash.get('winner'),
+        )
+
     if unmatched:
         logger.info(
             'PCO sync left %s scheduled %s unmatched (no slot for %s)',
@@ -1545,11 +1884,22 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
 
     slots_matched = sum(len(entry.get('slots') or []) for entry in resolved)
 
+    # ⚠️ Only a real sync changes what is on the board, so only a real sync
+    # resets what change detection compares against. A preview that recorded
+    # here would make the next check report "no change" about a plan nobody
+    # ever applied.
+    if not dry_run:
+        record_sync(plan_id, resolution.get('plan_updated_at'), profile.get('id'))
+
     return {
         "ok": True,
         "dry_run": dry_run,
         "cleared": cleared,
         "clearable": clearable,
+        # ⚠️ Which rules ran is no longer obvious from the screen once profiles
+        # exist, so every sync and every preview says so.
+        "profile": profile,
+        "profile_conflicts": resolution.get('profile_conflicts') or [],
         "plan_id": plan_id,
         "strategy": options['strategy'],
         "note_category": category,
@@ -1571,7 +1921,11 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     }
 
 
-def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False) -> Dict[str, Any]:
+def sync_from_pco(
+    plan_id_override: Optional[str] = None,
+    dry_run: bool = False,
+    profile_override: Optional[str] = None,
+) -> Dict[str, Any]:
     """Read the selected plan and map its people onto Wirelessboard slots.
 
     Each scheduled person is matched by their PCO team position name (for
@@ -1591,13 +1945,16 @@ def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False)
     if not started.get('ok'):
         return started
 
-    resolution = resolve_sync(started['config'], plan_id_override)
+    resolution = resolve_sync(started['config'], plan_id_override, profile_override)
     return finish_sync(resolution, dry_run=dry_run)
 
 
-def preview_sync(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
+def preview_sync(
+    plan_id_override: Optional[str] = None,
+    profile_override: Optional[str] = None,
+) -> Dict[str, Any]:
     """Dry-run of :func:`sync_from_pco` -- resolves the mapping without saving."""
-    return sync_from_pco(plan_id_override, dry_run=True)
+    return sync_from_pco(plan_id_override, dry_run=True, profile_override=profile_override)
 
 
 def notes_for_plan(plan_id_override: Optional[str] = None, source_override: Optional[str] = None) -> Dict[str, Any]:
