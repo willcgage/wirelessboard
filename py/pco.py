@@ -714,6 +714,59 @@ def _plan_label(attrs: Dict[str, Any]) -> str:
     return ' — '.join(part.strip() for part in parts if part and part.strip())
 
 
+def plan_schedule(limit: int = 10) -> Dict[str, Any]:
+    """The upcoming plans and which rules each one will get (#140).
+
+    ⭐ The only way to check a rule set *before* a service rather than after.
+    "What will the board do on Sunday" is otherwise unanswerable without
+    actually syncing, which writes.
+
+    ⚠️ Read-only and deliberately cheap. The plans list already carries each
+    plan's `service_type_id`, so resolving a profile per plan costs nothing
+    beyond the folder walk -- and that is cached per service type, so a church
+    with four of them pays four walks per ten minutes however many plans are
+    listed.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        logger.warning('PCO schedule aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+
+    services = pco_cfg.get('services', {})
+    st_raw = services.get('service_type') if 'service_type' in services else services.get('service_type_id')
+    listed = list_plans_for_service(st_raw) if st_raw else list_plans()
+    if not listed.get('ok'):
+        return listed
+
+    walk = pco_profiles.binds_anywhere(pco_cfg)
+    entries = []
+    for plan in (listed.get('plans') or [])[:max(0, int(limit or 0))]:
+        stid = plan.get('service_type_id')
+        folders = ()
+        if walk and stid and not pco_profiles.profiles_for_service_type(pco_cfg, stid):
+            folders = folder_chain(stid, headers)
+
+        profile, reason, _error = pco_profiles.select_profile(pco_cfg, stid, None, folders)
+        entries.append({
+            "plan_id": plan.get('id'),
+            "label": _plan_label(plan) or plan.get('short_dates') or plan.get('dates') or '',
+            "sort_date": plan.get('sort_date'),
+            "service_type_id": stid,
+            "service_type_name": plan.get('service_type_name') or '',
+            "profile": _profile_report(profile, reason),
+        })
+
+    return {
+        "ok": True,
+        "plans": entries,
+        "profile_conflicts": pco_profiles.binding_conflicts(pco_cfg),
+    }
+
+
 def next_plan() -> Dict[str, Any]:
     """Which plan "next upcoming" means right now (#120).
 
@@ -1305,6 +1358,107 @@ def _get_plan_people_any(plan_id: str, headers: Dict[str, str]) -> Optional[Dict
     return None
 
 
+# What the board last synced, so a change in Planning Center can be noticed
+# (#140). In memory on purpose: it describes this run of the server, not the
+# configuration, and writing it would mean a config save per sync -- on the one
+# file whose corruption once left a server that could not start.
+_LAST_SYNC: Dict[str, Any] = {}
+
+
+def plan_updated_at(plan_id: str, headers: Dict[str, str]) -> Optional[str]:
+    """Planning Center's own `updated_at` for a plan.
+
+    ⭐ One request, and it answers *whether* something changed without any
+    diffing. What changed is a separate question, and `preview_sync` already
+    answers it -- including which people a re-sync would take off the board.
+    """
+    if not plan_id:
+        return None
+    data = _http_get(f"{BASE_URL}/plans/{plan_id}", headers)
+    if not data:
+        return None
+    attrs = (data.get('data') or {}).get('attributes') or {}
+    return (attrs.get('updated_at') or '').strip() or None
+
+
+def record_sync(plan_id: Optional[str], updated_at: Optional[str], profile_id: Optional[str]) -> None:
+    """Remember what was synced, for change detection to compare against."""
+    if not plan_id:
+        return
+    _LAST_SYNC.clear()
+    _LAST_SYNC.update({
+        'plan_id': str(plan_id),
+        'updated_at': updated_at or '',
+        'profile_id': profile_id or '',
+        'at': time.time(),
+    })
+
+
+def last_sync() -> Dict[str, Any]:
+    """What the board last put on screen. Empty before the first sync."""
+    return dict(_LAST_SYNC)
+
+
+def forget_last_sync() -> None:
+    _LAST_SYNC.clear()
+
+
+def _watching_active_plan(pco_cfg: Dict[str, Any]) -> bool:
+    """Whether the board should notice the active plan changing (#140).
+
+    ⛔ Off by default. It costs a request per sync plus a poll, and it exists to
+    support a policy -- notify, or re-sync automatically -- that #120 settled as
+    the operator's to choose rather than the board's to assume.
+    """
+    return (pco_cfg or {}).get('watch_active_plan', False) is True
+
+
+def check_active_plan() -> Dict[str, Any]:
+    """Has the plan on the board changed in Planning Center since it was synced?
+
+    ⚠️ Answers about the plan the board **last synced**, not the plan nearest
+    today. Those differ exactly when somebody syncs early, and the honest
+    question is "is what is on screen still right", not "is there a newer plan".
+
+    ⛔ Reports. Never syncs. Whether a change is applied automatically or waits
+    for an admin is a policy decision made above this, and #120's rule that a
+    sync is the operator's action is only reversed where the operator has asked
+    for it.
+    """
+    remembered = last_sync()
+    if not remembered.get('plan_id'):
+        return {"ok": True, "known": False, "changed": False,
+                "reason": "Nothing has been synced yet this run."}
+
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+
+    current = plan_updated_at(remembered['plan_id'], headers)
+    if current is None:
+        # Could not ask. Not the same as "unchanged", and saying so stops a
+        # dead network reading as a quiet all-clear.
+        return {"ok": False, "known": True, "plan_id": remembered['plan_id'],
+                "error": _fetch_error('Unable to check the plan')}
+
+    was = remembered.get('updated_at') or ''
+    changed = bool(was) and current != was
+    return {
+        "ok": True,
+        "known": True,
+        "changed": changed,
+        "plan_id": remembered['plan_id'],
+        "synced_at": remembered.get('at'),
+        "profile_id": remembered.get('profile_id') or None,
+        "updated_at": current,
+        "previous_updated_at": was or None,
+    }
+
+
 def _get_plan_service_type_id(plan_id: str, headers: Dict[str, str]) -> Optional[int]:
     """Resolve the service_type id for a given plan id by querying the plan resource.
     Uses relationships and included service_type if available.
@@ -1592,6 +1746,13 @@ def resolve_sync(
         "ok": True,
         "plan_id": plan_id,
         "service_type_id": stid,
+        # ⚠️ Captured only when the board is actually watching for changes.
+        # It is one more request on the path an operator is waiting on, and a
+        # board that never asks "has this plan changed" must not pay for the
+        # answer -- the same rule the folder walk follows.
+        "plan_updated_at": (
+            plan_updated_at(plan_id, headers) if _watching_active_plan(pco_cfg) else None
+        ),
         "options": options,
         "category": category,
         "profile": _profile_report(profile, profile_reason),
@@ -1722,6 +1883,13 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
         )
 
     slots_matched = sum(len(entry.get('slots') or []) for entry in resolved)
+
+    # ⚠️ Only a real sync changes what is on the board, so only a real sync
+    # resets what change detection compares against. A preview that recorded
+    # here would make the next check report "no change" about a plan nobody
+    # ever applied.
+    if not dry_run:
+        record_sync(plan_id, resolution.get('plan_updated_at'), profile.get('id'))
 
     return {
         "ok": True,

@@ -797,6 +797,34 @@ class PcoConnectHandler(web.RequestHandler):
         self.write(json.dumps(pco.store_credentials(token, secret, checked)))
 
 
+class PcoScheduleHandler(web.RequestHandler):
+    """Upcoming plans and the rules each will get (#140). Read-only."""
+
+    async def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        try:
+            limit = int(self.get_query_argument('limit', default='10'))
+        except (TypeError, ValueError):
+            limit = 10
+        result = await _run_pco(pco.plan_schedule, max(1, min(limit, 50)))
+        self.write(json.dumps(result))
+
+
+class PcoActivePlanHandler(web.RequestHandler):
+    """Has the plan on the board changed since it was synced? (#140)
+
+    ⛔ Reports only, and never syncs. Whether a change is applied automatically
+    or waits for an admin is the operator's decision, not this endpoint's.
+    """
+
+    async def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        result = await _run_pco(pco.check_active_plan)
+        self.write(json.dumps(result))
+
+
 class PcoNextPlanHandler(web.RequestHandler):
     """Which plan "next upcoming" means right now (#120).
 
@@ -1231,6 +1259,8 @@ def twisted():
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
         (r'/api/pco/next-plan', PcoNextPlanHandler),
+        (r'/api/pco/schedule', PcoScheduleHandler),
+        (r'/api/pco/active-plan', PcoActivePlanHandler),
         (r'/api/pco/connect', PcoConnectHandler),
         (r'/api/pco/people', PcoPeopleHandler),
         (r'/api/pco/teams', PcoTeamsHandler),
