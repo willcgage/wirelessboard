@@ -236,6 +236,16 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}-${{ github.ref_name }}
           path: ${{ matrix.artifact_folder }}
+          # ⛔ These are build intermediates, not the release. The publish job
+          # downloads them minutes later in this same run, and what ships is
+          # attached to the GitHub Release, which is stored separately and is
+          # not Actions storage.
+          #
+          # The default is 90 days, and at ~1.2GB per release that quietly grew
+          # to 44GB across 64 artifacts before anyone looked -- on an account
+          # with a storage limit. Three days is enough to pull a build apart
+          # after a failed publish, which is the only reason to keep one.
+          retention-days: 3
 
   publish:
     name: Publish the release
@@ -381,3 +391,6 @@ jobs:
         with:
           name: wirelessboard-pi-${{ github.ref_name }}
           path: release/pi/wirelessboard-pi-*.tar.gz
+          # Same reasoning as the desktop upload above: a build intermediate,
+          # kept only long enough to inspect after a failure.
+          retention-days: 3
