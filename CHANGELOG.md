@@ -8,7 +8,20 @@
 - _Nothing yet._
 
 ### Fixed
+- _Nothing yet._
+
+## [1.16.2] - 2026-10-11
+A way back out of a hidden top bar, and a round of updates.
+
+Small release with one real fix in it. If you have ever pressed `H` on a tablet and found yourself
+stuck, this is for you; everything else here is maintenance.
+
+### Fixed
 - **Hiding the top bar no longer leaves a touchscreen with no way back.** Pressing `H` hides the Wirelessboard bar, and the bar is the only thing on the board you can click — so on a tablet or phone, with no keyboard to press `H` again, there was nothing left to touch. Worse, the choice is remembered per device, so the board came back that way after a restart and the only fixes were editing the address bar or clearing the browser's stored data. A small button now appears in the bottom corner whenever the bar is hidden, and brings it straight back. It shows up only while the bar is hidden, so a board in normal use looks exactly as it did.
+
+### Changed
+- **Everything under the hood is up to date, including Electron.** Ten dependency updates landed together, taking the project from twenty open security advisories down to two — and the two that remain have no fix available anywhere, sit in a tool that only runs on the build machine, and are not part of the app you install. The desktop runtime moved to Electron 43.5.0, a patch-level step on the same version the venue has been running since 1.11.0.
+- **Release builds no longer hoard disk space.** Each release left about 1.2 GB of intermediate build files on GitHub for ninety days, which had quietly grown to 44 GB. They now expire after three days. Nothing you download is affected — the installers live on the release page, which is storage of a different kind.
 
 ## [1.16.1] - 2026-09-13
 Makes SLX-D usable from the configuration page.
