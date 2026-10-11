@@ -4,6 +4,7 @@ import { postJSON } from './data.js';
 import { resolveSlotType } from './slot-rules.mjs';
 import { discoveryHint } from './discovery-hint.mjs';
 import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from './background-key.mjs';
+import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 
 const noop = () => {};
 
@@ -2537,6 +2538,118 @@ function closePCOView() {
   try { initConfigEditor(true); } catch (_) {}
 }
 
+/**
+ * The groups panel (#114).
+ *
+ * ⭐ Built with createElement rather than innerHTML: these strings are people's
+ * names arriving from PCO and from a hand-edited config.json, and one of them
+ * will eventually contain an apostrophe or an angle bracket.
+ */
+function renderGroupSummary() {
+  const holder = document.getElementById('groups-summary');
+  if (!holder) {
+    return;
+  }
+  holder.innerHTML = '';
+
+  const slots = (micboard.config && micboard.config.slots) || [];
+  const groups = micboard.groups || {};
+  const rows = summariseGroups(groups, slots);
+  const loose = unassignedSlots(groups, slots);
+
+  const names = (list) => list.map(slotLabel).join(', ');
+
+  if (!rows.length) {
+    const empty = document.createElement('p');
+    empty.className = 'text-muted small';
+    empty.textContent = 'No groups yet. Open a group from the bar and press E to put channels in one.';
+    holder.appendChild(empty);
+  }
+
+  rows.forEach((row) => {
+    const card = document.createElement('div');
+    card.className = 'group-row';
+    card.dataset.group = String(row.group);
+
+    const head = document.createElement('div');
+    head.className = 'group-row-head';
+
+    const key = document.createElement('span');
+    key.className = 'group-key';
+    key.textContent = String(row.group);
+    head.appendChild(key);
+
+    // Renaming sends the title alone. That is only safe because update_group
+    // edits the fields a payload carries and leaves the rest -- a rename has
+    // no business knowing the membership it never showed anyone.
+    const title = document.createElement('input');
+    title.type = 'text';
+    title.className = 'form-control form-control-sm group-title';
+    title.value = row.title;
+    title.setAttribute('aria-label', `Name of group ${row.group}`);
+    title.addEventListener('change', () => {
+      const next = title.value.trim();
+      if (!next || next === row.title) {
+        title.value = row.title;
+        return;
+      }
+      postJSON('api/group', { group: row.group, title: next });
+      row.title = next;
+    });
+    head.appendChild(title);
+
+    const count = document.createElement('span');
+    count.className = 'group-count';
+    count.textContent = `${row.count} ch`;
+    head.appendChild(count);
+
+    card.appendChild(head);
+
+    const members = document.createElement('p');
+    members.className = 'group-members';
+    members.textContent = row.count ? names(row.slots) : 'No channels in this group';
+    if (!row.count) members.classList.add('is-empty');
+    card.appendChild(members);
+
+    // A group pointing at a slot that no longer exists. Deleting a slot does
+    // not visit every group, so these accumulate silently.
+    if (row.missing.length) {
+      const stale = document.createElement('p');
+      stale.className = 'group-missing';
+      stale.textContent = `Missing slots: ${row.missing.join(', ')}`;
+      card.appendChild(stale);
+    }
+
+    holder.appendChild(card);
+  });
+
+  // ⭐ The reason this panel exists.
+  const orphans = document.createElement('div');
+  orphans.className = 'group-row group-orphans';
+  const head = document.createElement('div');
+  head.className = 'group-row-head';
+  const label = document.createElement('span');
+  label.className = 'group-title-static';
+  label.textContent = 'In no group';
+  head.appendChild(label);
+  const count = document.createElement('span');
+  count.className = 'group-count';
+  count.textContent = `${loose.length} ch`;
+  head.appendChild(count);
+  orphans.appendChild(head);
+
+  const detail = document.createElement('p');
+  detail.className = 'group-members';
+  if (loose.length) {
+    detail.textContent = names(loose);
+  } else {
+    detail.textContent = 'Every channel is in at least one group.';
+    detail.classList.add('is-empty');
+  }
+  orphans.appendChild(detail);
+  holder.appendChild(orphans);
+}
+
 export function initConfigEditor(force = false) {
   if (micboard && typeof micboard === 'object') {
     micboard.stopLogAutoRefresh = stopLogAutoRefresh;
@@ -2572,6 +2685,8 @@ export function initConfigEditor(force = false) {
 
   ensureConfigHealthBindings();
   loadConfigHealth();
+
+  renderGroupSummary();
 
   // Render slot list (replacement for missing renderSlotList)
   const holder = document.getElementById('editor_holder');

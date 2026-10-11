@@ -1209,6 +1209,19 @@ def get_group_by_number(group_number):
     return None
 
 def update_group(data):
+    """Apply a group change, editing only the fields the payload carries.
+
+    ⛔ Absent means "not editing this", never "clear it" -- the same bargain
+    ``config_mix`` strikes on the slot side, and for the same reason. These
+    three fields are edited from different places: the board's drag-and-drop
+    editor rearranges ``slots``, and a list that only renames a group sends
+    ``title`` alone. Writing all three unconditionally meant the rename had to
+    send back a membership it never showed the operator, and getting that wrong
+    emptied the group.
+
+    A caller that genuinely wants a group emptied sends ``slots: []``, which is
+    present and says so.
+    """
     group_update_list.append(data)
     group = get_group_by_number(data['group'])
     if not group:
@@ -1216,9 +1229,9 @@ def update_group(data):
         group['group'] = data['group']
         config_tree['groups'].append(group)
 
-    group['slots'] = data['slots']
-    group['title'] = data['title']
-    group['hide_charts'] = data['hide_charts']
+    for field in ('slots', 'title', 'hide_charts'):
+        if field in data:
+            group[field] = data[field]
 
     save_current_config()
 

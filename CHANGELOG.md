@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- **The configuration page now shows your groups, and what is in none of them.** A new Groups panel lists every group with its channels and a count, and — the part the board's own editor could never answer — a row for channels that are in no group at all. Those channels are invisible to anyone viewing a group rather than the whole board, and until now nothing told you. Group names can be changed from here too. It also flags a group pointing at a slot that no longer exists, which until now accumulated silently.
 - **The status colour can now fill the whole card or just the text band.** Press `W` in TV mode to switch. The band is the new default; the full card is how the board looked before. Worth trying both on the actual wall — on a card with a photo, the full-card colour is mostly hidden behind the picture, which is why the band exists.
 - **You can now cap how many columns the board uses.** Press `C` in TV mode to cycle between letting the board decide and allowing at most 4, 6, 8, 10 or 12 across. Twelve channels on a wide screen gives you slivers about 155 pixels wide; capping at six makes each card twice that and puts the rest on a second row. It is a ceiling rather than an exact number, so it works alongside the arrangement key rather than overriding it — and nothing is ever hidden: channels that do not fit the width wrap onto another row. Like the other view settings, the choice is remembered on that device and can be set from a link.
 
