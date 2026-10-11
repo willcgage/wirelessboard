@@ -7,6 +7,15 @@ import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from '
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 import {
+  NEXT_PLAN,
+  planLabel,
+  nextPlanOptionLabel,
+  resolvePlanId,
+  syncPlanParam,
+  planDescription,
+  planBlocker,
+} from './plan-choice.mjs';
+import {
   CLEAR_ASSIGNMENT,
   parseSelection,
   assignedSlots,
@@ -16,6 +25,25 @@ import {
 } from './clear-assignments.mjs';
 
 const noop = () => {};
+
+/**
+ * What the server last said "next upcoming" resolves to (#120).
+ *
+ * ⚠️ A cache for labelling and for the lookups that need a concrete id. A sync
+ * never reads it -- see `syncPlanParam`.
+ */
+let nextPlanInfo = null;
+
+/** The select's raw value: a plan id, `NEXT_PLAN`, or ''. */
+function planChoice() {
+  const sel = document.getElementById('pco-plan-select');
+  return sel ? (sel.value || '') : '';
+}
+
+/** The concrete plan id for a lookup, or '' when there is not one yet. */
+function selectedPlanId() {
+  return resolvePlanId(planChoice(), nextPlanInfo);
+}
 
 // Bootstrap text colours for the status lines above the PCO and log panes.
 // Anything unrecognised falls back to text-muted, as the old nested ternaries did.
@@ -3157,7 +3185,7 @@ function renderPcoTeamChoices(teams) {
 
 function loadPcoTeams() {
   const host = document.getElementById('pco-team-choices');
-  const planId = document.getElementById('pco-plan-select')?.value || '';
+  const planId = selectedPlanId();
   const serviceId = document.getElementById('pco-service-type-id')?.value || '';
   if (!host) return;
   if (!planId) {
@@ -3341,14 +3369,14 @@ function handleNotePreview() {
   const cat = (catEl?.value || 'Mic / IEM Assignments').trim();
   const sourceEl = document.getElementById('pco-note-source');
   const source = (sourceEl?.value || 'person').trim() || 'person';
-  const planSel = document.getElementById('pco-plan-select');
-  const planId = planSel ? (planSel.value || '') : '';
+  const planId = selectedPlanId();
   const resultEl = document.getElementById('pco-note-preview-results');
   const btn = document.getElementById('pco-note-preview');
 
-  if (!planId) {
-    if (resultEl) resultEl.innerHTML = '<span class="text-warning">Select a plan, then fetch notes.</span>';
-    appendPcoLog('Select a plan before fetching notes.', 'warn');
+  const blocker = planBlocker(planChoice(), nextPlanInfo);
+  if (blocker) {
+    if (resultEl) resultEl.innerHTML = `<span class="text-warning">${escapeHtml(blocker)}</span>`;
+    appendPcoLog(blocker, 'warn');
     return;
   }
 
@@ -3443,6 +3471,10 @@ function showPCOView() {
   if (planSel) planSel.innerHTML = '<option value="">Select a plan...</option>';
   const loadBtn = document.getElementById('pco-load-people');
   if (loadBtn) loadBtn.disabled = true;
+  // Opening the panel says nothing about which plan is next any more; the
+  // answer is re-fetched with the list rather than carried over from whenever
+  // the panel was last open.
+  nextPlanInfo = null;
   // Step 2 needs the service type list before it is any use.
   loadPcoServiceTypes();
   renderPcoTeamChoices(null);
@@ -3626,12 +3658,15 @@ function handlePcoSync(dryRun = false) {
   const conflictsEl = document.getElementById('pco-conflicts');
   if (conflictsEl) conflictsEl.innerHTML = '';
 
-  const planSel = document.getElementById('pco-plan-select');
-  const selectedPlan = planSel ? (planSel.value || '') : '';
+  const choice = planChoice();
+  // ⛔ On "next upcoming" this sends no plan at all, so the server resolves it
+  // at sync time. Sending the id resolved when the panel was opened would make
+  // a board left up for a week sync last Sunday's plan.
+  const planParam = syncPlanParam(choice);
   const endpoint = dryRun ? 'api/pco/preview' : 'api/pco/sync';
-  const url = selectedPlan ? `${endpoint}?plan=${encodeURIComponent(selectedPlan)}` : endpoint;
+  const url = planParam ? `${endpoint}?plan=${encodeURIComponent(planParam)}` : endpoint;
   const verb = dryRun ? 'Previewing' : 'Syncing';
-  appendPcoLog(`${verb} assignments with PCO ${selectedPlan ? `(plan ${selectedPlan})` : '(auto plan)'}...`);
+  appendPcoLog(`${verb} assignments with PCO (${planDescription(choice, nextPlanInfo)})...`);
 
   fetch(url, { method: 'POST' })
     .then((r) => r.json())
@@ -3732,6 +3767,36 @@ export function bindPcoHandlers() {
   }, { passive: false });
 }
 
+/**
+ * Ask the server which plan is next and relabel the option with its date.
+ *
+ * ⛔ Goes to its own endpoint rather than taking the first row of the plan
+ * list: the list is scoped to the chosen service type, while a sync falls back
+ * to scanning every service type when none is chosen. Offering one plan and
+ * syncing another would be worse than not offering it at all.
+ */
+function refreshNextPlan() {
+  const sel = document.getElementById('pco-plan-select');
+  return fetch(`api/pco/next-plan?_=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((resp) => {
+      nextPlanInfo = resp && typeof resp === 'object' ? resp : null;
+      const opt = sel ? sel.querySelector(`option[value="${NEXT_PLAN}"]`) : null;
+      if (opt) opt.textContent = nextPlanOptionLabel(nextPlanInfo);
+      if (nextPlanInfo && nextPlanInfo.ok) {
+        appendPcoLog(`Next upcoming plan is ${nextPlanInfo.plan_id}${nextPlanInfo.label ? ` (${nextPlanInfo.label})` : ''}.`);
+      } else if (nextPlanInfo && nextPlanInfo.error) {
+        appendPcoLog(`Could not work out the next plan: ${nextPlanInfo.error}`, 'warn');
+      }
+      return nextPlanInfo;
+    })
+    .catch((err) => {
+      nextPlanInfo = { ok: false, error: formatError(err) };
+      appendPcoLog(`Could not work out the next plan: ${formatError(err)}`, 'warn');
+      return nextPlanInfo;
+    });
+}
+
 function refreshPlansList(options = {}) {
   const autoTrigger = !!(options && options.auto);
   const sel = document.getElementById('pco-plan-select');
@@ -3763,6 +3828,9 @@ function refreshPlansList(options = {}) {
     return;
   }
 
+  // ⚠️ Read before the "Loading…" placeholder wipes it, or the operator's
+  // explicit choice is lost on every refresh.
+  const previous = sel ? (sel.value || '') : '';
   if (sel) sel.innerHTML = '<option value="">Loading…</option>';
   // Without a service type the list aggregates every service type in the
   // account, which on a mid-sized church is dozens of unrelated plans.
@@ -3775,19 +3843,29 @@ function refreshPlansList(options = {}) {
       if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'Failed to load plans');
       const plans = resp.plans || [];
       if (sel) {
-        sel.innerHTML = '<option value="">Select a plan…</option>';
+        // ⭐ "Next upcoming" is first and is what the select lands on, because
+        // it is the right answer almost every week. Picking this Sunday's plan
+        // out of a list by hand was the one chore nobody could skip (#120).
+        sel.innerHTML = `<option value="${NEXT_PLAN}">${nextPlanOptionLabel(nextPlanInfo)}</option>`
+          + '<option value="">Select a plan…</option>';
         plans.forEach((p) => {
-          // Scoped to one service type the API omits its name, and most plans
-          // carry no title -- joining only the parts present avoids "Aug 2 — ".
-          const label = [p.service_type_name, p.short_dates || p.dates, p.title]
-            .map((part) => (part || '').trim()).filter((part) => part).join(' — ');
           const opt = document.createElement('option');
           opt.value = p.id || '';
-          opt.textContent = label;
+          opt.textContent = planLabel(p);
           sel.appendChild(opt);
         });
+        // Keep an explicit choice across a refresh; otherwise land on "next".
+        sel.value = previous && previous !== NEXT_PLAN && plans.some((p) => p.id === previous)
+          ? previous
+          : NEXT_PLAN;
       }
       appendPcoLog(`Fetched ${plans.length} plan(s) from PCO.`);
+      return refreshNextPlan().then(() => {
+        // Setting `.value` fires no change event, so the work the operator's
+        // own selection would have triggered has to be done by hand.
+        if (btn) btn.disabled = !selectedPlanId();
+        if (sel && sel.value === NEXT_PLAN && selectedPlanId()) loadPcoTeams();
+      });
     })
     .catch((err) => {
       if (sel) sel.innerHTML = '<option value="">No plans</option>';
@@ -3818,15 +3896,15 @@ function clearLoadedPlanPeople() {
 }
 
 function loadPeopleForSelectedService() {
-  const planSel = document.getElementById('pco-plan-select');
-  const planId = planSel ? (planSel.value || '') : '';
+  const planId = selectedPlanId();
   const summary = document.getElementById('pco-people-summary');
   const tblWrap = document.getElementById('pco-people-table');
   const tbody = document.querySelector('#pco-people-table tbody');
   const assignSummary = document.getElementById('pco-assign-summary');
-  if (!planId) {
-    appendPcoLog('Cannot load people: select a plan first.', 'warn');
-    if (summary) summary.innerHTML = '<span class="text-warning">Select a Plan first.</span>';
+  const blocker = planBlocker(planChoice(), nextPlanInfo);
+  if (blocker) {
+    appendPcoLog(`Cannot load people: ${blocker}`, 'warn');
+    if (summary) summary.innerHTML = `<span class="text-warning">${escapeHtml(blocker)}</span>`;
     return;
   }
   if (summary) summary.textContent = '';
@@ -3980,7 +4058,7 @@ document.addEventListener('change', (e) => {
   if (!t) return;
   if (t.id === 'pco-plan-select') {
     const loadBtn = document.getElementById('pco-load-people');
-    if (loadBtn) loadBtn.disabled = !(t.value);
+    if (loadBtn) loadBtn.disabled = !selectedPlanId();
     // ⛔ Clear what the previous plan left behind before anything else. The
     // people table and the assignment list are not reloaded until the operator
     // presses Load People, so leaving them up means a new plan shows the old
@@ -4141,12 +4219,12 @@ function applyAssignmentsFromSelects() {
   });
 }
 function autoFillAssignmentsFromNotes() {
-  const planSel = document.getElementById('pco-plan-select');
-  const planId = planSel ? (planSel.value || '') : '';
+  const planId = selectedPlanId();
   const assignSummary = document.getElementById('pco-assign-summary');
-  if (!planId) {
-    if (assignSummary) assignSummary.innerHTML = '<span class="text-warning">Select a Plan first.</span>';
-    appendPcoLog('Cannot auto-fill assignments: select a plan first.', 'warn');
+  const blocker = planBlocker(planChoice(), nextPlanInfo);
+  if (blocker) {
+    if (assignSummary) assignSummary.innerHTML = `<span class="text-warning">${escapeHtml(blocker)}</span>`;
+    appendPcoLog(`Cannot auto-fill assignments: ${blocker}`, 'warn');
     return;
   }
   appendPcoLog(`Auto-filling assignments from notes for plan ${planId}...`);
