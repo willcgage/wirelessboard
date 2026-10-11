@@ -2,10 +2,14 @@
 
 ## [Unreleased]
 ### Added
+- **The status colour can now fill the whole card or just the text band.** Press `W` in TV mode to switch. The band is the new default; the full card is how the board looked before. Worth trying both on the actual wall — on a card with a photo, the full-card colour is mostly hidden behind the picture, which is why the band exists.
 - **You can now cap how many columns the board uses.** Press `C` in TV mode to cycle between letting the board decide and allowing at most 4, 6, 8, 10 or 12 across. Twelve channels on a wide screen gives you slivers about 155 pixels wide; capping at six makes each card twice that and puts the rest on a second row. It is a ceiling rather than an exact number, so it works alongside the arrangement key rather than overriding it — and nothing is ever hidden: channels that do not fit the width wrap onto another row. Like the other view settings, the choice is remembered on that device and can be set from a link.
 
 ### Changed
-- _Nothing yet._
+- **The card has been rebuilt so the photo is never covered by text.** The name, position and battery runtime now sit in a band along one edge of the card, and the band carries the channel's status colour. Above it the photograph is left completely alone — no dimming, no tint, nothing printed over a face. The channel's own name moves up into a heading above each card, where it lines up across the board instead of being repeated inside every card.
+- **A channel that needs attention now says so in words.** A small badge in the corner of the card reads "Replace", "Low" or "RX error" next to its symbol, rather than relying on the colour alone — which never worked for anyone who has trouble telling red from amber, and works even less well over a photograph. Healthy channels stay unmarked.
+- **Narrow cards drop what they have no room for.** At twelve across, a card keeps the face, the name and the time remaining and leaves the position out, instead of wrapping "Teaching" into fragments down the side. You choose how many channels to see; the card works out what fits.
+- **`P` now has two settings instead of three.** The text band sits at the bottom of the card or the top. "Middle" is gone: the band is solid, and a solid band across the middle cuts the photograph in half. Boards that had it set to middle move to bottom on their own.
 
 ### Fixed
 - _Nothing yet._

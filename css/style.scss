@@ -465,19 +465,55 @@ canvas.slotgraph {
   // A grid rather than a flex column because that row is the whole point: two
   // items, one at each end, on a line the name spans. `align-content` is what
   // P moves now -- the grid equivalent of the `justify-content` a column used.
+  // ⭐ The column stacks: the device's own name as a header, then the card
+  // (#130). The header is the same string for the life of a service, so it
+  // reads once at the top of the column instead of inside every card, and the
+  // labels line up across the board the way the rack does.
+  .col-sm {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chan-label {
+    flex: none;
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+    padding-bottom: calc(0.15rem * var(--tvmode-scale-clamped));
+  }
+
+  // ⭐ One area, because the text now travels as a block: the band carries the
+  // status colour and `align-content` -- which is what P moves -- pushes it to
+  // the bottom edge or the top. A band across the middle is the placement that
+  // cannot work once it is opaque, which is why `middle` retired with #130.
   .mic_name {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas: "band";
+    align-content: end;
+    justify-items: stretch;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  // The 1.15.0 shape, moved inside the band: two rows, not three. The name gets
+  // a line to itself; the two short tags share the one below it at opposite
+  // ends. The device name used to be the left-hand tag and is now the column
+  // header, so the runtime takes that side of the row -- the figure anyone
+  // glancing at the board actually wants.
+  .mic_name .card-band {
+    grid-area: band;
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       "name name"
-      "slot position";
-    align-content: center;
+      "position runtime";
     justify-items: center;
-    position: relative;
-    overflow: hidden;
-    padding: calc(0.55rem * var(--tvmode-scale-clamped)) 0.6rem calc(0.5rem * var(--tvmode-scale-clamped));
     gap: calc(0.2rem * var(--tvmode-scale-clamped));
-    min-height: 0;
+    padding: calc(0.45rem * var(--tvmode-scale-clamped)) 0.6rem calc(0.5rem * var(--tvmode-scale-clamped));
+    min-width: 0;
   }
 
   .mic_name .name {
@@ -487,16 +523,140 @@ canvas.slotgraph {
   // text-align matters only when one of these is long enough to wrap: the cell
   // is already pushed to its edge, but without this the wrapped lines ragged
   // the wrong way and the pair stops looking like a pair.
-  .mic_name p.device-name {
-    grid-area: slot;
-    justify-self: start;
-    text-align: left;
-  }
-
   .mic_name .mic_id {
     grid-area: position;
+    justify-self: start;
+    text-align: left;
+    // ⛔ Overrides the base rule's absolute positioning: in the band it is a
+    // grid item, and an absolutely positioned one ignores the row it was given.
+    position: static;
+    top: auto;
+  }
+
+  .mic_name .card-runtime {
+    grid-area: runtime;
     justify-self: end;
     text-align: right;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(0.7rem, calc(var(--tvmode-type) * 0.05), calc(3.4rem * var(--tvmode-type-scale)));
+  }
+
+  // ⛔ These two are tags, not prose. The name may wrap -- it is the thing the
+  // board is for -- but a position breaking into "Teac / hing" down the side of
+  // a 123px card is just noise, which is exactly what a one-row-of-twelve board
+  // produced the first time this was rendered.
+  .mic_name .mic_id,
+  .mic_name .card-runtime {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+  }
+
+  // ⭐ What a card shows is decided by the width it was given, not by another
+  // switch for the operator (#130). They chose how many channels to see; the
+  // card works out what still fits. The container query asks the column, so a
+  // narrow board and a wide one get different cards from the same markup.
+  .col-sm {
+    container-type: inline-size;
+  }
+
+  // Narrow: the position goes and the runtime takes the whole row, because
+  // "how long has this pack got" outlives "what are they doing".
+  @container (max-width: 190px) {
+    .mic_name .mic_id {
+      display: none;
+    }
+
+    .mic_name .card-runtime {
+      grid-column: 1 / -1;
+      justify-self: center;
+      text-align: center;
+    }
+  }
+
+  // Narrower still: a face and a name, which is the whole point of the board.
+  @container (max-width: 120px) {
+    .mic_name .card-runtime {
+      display: none;
+    }
+  }
+
+  // ⛔ Colour is never the only signal. A chip with a glyph and a word sits in
+  // the corner of the card, so a critical channel is still a critical channel
+  // to someone who cannot separate the red from the amber -- or who is looking
+  // at a card whose photograph is red anyway.
+  .mic_name .status-chip {
+    position: absolute;
+    top: calc(0.3rem * var(--tvmode-scale-clamped));
+    right: calc(0.3rem * var(--tvmode-scale-clamped));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    max-width: calc(100% - 0.6rem);
+    padding: 0.1rem 0.32rem;
+    border-radius: 0.35rem;
+    background: rgba(0, 0, 0, 0.58);
+    color: var(--color-white);
+    font-size: clamp(0.55rem, calc(var(--tvmode-type) * 0.032), calc(1.6rem * var(--tvmode-type-scale)));
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .mic_name .status-chip .chip-glyph {
+    color: var(--status, var(--color-white));
+  }
+
+  // ⛔ The chip takes the edge the band does not. With both at the top the chip
+  // landed on the band and covered the name -- found by looking at it, which no
+  // assertion about either element on its own would have caught.
+  &.text-top .mic_name .status-chip {
+    top: auto;
+    bottom: calc(0.3rem * var(--tvmode-scale-clamped));
+  }
+
+  // Nothing to say about a channel with no receiver trouble and nobody on it.
+  .mic_name .status-chip:empty,
+  .mic_name .status-chip.is-quiet {
+    display: none;
+  }
+
+  // ---- The wash: band, or the whole card (W) ----------------------------
+  //
+  // `band` gives the status colour to the text block and leaves the photograph
+  // untouched -- the band is opaque, so it covers the picture exactly where the
+  // text is and nowhere else, and the scrim that used to keep text readable
+  // over the photo has nothing left to do.
+  &.wash-band .mic_name .card-band {
+    background: var(--status, var(--color-black));
+    color: var(--status-ink, var(--color-white));
+  }
+
+  &.wash-band .mic_name .card-band .name,
+  &.wash-band .mic_name .card-band .mic_id,
+  &.wash-band .mic_name .card-band .card-runtime {
+    color: inherit;
+    text-shadow: none;
+  }
+
+  &.wash-band .mic_name .mic_id {
+    background: rgba(0, 0, 0, 0.18);
+  }
+
+  &.wash-band .mic_name .slot-media.is-active::after {
+    opacity: 0;
+  }
+
+  // `full` is the board as it was: the colour behind the whole card, the photo
+  // over it, and the scrim doing the work of making text readable.
+  &.wash-full .mic_name .card-band {
+    background: transparent;
   }
 
   // ⭐⭐ The text block was mostly not text. Measured on a 356px card: 100px of
@@ -508,7 +668,8 @@ canvas.slotgraph {
   // asked for. Desk mode still wants its own spacing, hence the .tvmode scope.
   .mic_name .name,
   .mic_name .mic_id,
-  .mic_name p.device-name {
+  .mic_name .card-runtime,
+  .chan-label p.device-name {
     margin-top: 0;
     margin-bottom: 0;
   }
@@ -518,7 +679,7 @@ canvas.slotgraph {
   // around a four-character channel label, and stretching gave it a 372px bar
   // to sit in. `display: inline-block` below was already trying to say this and
   // could not, because align-self outranks it in a flex container.
-  .mic_name p.device-name {
+  .chan-label p.device-name {
     margin-left: 0;
     margin-right: 0;
   }
@@ -542,10 +703,13 @@ canvas.slotgraph {
   // above -- 192px of text block became 106px without changing a font size) and
   // to gather the scrim where the text actually is, instead of dimming the
   // whole picture to light three lines at one edge.
-  &.text-middle .mic_name {
-    align-content: center;
-  }
-
+  // ⛔ `middle` is gone with #130: the band is opaque, and an opaque block
+  // across the centre cuts the photograph in two. The band now sits at one edge
+  // or the other, which is all P chooses.
+  //
+  // ⚠️ And note what this is NOT: the band overlays the picture, it does not
+  // shrink it. 1.14.0 scaled the photo down to sit beside the text and lost a
+  // third of every face; the rule above still stands.
   &.text-top .mic_name {
     align-content: start;
   }
@@ -591,7 +755,11 @@ canvas.slotgraph {
     margin-left: 0;
   }
 
-  .mic_name > :not(.slot-media) {
+  // ⛔ The chip is excluded deliberately. This rule and `.mic_name .status-chip`
+  // have the same specificity, and this one comes later, so without the extra
+  // `:not` it quietly turned the chip's `position: absolute` into `relative` --
+  // which dropped it out of the corner and into the grid, below the band.
+  .mic_name > :not(.slot-media):not(.status-chip) {
     position: relative;
     z-index: 1;
   }
@@ -981,14 +1149,20 @@ canvas.slotgraph {
 /* Background Colors */
 .GOOD{
   background: var(--color-green);
+  --status: var(--color-green);
+  --status-ink: #0B0E13;
 }
 
 .PREV_GOOD{
   background: var(--color-blue);
+  --status: var(--color-blue);
+  --status-ink: #F2F6FA;
 }
 
 .REPLACE {
   background: var(--color-yellow);
+  --status: var(--color-yellow);
+  --status-ink: #0B0E13;
 }
 
 .PREV_REPLACE {
@@ -1003,6 +1177,8 @@ canvas.slotgraph {
 
 .CRITICAL, .PREV_CRITICAL {
   background: var(--color-red);
+  --status: var(--color-red);
+  --status-ink: #FFF4F2;
 }
 
 .PREV_CRITICAL {
@@ -1017,14 +1193,20 @@ canvas.slotgraph {
 
 .UNASSIGNED {
   background: var(--color-black);
+  --status: var(--color-black);
+  --status-ink: var(--color-white);
 }
 
 .TX_COM_ERROR {
   background: var(--color-black);
+  --status: var(--color-black);
+  --status-ink: var(--color-white);
 }
 
 .RX_COM_ERROR {
   background: var(--color-purple);
+  --status: var(--color-purple);
+  --status-ink: #F7EFF3;
 }
 
 .blank {

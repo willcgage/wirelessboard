@@ -759,11 +759,22 @@
              bottom was `p.ext-name`, which printed extended_name -- the same
              string `p.name` already showed, since get_chan_name resolves the
              person from that very field. The device name was nowhere. -->
+        <!-- The device's own name (HH-4, BP-9) is a column header now, not a
+             line inside the card: it is the same string on every row of the
+             board, and aligned across the top it reads once instead of twice a
+             card. #130. -->
+        <div class="chan-label"><p class="device-name"></p></div>
         <div class="mic_name">
           <div class="slot-media" aria-hidden="true"></div>
-          <p class="device-name"></p>
-          <p class="name"></p>
-          <p class="mic_id"></p>
+          <!-- ⛔ Status carries a glyph and a word, never colour alone: red and
+               amber are the two states that matter most and the two hardest to
+               tell apart over a photograph. -->
+          <div class="status-chip"><span class="chip-glyph"></span><span class="chip-word"></span></div>
+          <div class="card-band">
+            <p class="name"></p>
+            <p class="mic_id"></p>
+            <p class="card-runtime"></p>
+          </div>
         </div>
         <div class="electrode"></div>
 

@@ -10,6 +10,7 @@ import {
   isArrangement, isCardShape, isTextPosition, isTypeSize, isEdgePlacement, isTopBarState,
   migrateArrangement, migrateCardShape,
   COLUMN_CHOICES, COLUMNS_AUTO, isColumnChoice, columnCeiling,
+  WASH_STYLES, isWashStyle, migrateTextPosition,
 } from './board-layout.mjs';
 
 const WIDE = { slotCount: 12, maxColumns: 12 };
@@ -133,17 +134,42 @@ test('nextOption cycles and wraps', () => {
   assert.equal(nextOption(CARD_SHAPES, 'tall'), 'auto');
 });
 
-test('text placement cycles through all three and returns to the default', () => {
-  assert.equal(nextOption(TEXT_POSITIONS, 'middle'), 'top');
+test('the text band toggles between the two edges', () => {
+  // ⛔ Was three states until #130. The band carries the status colour and is
+  // opaque, so a band across the middle cuts the photograph in half -- the one
+  // placement that stopped making sense once the text got a solid background.
+  assert.equal(nextOption(TEXT_POSITIONS, 'bottom'), 'top');
   assert.equal(nextOption(TEXT_POSITIONS, 'top'), 'bottom');
-  assert.equal(nextOption(TEXT_POSITIONS, 'bottom'), 'middle');
 });
 
-test('the default text placement is the centred card the board has always had', () => {
+test('the band sits at the bottom by default', () => {
   // First in the list is the default and the value the cycle starts from, which
-  // is the convention the other two controls follow.
-  assert.equal(TEXT_POSITIONS[0], 'middle');
-  assert.equal(TEXT_POSITIONS.length, 3);
+  // is the convention the other controls follow. Bottom, because shading at the
+  // foot of a card is where it least often lands on a face.
+  assert.equal(TEXT_POSITIONS[0], 'bottom');
+  assert.equal(TEXT_POSITIONS.length, 2);
+});
+
+test('a board that remembers `middle` is moved, not reset', () => {
+  // 1.15.0 wrote this value and wall displays have it stored; links carry it
+  // too. Resetting such a board to a default would be a worse greeting than the
+  // near-equivalent placement.
+  assert.equal(migrateTextPosition('middle'), 'bottom');
+  assert.equal(migrateTextPosition('top'), 'top');
+  assert.equal(migrateTextPosition('sideways'), null);
+  assert.equal(migrateTextPosition(undefined), null);
+});
+
+test('the wash has two styles and starts on the band', () => {
+  assert.deepEqual(WASH_STYLES, ['band', 'full']);
+  assert.equal(nextOption(WASH_STYLES, 'band'), 'full');
+  assert.equal(nextOption(WASH_STYLES, 'full'), 'band');
+  for (const style of WASH_STYLES) {
+    assert.ok(isWashStyle(style));
+  }
+  for (const junk of ['', 'tint', null, undefined]) {
+    assert.ok(!isWashStyle(junk));
+  }
 });
 
 test('text size cycles through all three and returns to the default', () => {
@@ -251,9 +277,15 @@ test('the slot and the position share one row, at opposite ends', () => {
     'utf8',
   );
 
-  const areas = scss.split('grid-template-areas:')[1].split(';')[0];
+  // ⚠️ Scan for the band's own area list rather than the first one in the file:
+  // `.mic_name` has a single-area grid of its own since #130.
+  const areas = scss.split('.mic_name .card-band {')[1].split('}')[0];
   assert.match(areas, /"name name"/, 'the name should span the row above');
-  assert.match(areas, /"slot position"/, 'slot and position should share one row');
+  assert.match(
+    areas,
+    /"position runtime"/,
+    'the position and the runtime should share one row',
+  );
 
   // These selectors each appear more than once, so scan the blocks rather than
   // assuming the first one is the placement rule.
@@ -261,13 +293,17 @@ test('the slot and the position share one row, at opposite ends', () => {
     .split(selector).slice(1)
     .some((chunk) => pattern.test(chunk.split('}')[0]));
 
+  // ⛔ The device name is a column header now (#130), not the left-hand tag:
+  // it is the same string on every row of the board, so it reads once above the
+  // card instead of inside it. The position took its place, and the runtime --
+  // the figure anyone glancing at the board actually wants -- took the end.
   assert.ok(
-    declares('.mic_name p.device-name {', /justify-self:\s*start/),
-    'the slot label should sit at the start of its row',
+    declares('.mic_name .mic_id {', /justify-self:\s*start/),
+    'the position should sit at the start of its row',
   );
   assert.ok(
-    declares('.mic_name .mic_id {', /justify-self:\s*end/),
-    'the position should sit at the end of its row',
+    declares('.mic_name .card-runtime {', /justify-self:\s*end/),
+    'the runtime should sit at the end of its row',
   );
 });
 
@@ -315,11 +351,13 @@ test('every text placement has a stylesheet rule to act on', () => {
 test('the validators accept exactly the supported values', () => {
   ['fit', 'row', 'column', 'grid'].forEach((v) => assert.ok(isArrangement(v), v));
   ['auto', 'wide', 'tall'].forEach((v) => assert.ok(isCardShape(v), v));
-  ['middle', 'top', 'bottom'].forEach((v) => assert.ok(isTextPosition(v), v));
+  ['top', 'bottom'].forEach((v) => assert.ok(isTextPosition(v), v));
 
   // This one reaches a CSS class name straight off a link, so it has to refuse
-  // anything it does not recognise rather than pass it through.
-  ['centre', 'center', 'middle ', '', null, undefined, 'top; }'].forEach((v) => {
+  // anything it does not recognise rather than pass it through. `middle` is in
+  // this list as of #130: it is no longer valid on its own and has to come
+  // through migrateTextPosition.
+  ['centre', 'center', 'middle', 'middle ', '', null, undefined, 'top; }'].forEach((v) => {
     assert.equal(isTextPosition(v), false, String(v));
   });
 

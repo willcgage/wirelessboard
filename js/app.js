@@ -18,11 +18,12 @@ import {
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
   isArrangement, isCardShape, isTextPosition, isTypeSize, isTopBarState, isColumnChoice,
-  migrateArrangement, migrateCardShape,
+  isWashStyle, migrateArrangement, migrateCardShape, migrateTextPosition,
 } from './board-layout.mjs';
 import {
   resolvePref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
+  WASH_KEY,
 } from './view-prefs.mjs';
 
 import '../css/colors.scss';
@@ -42,10 +43,11 @@ micboard.displayMode = 'deskmode';
 // Resolved properly in readURLParameters once the hash and storage are known.
 micboard.arrangement = 'fit';
 micboard.cardShape = 'auto';
-micboard.textPosition = 'middle';
+micboard.textPosition = 'bottom';
 micboard.typeSize = 'medium';
 micboard.topBar = 'shown';
 micboard.columns = 'auto';
+micboard.wash = 'band';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -421,6 +423,7 @@ function readURLParameters() {
   micboard.url.type = getUrlParameter('type');
   micboard.url.topbar = getUrlParameter('topbar');
   micboard.url.columns = getUrlParameter('columns');
+  micboard.url.wash = getUrlParameter('wash');
 
   // hash beats what the device remembers, which beats the default. A wall
   // display that has just come back from a power cut has no hash and nobody
@@ -443,14 +446,15 @@ function readURLParameters() {
     migrate: migrateCardShape,
     fallback: 'auto',
   });
-  // No migrate: this preference is new, so there is no older vocabulary that
-  // could be sitting in storage or in a link somebody was handed.
+  // ⛔ `middle` retired in #130 and boards have it stored, so this one migrates
+  // now: a remembered `middle` becomes `bottom` rather than silently resetting.
   micboard.textPosition = resolvePref({
     hashValue: micboard.url.text,
     storage,
     key: TEXT_POSITION_KEY,
     isValid: isTextPosition,
-    fallback: 'middle',
+    migrate: migrateTextPosition,
+    fallback: 'bottom',
   });
   micboard.typeSize = resolvePref({
     hashValue: micboard.url.type,
@@ -472,6 +476,13 @@ function readURLParameters() {
     key: COLUMNS_KEY,
     isValid: isColumnChoice,
     fallback: 'auto',
+  });
+  micboard.wash = resolvePref({
+    hashValue: micboard.url.wash,
+    storage,
+    key: WASH_KEY,
+    isValid: isWashStyle,
+    fallback: 'band',
   });
 
   if (micboard.url.settings === 'logs') {
@@ -504,11 +515,14 @@ export function updateHash() {
   if (micboard.cardShape && micboard.cardShape !== 'auto') {
     hash += `&aspect=${micboard.cardShape}`;
   }
-  if (micboard.textPosition && micboard.textPosition !== 'middle') {
+  if (micboard.textPosition && micboard.textPosition !== 'bottom') {
     hash += `&text=${micboard.textPosition}`;
   }
   if (micboard.typeSize && micboard.typeSize !== 'medium') {
     hash += `&type=${micboard.typeSize}`;
+  }
+  if (micboard.wash && micboard.wash !== 'band') {
+    hash += `&wash=${micboard.wash}`;
   }
   if (micboard.columns && micboard.columns !== 'auto') {
     hash += `&columns=${micboard.columns}`;

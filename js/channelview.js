@@ -58,6 +58,53 @@ function updateTXOffset(slotSelector, data) {
 
 function updateRuntime(slotSelector, data) {
   slotSelector.querySelector('p.runtime').innerHTML = data.runtime;
+
+  // The same figure on the card itself (#130). The drawer keeps its copy: it is
+  // the detail view, and it is what a desk-mode board shows.
+  const onCard = slotSelector.querySelector('p.card-runtime');
+  if (onCard) {
+    onCard.textContent = data.runtime || '';
+  }
+}
+
+/**
+ * The status chip: a glyph, a word, and the colour (#130).
+ *
+ * ⛔ Three signals for one state on purpose. The board is read at a glance from
+ * a few feet away, often over a photograph, and "the card went red" is no use
+ * to someone who cannot separate red from amber -- or to anyone whose photo is
+ * red already.
+ *
+ * ⚠️ The vocabulary is the card's, not the protocol's: an operator wants to
+ * know whether to go and swap a pack, not which enum the receiver reported.
+ */
+const STATUS_CHIP = {
+  GOOD: null,
+  PREV_GOOD: null,
+  REPLACE: { glyph: '▲', word: 'Replace' },
+  PREV_REPLACE: { glyph: '▲', word: 'Replace' },
+  CRITICAL: { glyph: '■', word: 'Low' },
+  PREV_CRITICAL: { glyph: '■', word: 'Low' },
+  AUDIO_PEAK: { glyph: '●', word: 'Peak' },
+  RX_COM_ERROR: { glyph: '✕', word: 'RX error' },
+  TX_COM_ERROR: { glyph: '○', word: 'No TX' },
+  UNASSIGNED: null,
+};
+
+function updateStatusChip(slotSelector, data) {
+  const chip = slotSelector.querySelector('.status-chip');
+  if (!chip) {
+    return;
+  }
+  const shown = STATUS_CHIP[data.status];
+  const glyph = chip.querySelector('.chip-glyph');
+  const word = chip.querySelector('.chip-word');
+
+  // A chip for every state would be a row of badges saying nothing. Only the
+  // states worth walking across a room for get one.
+  chip.classList.toggle('is-quiet', !shown);
+  if (glyph) glyph.textContent = shown ? shown.glyph : '';
+  if (word) word.textContent = shown ? shown.word : '';
 }
 
 function updatePowerlock(slotSelector, data) {
@@ -123,6 +170,8 @@ function updateDeviceName(slotSelector, data) {
 function updateStatus(slotSelector, data) {
   slotSelector.querySelector('div.mic_name').className = 'mic_name';
   slotSelector.querySelector('div.mic_name').classList.add(data.status);
+
+  updateStatusChip(slotSelector, data);
 
   slotSelector.querySelector('div.electrode').className = 'electrode';
   slotSelector.querySelector('div.electrode').classList.add(data.status);
