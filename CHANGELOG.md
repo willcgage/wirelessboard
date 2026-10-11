@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **You can now cap how many columns the board uses.** Press `C` in TV mode to cycle between letting the board decide and allowing at most 4, 6, 8, 10 or 12 across. Twelve channels on a wide screen gives you slivers about 155 pixels wide; capping at six makes each card twice that and puts the rest on a second row. It is a ceiling rather than an exact number, so it works alongside the arrangement key rather than overriding it — and nothing is ever hidden: channels that do not fit the width wrap onto another row. Like the other view settings, the choice is remembered on that device and can be set from a link.
 
 ### Changed
 - _Nothing yet._
