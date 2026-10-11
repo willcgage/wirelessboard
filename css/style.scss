@@ -1934,3 +1934,78 @@ a:link, a:visited, a:hover, a:active {
   font-style: italic;
   margin-bottom: 0px;
 }
+
+/* The groups panel in the config view (#114).
+
+   Plain and dense on purpose: it is a list someone reads before a service to
+   answer "who is in Worship" and "is anything in no group", not a thing to
+   look at. */
+.groups-summary .group-row {
+  border: 1px solid rgba(97, 97, 97, 0.35);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.groups-summary .group-row-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.groups-summary .group-key {
+  flex: none;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.25rem;
+  background: rgba(0, 100, 148, 0.12);
+  color: var(--color-blue);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.groups-summary .group-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.groups-summary .group-title-static {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.groups-summary .group-count {
+  flex: none;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.groups-summary .group-members {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.groups-summary .group-members.is-empty {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* ⚠️ A group pointing at a slot that no longer exists. Deleting a slot does not
+   visit every group, so these accumulate quietly -- the whole point of showing
+   them is that nothing else does. */
+.groups-summary .group-missing {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-yellow);
+}
+
+.groups-summary .group-orphans {
+  border-style: dashed;
+}
