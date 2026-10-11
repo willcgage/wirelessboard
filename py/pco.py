@@ -537,6 +537,100 @@ def list_plans_for_service(service_type_value) -> Dict[str, Any]:
     return {"ok": True, "plans": plans}
 
 
+PEOPLE_BASE_URL = 'https://api.planningcenteronline.com/people/v2'
+
+
+def verify_credentials(token: str, secret: str) -> Dict[str, Any]:
+    """Do these credentials work for what this board actually does? (#120)
+
+    ⭐ Asks for a service type rather than "who are you". A Personal Access
+    Token can authenticate perfectly and still have no access to Services, and
+    a board that reports "Connected" on such a token has told the operator the
+    opposite of the truth. Listing one service type is the smallest call that
+    exercises the permission every other call here depends on.
+    """
+    if not token or not secret:
+        return {"ok": False, "error": "Enter both the Personal Access Token and its secret."}
+
+    headers = {'Authorization': _basic_auth_header(token, secret)}
+    data = _http_get(f"{BASE_URL}/service_types", headers, params={"per_page": 1})
+    if data is None:
+        return {"ok": False, "error": _fetch_error('Unable to reach Planning Center')}
+
+    service_types = data.get('data') or []
+    if not service_types:
+        # Authenticated, authorised, and nothing to read. Worth saying, because
+        # every later step will come back empty and look like a bug.
+        return {
+            "ok": True,
+            "who": _connected_as(headers),
+            "service_types": 0,
+            "warning": "Connected, but this account can see no service types in Services.",
+        }
+
+    return {
+        "ok": True,
+        "who": _connected_as(headers),
+        "service_types": len(service_types),
+    }
+
+
+def _connected_as(headers: Dict[str, str]) -> str:
+    """A name for the account, or '' when it cannot be had.
+
+    ⚠️ Never fatal. The People API is a different product from Services and a
+    Services-only token is refused by it, so a board that failed Connect over a
+    missing display name would reject credentials that work perfectly.
+    """
+    data = _http_get(f"{PEOPLE_BASE_URL}/me", headers)
+    if not data:
+        return ''
+    attrs = (data.get('data') or {}).get('attributes') or {}
+    return (attrs.get('name') or '').strip()
+
+
+def store_credentials(token: str, secret: str, checked: Dict[str, Any]) -> Dict[str, Any]:
+    """Put verified credentials in the keyring. Call only after `verify_credentials`.
+
+    ⛔ Writes config.json, so this belongs on the IOLoop beside every other
+    writer of that file -- see `PcoConnectHandler` for the split, and
+    `PcoSyncHandler` for why it exists at all. The network half is
+    `verify_credentials`, which writes nothing and runs on a worker.
+
+    ⛔ The order matters as much as the thread. Storing first and checking
+    afterwards is what made the old flow save → fetch → find out it was wrong →
+    save again, and it leaves a bad token in the keyring looking like a good one.
+    """
+    token = (token or '').strip()
+    secret = (secret or '').strip()
+
+    if not checked.get('ok'):
+        return checked
+
+    try:
+        # ⛔ Stores the credentials and nothing else. `enabled` is the admin's
+        # switch: if they turned it on it stays on, if they turned it off it
+        # stays off, and a save is what changes it. Connecting is not consent
+        # to enable -- an admin may well be re-storing a token on a board they
+        # have deliberately taken out of service.
+        #
+        # ⚠️ `update_pco_config` merges, so leaving the key out preserves
+        # whatever is there. Do not "helpfully" add `enabled` back.
+        config.update_pco_config({'auth': {'token': token, 'secret': secret}})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('Storing PCO credentials failed: %s', exc)
+        return {"ok": False, "error": f'Credentials are valid but could not be stored: {exc}'}
+
+    who = checked.get('who') or ''
+    logger.info('PCO credentials verified and stored%s', f' for {who}' if who else '')
+    return {
+        "ok": True,
+        "who": who,
+        "service_types": checked.get('service_types', 0),
+        "warning": checked.get('warning'),
+    }
+
+
 def _plan_label(attrs: Dict[str, Any]) -> str:
     """One line naming a plan, from whichever of its fields PCO filled in.
 

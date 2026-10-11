@@ -286,6 +286,20 @@
                 <input type="password" class="form-control" id="pco-secret" name="pco-secret" placeholder="PCO Personal Access Secret" autocomplete="off">
               </div>
             </div>
+            <!-- Its own action, not part of the form's Save (#120). Connecting
+                 checks the credentials against Planning Center *before* storing
+                 them, which is what makes the rest of the panel usable without
+                 the old save → fetch → find out it was wrong → save again. -->
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <button type="button" id="pco-connect" class="btn btn-primary">Connect</button>
+              <span id="pco-connect-status" class="small"></span>
+            </div>
+            <div class="form-text">
+              Checks the token and secret against Planning Center, then stores them in this
+              computer&rsquo;s system keyring &mdash; never in <code>config.json</code>, which is why
+              a token entered on another machine does not carry across. Connecting does not change
+              Enable PCO &mdash; that stays as you set it, and a save is what changes it.
+            </div>
 
             <h5 class="pco-step-heading mt-4">2 &middot; Choose the plan</h5>
             <div class="row g-2 align-items-end">

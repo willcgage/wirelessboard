@@ -760,6 +760,40 @@ class PcoPlansHandler(web.RequestHandler):
         self.write(json.dumps(result))
 
 
+class PcoConnectHandler(web.RequestHandler):
+    """Verify a token and secret, then store them (#120).
+
+    ⛔ Two phases for the same reason `PcoSyncHandler` has three: the check is
+    several seconds of HTTP and must leave the IOLoop, while storing writes
+    config.json and must not. Do not collapse them.
+
+    ⚠️ The credentials arrive in the body, never the query string -- a URL ends
+    up in logs, in history and in the referrer of anything the page loads next.
+    """
+
+    async def post(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        try:
+            body = json.loads(self.request.body.decode('utf-8') or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write('{"ok": false, "error": "Invalid JSON body"}')
+            return
+
+        token = str((body or {}).get('token') or '')
+        secret = str((body or {}).get('secret') or '')
+
+        # Off the loop: every HTTP call, no writes.
+        checked = await _run_pco(pco.verify_credentials, token, secret)
+        if not checked.get('ok'):
+            self.write(json.dumps(checked))
+            return
+
+        # On the loop: writes config.json, serialized with every other writer.
+        self.write(json.dumps(pco.store_credentials(token, secret, checked)))
+
+
 class PcoNextPlanHandler(web.RequestHandler):
     """Which plan "next upcoming" means right now (#120).
 
@@ -1194,6 +1228,7 @@ def twisted():
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
         (r'/api/pco/next-plan', PcoNextPlanHandler),
+        (r'/api/pco/connect', PcoConnectHandler),
         (r'/api/pco/people', PcoPeopleHandler),
         (r'/api/pco/teams', PcoTeamsHandler),
         (r'/api/pco/notes', PcoNotesHandler),
