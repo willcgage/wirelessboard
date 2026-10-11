@@ -44,7 +44,10 @@ test('something listens to it', () => {
   // The dead-ids suite proves an id exists somewhere; this proves this one is
   // wired. An escape hatch that does nothing is the same dead end with a button.
   assert.match(appjs, /topbar-restore/, 'nothing in app.js binds the escape control');
-  assert.match(appjs, /showTopBar\(\)/, 'the handler must restore the bar');
+  // ⭐ It used to restore the bar directly. Since #111 it opens the view panel,
+  // which carries the switch for the bar along with every other view
+  // preference -- a strictly larger way out of the same dead end.
+  assert.match(appjs, /toggleViewPanel\(\)/, 'the handler must open the view panel');
 });
 
 test('hiding the bar does not hide the way back', () => {
@@ -55,16 +58,20 @@ test('hiding the bar does not hide the way back', () => {
   );
 });
 
-test('the control appears exactly when the bar is hidden', () => {
+test('the control is always on screen', () => {
+  // ⛔ Inverted by #111, deliberately. While it only restored the bar it had no
+  // business existing when the bar was visible; now it opens the view panel,
+  // which is worth reaching whatever the bar is doing -- and a control that is
+  // always there cannot be reasoned into disappearing on the one display that
+  // needs it.
   assert.match(
     css,
-    /\.topbar-restore\s*\{[^}]*display:\s*none/i,
-    'the control should stay out of the way while the bar is visible',
+    /\.topbar-restore\s*\{[^}]*position:\s*fixed/i,
+    'the control should be pinned to the screen',
   );
-  assert.match(
-    css,
-    /body\.topbar-hidden\s+\.topbar-restore\s*\{[^}]*display:\s*(?!none)[a-z-]+/i,
-    'nothing makes the control visible when the bar is hidden',
+  assert.ok(
+    !/\.topbar-restore\s*\{[^}]*display:\s*none/i.test(css),
+    'the control must not start hidden',
   );
 });
 

@@ -32,4 +32,28 @@ export function deviceLabel(nameRaw) {
   return trimmed;
 }
 
+/**
+ * The column heading: which handheld or bodypack this is (#130).
+ *
+ * ⭐ Someone walking up to the rack needs to know which piece of equipment to
+ * pick up, and that is the only job of this line. It takes `device_id` — the
+ * hardware's own identifier, parsed from the channel label by the server, with
+ * any person's name already stripped off. ⛔ Not `name_raw`: receivers are
+ * conventionally labelled "HH-1 Dave", so the raw label carries the person too,
+ * and printing it put their name on the board twice.
+ *
+ * The fallback is the slot's own number, because a column with no heading at
+ * all is worse than one that says "Slot 7" — the slot number is on the board,
+ * and it is still true when a receiver has not reported its channel name yet.
+ * It never falls back to the person: that is the conflation #57 was about.
+ */
+export function deviceHeading(deviceId, slot) {
+  const id = typeof deviceId === 'string' ? deviceId.trim() : '';
+  if (id && !PLACEHOLDER.test(id)) {
+    return id;
+  }
+  const number = Number(slot);
+  return Number.isFinite(number) && number > 0 ? `Slot ${number}` : '';
+}
+
 export default deviceLabel;

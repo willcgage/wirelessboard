@@ -85,7 +85,7 @@ function bindingTable() {
       // words -- fit to page, landscape, portrait -- differing only by the noun
       // in front, which read as one control listed twice (#75).
       keys: ['o'],
-      hud: 'Arrangement: fit to page, one row, one column, balanced grid (TV mode).',
+      hud: 'Arrangement: fit, side by side, stacked, grid (TV mode).',
       run: () => cycleArrangement(),
     },
     {

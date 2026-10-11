@@ -167,6 +167,7 @@ class WirelessMic(ChannelDevice):
             'battery':self.battery, 'tx_offset': self.tx_offset, 'quality': self.quality,
             'status': self.tx_state(), 'slot': self.slot, 'raw': self.raw,
             'type': self.rx.type, 'name_raw' : self.chan_name_raw,
+            'device_id': self.device_id(),
             'power_lock': self.power_lock, 'runtime' : self.runtime
         }
 

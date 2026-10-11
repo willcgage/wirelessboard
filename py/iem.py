@@ -76,7 +76,8 @@ class IEM(ChannelDevice):
             'id': name[0], 'name': name[1], 'channel': self.channel, 'status': self.ch_state(),
             'audio_level_l' : self.audio_level_l, 'audio_level_r' : self.audio_level_r,
             'frequency': self.frequency, 'slot': self.slot, 'raw': self.raw,
-            'type': self.rx.type, 'name_raw' : self.chan_name_raw
+            'type': self.rx.type, 'name_raw' : self.chan_name_raw,
+            'device_id': self.device_id()
         }
 
     def ch_json_mini(self):
