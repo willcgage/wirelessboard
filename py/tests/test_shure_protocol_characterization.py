@@ -361,7 +361,11 @@ def test_channel_json_keys():
     assert set(mic('ulxd').ch_json()) == {
         'id', 'name', 'channel', 'antenna', 'audio_level', 'rf_level',
         'frequency', 'battery', 'tx_offset', 'quality', 'status', 'slot',
-        'raw', 'type', 'name_raw', 'power_lock', 'runtime',
+        'raw', 'type', 'name_raw', 'device_id', 'power_lock', 'runtime',
+        # `device_id` joined the contract with #130: the equipment's own
+        # identifier, with any person's name stripped off. `name_raw` keeps the
+        # receiver's label whole, because the backgrounds and the re-patch
+        # check both read it -- this is an addition, not a replacement.
     }
 
 

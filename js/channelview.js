@@ -3,7 +3,7 @@ import { updateBackground } from './gif.js';
 import { initChart, charts } from './chart-smoothie.js';
 import { seedTransmitters, autoRandom } from './demodata.js';
 import { updateEditor } from './dnd.js';
-import { deviceLabel } from './device-label.mjs';
+import { deviceHeading } from './device-label.mjs';
 
 function allSlots() {
   const slot = micboard.config.slots;
@@ -163,7 +163,10 @@ function updateName(slotSelector, data) {
 function updateDeviceName(slotSelector, data) {
   const el = slotSelector.querySelector('p.device-name');
   if (el) {
-    el.textContent = deviceLabel(data && data.name_raw);
+    // ⭐ The column heading answers one question: which handheld or bodypack is
+    // this? So it takes the hardware's own id, never the raw channel label --
+    // "HH-1 Dave" carries the person's name, who is already named on the card.
+    el.textContent = deviceHeading(data && data.device_id, data && data.slot);
   }
 }
 

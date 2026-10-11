@@ -27,7 +27,12 @@ class OfflineDevice:
             'type': 'offline',
             'status': 'UNASSIGNED',
             'slot': self.slot,
-            'name_raw' : name[0] + ' ' + name[1],
+            # ⛔ No device, so no device name. This used to synthesise one from
+            # the position and the person -- "Teaching Dave R." -- which put the
+            # person's name on the board a second time, on the line that is
+            # supposed to say which handheld to pick up.
+            'name_raw' : '',
+            'device_id': '',
             'frequency': '000000'
         }
 

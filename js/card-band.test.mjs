@@ -105,6 +105,18 @@ test('⛔ the band overlays the photo and never shrinks it', () => {
   );
 });
 
+test('⛔ the heading names the equipment, not the person', () => {
+  // The board carries the person's name on the card. A heading taken from the
+  // raw channel label ("HH-1 Dave") printed it a second time and buried the one
+  // thing the heading is for: which handheld or bodypack to pick up.
+  assert.match(view, /deviceHeading\(/, 'the heading should use the equipment id');
+  assert.ok(
+    !/device-name'\)[\s\S]{0,200}deviceLabel\(/.test(view),
+    'the heading must not be built from the raw channel label any more',
+  );
+  assert.match(view, /data\.device_id/, 'and the id has to come from the server, not be re-parsed here');
+});
+
 test('the device name became a column header', () => {
   assert.match(markup, /class="chan-label"/, 'the column needs a label row');
   const label = markup.split('<div class="chan-label">')[1].split('</div>')[0];

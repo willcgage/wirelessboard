@@ -33,6 +33,36 @@ class ChannelDevice:
         chan_name = chan_name.replace('_', ' ')
         self.chan_name_raw = chan_name
 
+    def device_id(self):
+        """The hardware's own identifier -- which handheld or bodypack this is.
+
+        ⭐ The piece of `chan_name_raw` that names the *equipment*, with any
+        person's name stripped off. Receivers are conventionally labelled
+        "HH-1 Dave" or "BP-9", so the raw label carries both; printing the whole
+        thing put the person's name on the board twice over and buried the one
+        thing somebody walking up to the rack actually needs.
+
+        ⛔ Derived here rather than in the browser. `get_chan_name` already
+        parses this exact prefix, and two places deriving one value from one
+        string is the fault #57 was about.
+
+        Empty while the channel still reports its placeholder: nothing has told
+        us what the hardware is called, and a made-up label is worse than none.
+        """
+        raw = (self.chan_name_raw or '').strip()
+        if not raw or raw.startswith('SLOT '):
+            return ''
+
+        first = raw.split()[0]
+        if re.match("([A-Za-z]+)?([-]?)([0-9])+", first):
+            return first
+        # Two-word IEM labels ("IEM 1") are an identifier in two pieces.
+        parts = raw.split()
+        if first == 'IEM' and len(parts) > 1 and len(parts[1]) == 1:
+            return ' '.join(parts[:2])
+        # No number in it at all: the whole label is the name of the thing.
+        return raw
+
     def get_chan_name(self):
         name = self.chan_name_raw.split()
         prefix = re.match("([A-Za-z]+)?([-]?)([0-9])+", name[0])
