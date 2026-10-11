@@ -608,15 +608,15 @@ def store_credentials(token: str, secret: str, checked: Dict[str, Any]) -> Dict[
         return checked
 
     try:
-        # ⭐ Turns the integration on as well. Pressing Connect is an explicit
-        # statement that PCO should work; leaving `enabled` false would mean an
-        # operator who just connected still had to tick a box and Save before
-        # anything would load, which is the friction #120 is about. One tick
-        # and a Save undoes it.
-        config.update_pco_config({
-            'enabled': True,
-            'auth': {'token': token, 'secret': secret},
-        })
+        # ⛔ Stores the credentials and nothing else. `enabled` is the admin's
+        # switch: if they turned it on it stays on, if they turned it off it
+        # stays off, and a save is what changes it. Connecting is not consent
+        # to enable -- an admin may well be re-storing a token on a board they
+        # have deliberately taken out of service.
+        #
+        # ⚠️ `update_pco_config` merges, so leaving the key out preserves
+        # whatever is there. Do not "helpfully" add `enabled` back.
+        config.update_pco_config({'auth': {'token': token, 'secret': secret}})
     except Exception as exc:  # noqa: BLE001
         logger.warning('Storing PCO credentials failed: %s', exc)
         return {"ok": False, "error": f'Credentials are valid but could not be stored: {exc}'}

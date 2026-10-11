@@ -3879,7 +3879,8 @@ function handlePcoConnect() {
     .then((r) => r.json())
     .then((resp) => {
       lastConnect = resp && typeof resp === 'object' ? resp : null;
-      const summary = connectSummary(resp);
+      const enabled = !!document.getElementById('pco-enabled')?.checked;
+      const summary = connectSummary(resp, { enabled });
       setConnectStatus(summary.text, summary.level);
       appendPcoLog(summary.text, summary.level === 'ok' ? 'info' : summary.level);
 
@@ -3891,12 +3892,10 @@ function handlePcoConnect() {
         if (secretEl) secretEl.value = '';
         if (micboard.config && micboard.config.pco) {
           micboard.config.pco.auth = { ...(micboard.config.pco.auth || {}), has_credentials: true };
-          micboard.config.pco.enabled = true;
         }
-        // Connecting turns the integration on server-side, so the checkbox has
-        // to agree -- otherwise a later Save would quietly switch it back off.
-        const enabledEl = document.getElementById('pco-enabled');
-        if (enabledEl) enabledEl.checked = true;
+        // ⛔ Does not touch `pco-enabled`. That switch is the admin's: on stays
+        // on, off stays off, and a save is what changes it. Connecting is not
+        // consent to enable -- a board may be deliberately out of service.
         applyConnectedState();
         refreshPlansList({ auto: true });
       }

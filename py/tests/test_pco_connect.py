@@ -150,16 +150,17 @@ class TestStore:
         result = pco.store_credentials('tok', 'sec', {'ok': True, 'who': 'Will Gage'})
 
         assert result['ok'] is True
-        assert stored == [{'enabled': True, 'auth': {'token': 'tok', 'secret': 'sec'}}]
+        assert stored == [{'auth': {'token': 'tok', 'secret': 'sec'}}]
 
-    def test_connecting_turns_the_integration_on(self, stored):
-        # ⭐ Pressing Connect is an explicit statement that PCO should work.
-        # Leaving `enabled` false would mean an operator who just connected
-        # still had to tick a box and Save before anything loaded -- the
-        # friction #120 exists to remove.
+    def test_connecting_does_not_touch_the_enabled_switch(self, stored):
+        # ⛔ `enabled` is the admin's: on stays on, off stays off, and a save is
+        # what changes it. Connecting is not consent to enable -- an admin may
+        # be re-storing a token on a board deliberately out of service.
+        # `update_pco_config` merges, so leaving the key out preserves it.
         pco.store_credentials('tok', 'sec', {'ok': True})
 
-        assert stored[0]['enabled'] is True
+        assert 'enabled' not in stored[0]
+        assert list(stored[0]) == ['auth']
 
     def test_a_failed_check_stores_nothing_and_is_passed_through(self, stored):
         checked = {'ok': False, 'error': 'Planning Center rejected these credentials (401)'}

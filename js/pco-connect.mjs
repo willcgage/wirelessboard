@@ -34,7 +34,7 @@ export function connectBlocker(token, secret) {
  * Levels map to the panel's existing status classes, so a warning reads as a
  * warning rather than as a success with small print.
  */
-export function connectSummary(resp) {
+export function connectSummary(resp, { enabled = true } = {}) {
   if (!resp || typeof resp !== 'object') {
     return { level: 'error', text: 'No answer from the board.' };
   }
@@ -52,10 +52,16 @@ export function connectSummary(resp) {
   // it. "Connected." on its own is the honest answer in that case, not a
   // degraded one.
   const who = (resp.who || '').trim();
-  return {
-    level: 'ok',
-    text: who ? `Connected as ${who}.` : 'Connected.',
-  };
+  const connected = who ? `Connected as ${who}.` : 'Connected.';
+
+  // ⛔ Says what is left rather than doing it. Enable PCO is the admin's
+  // switch, and connecting is not consent to flip it -- a board may be
+  // deliberately out of service. Pointing at the next step keeps that honest
+  // without leaving anyone guessing why nothing loads.
+  if (!enabled) {
+    return { level: 'warn', text: `${connected} Tick Enable PCO and save to start using it.` };
+  }
+  return { level: 'ok', text: connected };
 }
 
 /**
