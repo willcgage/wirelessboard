@@ -161,7 +161,7 @@ class SyncSplitsAcrossTheLoop(AsyncHTTPTestCase):
             seen['begin'] = threading.current_thread().name
             return {"ok": True, "config": {'auth': {}, 'mapping': {}}}
 
-        def resolve(_cfg, _plan):
+        def resolve(_cfg, _plan, _profile=None):
             seen['resolve'] = threading.current_thread().name
             time.sleep(0.6)          # stands in for the plan fetch
             return {"ok": True, "resolved": []}

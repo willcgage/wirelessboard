@@ -8,6 +8,7 @@ import requests
 
 import config
 import pco_mapping
+import pco_profiles
 from pco_credentials import CredentialError, ensure_credentials
 
 logger = logging.getLogger('micboard.pco')
@@ -1441,7 +1442,11 @@ def begin_sync() -> Dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-def resolve_sync(pco_cfg: Dict[str, Any], plan_id_override: Optional[str] = None) -> Dict[str, Any]:
+def resolve_sync(
+    pco_cfg: Dict[str, Any],
+    plan_id_override: Optional[str] = None,
+    profile_override: Optional[str] = None,
+) -> Dict[str, Any]:
     """Fetch the plan and work out which slot each person belongs in.
 
     Every network call lives here, and nothing here writes -- which is what
@@ -1452,16 +1457,43 @@ def resolve_sync(pco_cfg: Dict[str, Any], plan_id_override: Optional[str] = None
         'Authorization': _basic_auth_header(auth['token'], auth['secret'])
     }
 
-    mapping = pco_cfg.get('mapping', {})
-    options = _mapping_options(mapping)
-    category = mapping.get('note_category') or 'Mic / IEM Assignments'
-    team_filters = [t.strip().lower() for t in (mapping.get('team_name_filter') or []) if t and t.strip()]
-
     stid, plan_id, error = _select_plan(pco_cfg.get('services', {}), headers, plan_id_override)
     if error:
         return {"ok": False, "error": error}
     if not plan_id:
         return {"ok": False, "error": "No plan selected or upcoming plan found"}
+
+    # ⭐ The rules have to be chosen before anything is read, because they
+    # decide which note category and which teams are read in the first place.
+    #
+    # ⚠️ An explicitly chosen plan arrives without its service type, so
+    # matching a bound profile costs one extra lookup. Only on that path, only
+    # when a binding could actually apply, and it is off the IOLoop like every
+    # other call here.
+    if stid is None and not profile_override and pco_profiles.profiles_of(pco_cfg):
+        stid = _get_plan_service_type_id(plan_id, headers)
+
+    profile, profile_reason, profile_error = pco_profiles.select_profile(
+        pco_cfg, stid, profile_override)
+    if profile_error:
+        return {"ok": False, "error": profile_error}
+
+    mapping = pco_profiles.effective_mapping(pco_cfg, profile)
+
+    # ⛔ `get_pco_config` validates the board's own mapping, but a profile can
+    # override `strategy` and `note_source` and never passes through it. An
+    # unsupported strategy produces no labels at all, so every person comes
+    # back unmatched and the board looks like it simply found nobody -- the
+    # failure that is hardest to tell from a real empty plan. Checked here,
+    # where the profile that caused it can be named, and only for the profile
+    # actually in force.
+    mapping_error = _validate_mapping(mapping, profile)
+    if mapping_error:
+        return {"ok": False, "error": mapping_error}
+
+    options = _mapping_options(mapping)
+    category = mapping.get('note_category') or 'Mic / IEM Assignments'
+    team_filters = [t.strip().lower() for t in (mapping.get('team_name_filter') or []) if t and t.strip()]
 
     plan_people = _fetch_plan_people(stid, plan_id, headers)
     if not plan_people:
@@ -1474,12 +1506,49 @@ def resolve_sync(pco_cfg: Dict[str, Any], plan_id_override: Optional[str] = None
     return {
         "ok": True,
         "plan_id": plan_id,
+        "service_type_id": stid,
         "options": options,
         "category": category,
+        "profile": _profile_report(profile, profile_reason),
+        "profile_conflicts": pco_profiles.binding_conflicts(pco_cfg),
         "resolved": resolved,
         "unmatched": unmatched,
         "conflicts": conflicts,
         "people": people,
+    }
+
+
+def _validate_mapping(mapping: Dict[str, Any], profile: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Reject rules that would silently match nobody. Returns an error or None."""
+    where = 'the board settings'
+    if profile:
+        where = 'profile "{}"'.format(profile.get('name') or profile.get('id'))
+
+    strategy = mapping.get('strategy') or DEFAULT_STRATEGY
+    if strategy not in SUPPORTED_STRATEGIES:
+        return 'Unsupported strategy "{}" in {} (expected one of {})'.format(
+            strategy, where, ', '.join(SUPPORTED_STRATEGIES))
+
+    note_source = mapping.get('note_source') or 'auto'
+    if note_source not in ('person', 'plan', 'auto'):
+        return 'Unsupported note source "{}" in {}'.format(note_source, where)
+
+    return None
+
+
+def _profile_report(profile: Optional[Dict[str, Any]], reason: str) -> Dict[str, Any]:
+    """What the board says about which rules it used.
+
+    ⚠️ Always present, even when no profile applied. "Using the board
+    settings." is a real answer; an absent field would leave the operator to
+    infer it, and the whole point of profiles is that which rules ran is no
+    longer obvious from the screen.
+    """
+    return {
+        "id": (profile or {}).get('id') or None,
+        "name": (profile or {}).get('name') or (profile or {}).get('id') or None,
+        "reason": reason,
+        "description": pco_profiles.describe_selection(profile, reason),
     }
 
 
@@ -1494,6 +1563,7 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
 
     options = resolution['options']
     category = resolution['category']
+    profile = resolution.get('profile') or {}
     resolved = resolution['resolved']
     unmatched = resolution['unmatched']
     conflicts = resolution['conflicts']
@@ -1535,6 +1605,17 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
             conflict['winner'],
         )
 
+    if profile.get('description'):
+        logger.info('PCO sync: %s', profile['description'])
+
+    for clash in (resolution.get('profile_conflicts') or []):
+        logger.warning(
+            'PCO profiles: service type %s is claimed by %s -- "%s" wins',
+            clash.get('service_type_id'),
+            ', '.join(clash.get('profiles') or []),
+            clash.get('winner'),
+        )
+
     if unmatched:
         logger.info(
             'PCO sync left %s scheduled %s unmatched (no slot for %s)',
@@ -1550,6 +1631,10 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
         "dry_run": dry_run,
         "cleared": cleared,
         "clearable": clearable,
+        # ⚠️ Which rules ran is no longer obvious from the screen once profiles
+        # exist, so every sync and every preview says so.
+        "profile": profile,
+        "profile_conflicts": resolution.get('profile_conflicts') or [],
         "plan_id": plan_id,
         "strategy": options['strategy'],
         "note_category": category,
@@ -1571,7 +1656,11 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     }
 
 
-def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False) -> Dict[str, Any]:
+def sync_from_pco(
+    plan_id_override: Optional[str] = None,
+    dry_run: bool = False,
+    profile_override: Optional[str] = None,
+) -> Dict[str, Any]:
     """Read the selected plan and map its people onto Wirelessboard slots.
 
     Each scheduled person is matched by their PCO team position name (for
@@ -1591,13 +1680,16 @@ def sync_from_pco(plan_id_override: Optional[str] = None, dry_run: bool = False)
     if not started.get('ok'):
         return started
 
-    resolution = resolve_sync(started['config'], plan_id_override)
+    resolution = resolve_sync(started['config'], plan_id_override, profile_override)
     return finish_sync(resolution, dry_run=dry_run)
 
 
-def preview_sync(plan_id_override: Optional[str] = None) -> Dict[str, Any]:
+def preview_sync(
+    plan_id_override: Optional[str] = None,
+    profile_override: Optional[str] = None,
+) -> Dict[str, Any]:
     """Dry-run of :func:`sync_from_pco` -- resolves the mapping without saving."""
-    return sync_from_pco(plan_id_override, dry_run=True)
+    return sync_from_pco(plan_id_override, dry_run=True, profile_override=profile_override)
 
 
 def notes_for_plan(plan_id_override: Optional[str] = None, source_override: Optional[str] = None) -> Dict[str, Any]:

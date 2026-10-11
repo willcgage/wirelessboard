@@ -682,6 +682,7 @@ class PcoSyncHandler(web.RequestHandler):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_override = self.get_query_argument('plan', default=None)
+        profile_override = self.get_query_argument('profile', default=None)
         dry_run = self.get_query_argument('dry_run', default='').lower() in ('1', 'true', 'yes')
 
         # On the loop: may migrate credentials, which saves config.json.
@@ -691,7 +692,8 @@ class PcoSyncHandler(web.RequestHandler):
             return
 
         # Off the loop: the plan fetch and the matching. Writes nothing.
-        resolution = await _run_pco(pco.resolve_sync, started['config'], plan_override)
+        resolution = await _run_pco(
+            pco.resolve_sync, started['config'], plan_override, profile_override)
 
         # Back on the loop: the one write.
         result = pco.finish_sync(resolution, dry_run=dry_run)
@@ -705,7 +707,8 @@ class PcoPreviewHandler(web.RequestHandler):
         self.set_header('Content-Type', 'application/json')
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         plan_override = self.get_query_argument('plan', default=None)
-        result = await _run_pco(pco.preview_sync, plan_override)
+        profile_override = self.get_query_argument('profile', default=None)
+        result = await _run_pco(pco.preview_sync, plan_override, profile_override)
         self.write(json.dumps(result))
 
     async def post(self):
