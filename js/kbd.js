@@ -5,7 +5,7 @@ import {
 import {
   toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
   cycleArrangement, cycleCardShape, cycleTextPosition, cycleTypeSize, cycleTopBar,
-  cycleColumns,
+  cycleColumns, cycleWash,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
@@ -94,6 +94,13 @@ function bindingTable() {
       run: () => cycleCardShape(),
     },
     {
+      // Both ship so the two can be compared on the wall rather than argued
+      // about from a description (#130).
+      keys: ['w'],
+      hud: 'Status colour: the text band only, or the whole card (TV mode).',
+      run: () => cycleWash(),
+    },
+    {
       // A ceiling rather than an exact count, so it works alongside O instead
       // of overriding it. Anything over the ceiling wraps onto another row --
       // the board never shows fewer channels than it has.
@@ -106,7 +113,7 @@ function bindingTable() {
       // the person's in the service (#69) -- and the overlay would read as one
       // control if both used the word.
       keys: ['p'],
-      hud: 'Text placement: middle, top, bottom of the card (TV mode).',
+      hud: 'Text band: bottom or top of the card (TV mode).',
       run: () => cycleTextPosition(),
     },
     {

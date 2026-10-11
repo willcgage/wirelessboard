@@ -77,12 +77,44 @@ export const CARD_SHAPES = ['auto', 'wide', 'tall'];
  * the person's position in the service (#69), and reusing the word in the help
  * overlay would make two unrelated things read as one.
  *
- * `middle` is first because it is the default and because it is what every
- * board did before this existed: `.mic_name` has always been a centred flex
- * column. Only TV mode can honour these — a desk-mode card hugs its content, so
- * there is no slack to move the text within.
+ * ⛔ `middle` is gone as of #130. The text now sits in a band that carries the
+ * status colour, and a band across the middle cuts the photo in half — which is
+ * the one placement that cannot work once the text has a solid background
+ * rather than a gradient over the picture. `migrateTextPosition` turns a stored
+ * `middle` into `bottom` rather than resetting the board to a default.
+ *
+ * `bottom` is first because it is the default: shading at the foot of the card
+ * is where it least often lands on a face.
+ *
+ * Only TV mode can honour these — a desk-mode card hugs its content, so there
+ * is no slack to move the text within.
  */
-export const TEXT_POSITIONS = ['middle', 'top', 'bottom'];
+export const TEXT_POSITIONS = ['bottom', 'top'];
+
+/**
+ * 1.15.0 shipped `middle` and boards have it stored; a link may carry it too.
+ * Translate rather than discard, the same bargain as the arrangement rename.
+ */
+export function migrateTextPosition(value) {
+  if (TEXT_POSITIONS.includes(value)) {
+    return value;
+  }
+  return value === 'middle' ? 'bottom' : null;
+}
+
+/**
+ * How the status colour meets the card (#130).
+ *
+ * `band` gives the colour to the text band and leaves the photograph alone;
+ * `full` tints the whole card, which is what the board did before and reads
+ * from further away. The maintainer asked to run `band` and compare the two on
+ * the wall, so both ship and `W` switches between them.
+ */
+export const WASH_STYLES = ['band', 'full'];
+
+export function isWashStyle(value) {
+  return WASH_STYLES.includes(value);
+}
 
 /**
  * How large the card text is, as a multiplier on the sizes the layout derives.

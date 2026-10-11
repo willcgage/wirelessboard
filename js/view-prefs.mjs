@@ -29,6 +29,7 @@ export const TEXT_POSITION_KEY = 'wirelessboard.textPosition';
 export const TYPE_SIZE_KEY = 'wirelessboard.typeSize';
 export const TOP_BAR_KEY = 'wirelessboard.topBar';
 export const COLUMNS_KEY = 'wirelessboard.columns';
+export const WASH_KEY = 'wirelessboard.wash';
 
 export function safeStorage() {
   try {
