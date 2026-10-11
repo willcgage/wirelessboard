@@ -537,6 +537,60 @@ def list_plans_for_service(service_type_value) -> Dict[str, Any]:
     return {"ok": True, "plans": plans}
 
 
+def _plan_label(attrs: Dict[str, Any]) -> str:
+    """One line naming a plan, from whichever of its fields PCO filled in.
+
+    Most plans carry no title, and a scoped list omits the service type name,
+    so joining only the parts that are present avoids labels like "Aug 2 — ".
+    """
+    parts = [attrs.get('short_dates') or attrs.get('dates'), attrs.get('title')]
+    return ' — '.join(part.strip() for part in parts if part and part.strip())
+
+
+def next_plan() -> Dict[str, Any]:
+    """Which plan "next upcoming" means right now (#120).
+
+    ⭐ Goes through `_select_plan`, the same helper a sync uses, rather than
+    taking the first row of the plans list. The two can disagree -- the list is
+    scoped to the chosen service type while `_select_plan` falls back to
+    scanning every service type when none is chosen -- and a board that offers
+    "next upcoming" has to name the plan the sync will actually read. Offering
+    one and syncing another is worse than not offering it.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        logger.warning('PCO next-plan lookup aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+
+    stid, plan_id, error = _select_plan(pco_cfg.get('services', {}), headers)
+    if error:
+        return {"ok": False, "error": error}
+    if not plan_id:
+        return {"ok": False, "error": "No upcoming plan found"}
+
+    # The label is a convenience, not the answer. A plan that resolves but
+    # whose detail call fails is still the plan the sync will read, so report
+    # the id either way rather than failing the whole lookup over a title.
+    attrs: Dict[str, Any] = {}
+    detail = _http_get(f"{BASE_URL}/plans/{plan_id}", headers)
+    if detail:
+        attrs = (detail.get('data') or {}).get('attributes') or {}
+
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "service_type_id": stid,
+        "title": attrs.get('title') or '',
+        "dates": attrs.get('dates') or '',
+        "short_dates": attrs.get('short_dates') or '',
+        "label": _plan_label(attrs),
+    }
+
+
 def list_plans() -> Dict[str, Any]:
     """Return upcoming plans across all service types (aggregated)."""
     try:

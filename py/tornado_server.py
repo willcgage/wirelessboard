@@ -760,6 +760,22 @@ class PcoPlansHandler(web.RequestHandler):
         self.write(json.dumps(result))
 
 
+class PcoNextPlanHandler(web.RequestHandler):
+    """Which plan "next upcoming" means right now (#120).
+
+    ⭐ Its own endpoint rather than a field on the plans list, because the two
+    answers can differ: the list is scoped to the chosen service type, while
+    the sync's own `_select_plan` scans every service type when none is chosen.
+    The board has to offer the plan the sync will actually read.
+    """
+
+    async def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        result = await _run_pco(pco.next_plan)
+        self.write(json.dumps(result))
+
+
 class PcoPeopleHandler(web.RequestHandler):
     async def get(self):
         self.set_header('Content-Type', 'application/json')
@@ -1177,6 +1193,7 @@ def twisted():
         (r'/api/pco/config', PcoConfigHandler),
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
+        (r'/api/pco/next-plan', PcoNextPlanHandler),
         (r'/api/pco/people', PcoPeopleHandler),
         (r'/api/pco/teams', PcoTeamsHandler),
         (r'/api/pco/notes', PcoNotesHandler),
