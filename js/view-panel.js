@@ -17,6 +17,7 @@
 import {
   controlGroups, optionsInOrder, optionLabel, isSwitch,
 } from './view-controls.mjs';
+import { scopeNote } from './viewer-scope.mjs';
 
 /**
  * ⛔ The board's own functions are injected, not imported.
@@ -159,6 +160,13 @@ export function renderViewPanel() {
     note.className = 'vp-note';
     note.textContent = 'The settings below apply to TV mode.';
     body.appendChild(note);
+  }
+
+  // ⭐ Says which side of the line these are on (#116). Everything in this
+  // panel is stored in this browser; nothing here reaches another board.
+  const foot = document.querySelector('.view-panel-foot');
+  if (foot) {
+    foot.textContent = `${scopeNote('device')} Press ? for every key.`;
   }
 
   controlGroups().forEach((group) => {

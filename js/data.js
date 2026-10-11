@@ -1,4 +1,5 @@
 import 'whatwg-fetch';
+import { viewerCount } from './viewer-scope.mjs';
 import {
   dataURL, ActivateMessageBoard, micboard, updateNavLinks,
 } from './app.js';
@@ -39,6 +40,24 @@ function JsonUpdate() {
       });
       micboard.connectionStatus = 'CONNECTED';
       micboard.config = data.config;
+      // How many boards are watching this server (#116). Kept on micboard so
+      // the config panes can say what a save is about to reach, and announced
+      // when it changes -- the config view renders before the first payload
+      // lands, so without this the note sits there saying nothing about who
+      // else is connected.
+      const previousViewers = micboard.viewers;
+      micboard.viewers = viewerCount(data);
+      if (micboard.viewers !== previousViewers
+          && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        try {
+          const evt = (typeof window.CustomEvent === 'function')
+            ? new CustomEvent('wirelessboard:viewers', { detail: { viewers: micboard.viewers } })
+            : new Event('wirelessboard:viewers');
+          window.dispatchEvent(evt);
+        } catch (_) {
+          // A board that cannot announce the count still knows it.
+        }
+      }
       micboard.discovery_status = data.discovery_status || micboard.discovery_status || null;
       micboard.discovery_scan = data.discovery_scan || micboard.discovery_scan || null;
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {

@@ -529,6 +529,10 @@
   <p>Could not connect to the wirelessboard server. Please refresh the page.</p>
       </div>
       <div class="settings">
+        <!-- Which side of the line this pane is on (#116). View preferences are
+             this device's; everything here is the server's, so a save reaches
+             the wall display, the FOH laptop and anyone's phone at once. -->
+        <p id="config-scope-note" class="config-scope-note"></p>
         <!-- Shown only when config.json did not load cleanly. The board starts
              anyway so this panel is reachable, but starting is not fixing, and
              nothing writes to the file while it is in this state -- so the way
