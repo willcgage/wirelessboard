@@ -9,8 +9,10 @@ import { groupEditToggle, initEditor } from './dnd.js';
 import { slotEditToggle } from './extended.js';
 import { keybindings } from './kbd.js';
 import {
-  setBackground, setInfoDrawer, applyBoardLayout, showTopBar,
+  setBackground, setInfoDrawer, applyBoardLayout,
+  setViewOption, viewOptionValue, setDisplayMode,
 } from './display.js';
+import { initViewPanel, toggleViewPanel } from './view-panel.js';
 import { setTimeMode } from './chart-smoothie.js';
 import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule, scheduleBackgroundFilenameGuide,
@@ -334,15 +336,22 @@ function mapGroups() {
     });
   }
 
-  // The escape control for a hidden bar (#110). Bound unconditionally: it is
-  // the only route back on a board with no keyboard, so it must not depend on
-  // any of the panes above having rendered.
-  const topBarRestore = document.getElementById('topbar-restore');
-  if (topBarRestore && !topBarRestore.dataset.bound) {
-    topBarRestore.addEventListener('click', () => {
-      showTopBar();
+  // ⛔ The one control a board can always reach (#110, #111). It opens the view
+  // panel, which carries the switch for the bar itself -- so hiding the bar can
+  // no longer leave a keyboard-less display with nothing to press. Bound
+  // unconditionally: it must not depend on any pane above having rendered.
+  initViewPanel({
+    setViewOption,
+    viewOptionValue,
+    setDisplayMode,
+    getDisplayMode: () => micboard.displayMode,
+  });
+  const viewPanelButton = document.getElementById('topbar-restore');
+  if (viewPanelButton && !viewPanelButton.dataset.bound) {
+    viewPanelButton.addEventListener('click', () => {
+      toggleViewPanel();
     });
-    topBarRestore.dataset.bound = 'true';
+    viewPanelButton.dataset.bound = 'true';
   }
 
   const goGroupEdit = document.getElementById('go-groupedit');

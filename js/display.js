@@ -3,9 +3,10 @@ import { micboard, updateHash } from './app.js';
 import { updateGIFBackgrounds } from './gif.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES, TOP_BAR_SHOWN,
+  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES,
   COLUMN_CHOICES, WASH_STYLES, nextOption,
 } from './board-layout.mjs';
+import { controlFor, isValidValue } from './view-controls.mjs';
 import {
   writePref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
@@ -100,6 +101,44 @@ export function applyBoardLayout() {
   applyViewClasses();
   applyTopBarClass();
   requestTvLayoutUpdate();
+
+  // So anything showing these values can follow along. The panel (#111) mirrors
+  // the same state the keys change, and a key pressed while it is open has to
+  // move the control too or the two disagree about the board in front of you.
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      const evt = (typeof window.CustomEvent === 'function')
+        ? new CustomEvent('wirelessboard:view-changed')
+        : new Event('wirelessboard:view-changed');
+      window.dispatchEvent(evt);
+    }
+  } catch (_) {
+    // A board that cannot announce a view change still has to change the view.
+  }
+}
+
+/**
+ * Set one view preference outright (#111).
+ *
+ * The keys cycle; a control in the panel picks a value. ⭐ Both land in the
+ * same place -- the same field, the same storage key, the same hash -- because
+ * a control and its key that disagreed would be worse than having only the key.
+ */
+export function setViewOption(id, value) {
+  const control = controlFor(id);
+  if (!isValidValue(control, value)) {
+    return null;
+  }
+  micboard[id] = value;
+  writePref({ storage: safeStorage(), key: control.storageKey, value });
+  applyBoardLayout();
+  updateHash();
+  return value;
+}
+
+/** What the board currently has, for whatever is drawing the controls. */
+export function viewOptionValue(id) {
+  return micboard[id];
 }
 
 /**
@@ -162,23 +201,6 @@ export function cycleColumns() {
   applyBoardLayout();
   updateHash();
   return micboard.columns;
-}
-
-/**
- * Put the bar back, whatever state it is in.
- *
- * ⛔ Deliberately not a toggle. `H` cycles, which is right for a keyboard; this
- * drives the on-screen escape control (#110), which exists precisely because
- * the bar is already gone and there is no keyboard to press `H` on. A control
- * that could hide the bar again would be able to recreate the dead end it was
- * added to remove.
- */
-export function showTopBar() {
-  micboard.topBar = TOP_BAR_SHOWN;
-  writePref({ storage: safeStorage(), key: TOP_BAR_KEY, value: micboard.topBar });
-  applyBoardLayout();
-  updateHash();
-  return micboard.topBar;
 }
 
 /** Two states, so cycling is a toggle -- same shape as the controls above. */
