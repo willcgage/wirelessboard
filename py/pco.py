@@ -95,6 +95,13 @@ def _mapping_options(mapping: Dict[str, Any]) -> Dict[str, Any]:
         'number_fallback': mapping.get('position_number_fallback', False) is True,
         # Off by default: writing extended_id would relabel slots the operator set up.
         'seed_extended_id': mapping.get('seed_extended_id', False) is True,
+        # ⛔ Off by default, and it must stay that way. On, a sync makes the
+        # board match the plan exactly -- which also takes the spare handheld
+        # off the visiting speaker nobody told Planning Center about. The board
+        # showing a stale name is bad; the board quietly forgetting a deliberate
+        # assignment mid-service is worse, so this is a choice an operator makes
+        # rather than a default they discover (#135).
+        'clear_unmatched': mapping.get('clear_unmatched', False) is True,
     }
 
 
@@ -185,6 +192,52 @@ def find_conflicts(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(conflicts, key=lambda c: (c['slot'] is None, c['slot']))
 
 
+def slots_to_clear(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Slots carrying somebody the new plan does not account for.
+
+    ⭐ Only slots that actually have a name: an empty slot is already clear, and
+    counting it would make "4 slots will be cleared" meaningless.
+
+    ⚠️ The person, never the position. `extended_id` is what the *next* sync
+    matches on and is often something the operator set deliberately, so a slot
+    keeps its role when the person leaves it.
+    """
+    matched = set()
+    for entry in resolved:
+        for match in entry.get('_matches') or []:
+            number = match.get('slot', {}).get('slot')
+            if number is not None:
+                matched.add(number)
+
+    stale = []
+    for slot in _configured_slots():
+        number = slot.get('slot')
+        if number in matched:
+            continue
+        if (slot.get('extended_name') or '').strip():
+            stale.append(slot)
+    return stale
+
+
+def _clear_unmatched(stale: List[Dict[str, Any]]) -> int:
+    """Take the people off the given slots. Returns the count.
+
+    ⚠️ Takes the list rather than deriving it, so the caller can report the
+    names it is about to remove. Does not save -- the caller does, once.
+    """
+    for slot in stale:
+        slot.pop('extended_name', None)
+
+    if stale:
+        logger.info(
+            'PCO sync cleared %s slot%s this plan does not fill: %s',
+            len(stale),
+            '' if len(stale) == 1 else 's',
+            ', '.join(str(slot.get('slot')) for slot in stale),
+        )
+    return len(stale)
+
+
 def _apply_assignments(resolved: List[Dict[str, Any]], options: Dict[str, Any]) -> int:
     """Write ``extended_name`` onto every resolved slot. Returns slots changed.
 
@@ -222,11 +275,9 @@ def _apply_assignments(resolved: List[Dict[str, Any]], options: Dict[str, Any]) 
             if changed:
                 updated += 1
 
-    if updated:
-        try:
-            config.save_current_config()
-        except Exception as exc:
-            logger.warning('Failed to save config: %s', exc)
+    # ⚠️ Does not save. `finish_sync` writes config.json once, after this and
+    # after the clears -- before #135 this saved here and the clear saved again,
+    # which is two full rewrites of the one file a bad save has destroyed before.
     return updated
 
 
@@ -1301,7 +1352,32 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     people = resolution['people']
     plan_id = resolution['plan_id']
 
-    updates = 0 if dry_run else _apply_assignments(resolved, options)
+    # Reported either way, so a preview can say what a real sync would take off
+    # the board -- which is the half of this that an operator needs to see
+    # before agreeing to it.
+    #
+    # ⛔ Snapshot the names here, before anything clears them. `slots_to_clear`
+    # hands back the live slot dicts, so reading `extended_name` off them after
+    # the clear reports every name as empty -- a preview would be right and a
+    # real sync would report "cleared 4 slots: None, None, None, None".
+    stale = slots_to_clear(resolved) if options.get('clear_unmatched') else []
+    clearable = [
+        {"slot": slot.get('slot'), "name": slot.get('extended_name')}
+        for slot in stale
+    ]
+
+    cleared = 0
+    if not dry_run:
+        updates = _apply_assignments(resolved, options)
+        if stale:
+            cleared = _clear_unmatched(stale)
+        if updates or cleared:
+            try:
+                config.save_current_config()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning('Failed to save config after the sync: %s', exc)
+    else:
+        updates = 0
 
     for conflict in conflicts:
         logger.warning(
@@ -1324,6 +1400,8 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     return {
         "ok": True,
         "dry_run": dry_run,
+        "cleared": cleared,
+        "clearable": clearable,
         "plan_id": plan_id,
         "strategy": options['strategy'],
         "note_category": category,
