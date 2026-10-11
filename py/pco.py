@@ -577,6 +577,40 @@ def list_service_types() -> Dict[str, Any]:
     return {"ok": True, "services": services}
 
 
+def list_folders() -> Dict[str, Any]:
+    """The Services folders, so a profile can be bound to one by name (#139).
+
+    ⚠️ Returns a flat list with each folder's parent, not a tree. The panel
+    needs to show "Weekend / Youth" so two folders called "Youth" in different
+    places can be told apart, and a flat list with parents lets it build that
+    without this function deciding how deep is too deep to display.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        logger.warning('PCO folders list aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+    data = _http_get(f"{BASE_URL}/folders", headers, params={"per_page": 200})
+    if data is None:
+        return {"ok": False, "error": _fetch_error("Unable to fetch folders")}
+
+    folders = []
+    for item in (data.get('data') or []):
+        attrs = item.get('attributes') or {}
+        folders.append({
+            "id": item.get('id'),
+            "name": attrs.get('name') or '',
+            "parent_id": _parent_folder_id({'data': item}),
+        })
+    # ⚠️ An account with no folders is a normal answer, not a failure. Most
+    # churches have none, and the panel has to say "no folders" rather than
+    # "could not fetch folders".
+    return {"ok": True, "folders": folders}
+
+
 def list_plans_for_service(service_type_value) -> Dict[str, Any]:
     """Return upcoming plans (basic info) for a given service type (name or ID)."""
     try:

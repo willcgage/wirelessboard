@@ -751,6 +751,16 @@ class PcoServicesHandler(web.RequestHandler):
         self.write(json.dumps(result))
 
 
+class PcoFoldersHandler(web.RequestHandler):
+    """Services folders, for binding a profile to one (#139)."""
+
+    async def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        result = await _run_pco(pco.list_folders)
+        self.write(json.dumps(result))
+
+
 class PcoPlansHandler(web.RequestHandler):
     async def get(self):
         self.set_header('Content-Type', 'application/json')
@@ -1258,6 +1268,7 @@ def twisted():
         (r'/api/pco/config', PcoConfigHandler),
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
+        (r'/api/pco/folders', PcoFoldersHandler),
         (r'/api/pco/next-plan', PcoNextPlanHandler),
         (r'/api/pco/schedule', PcoScheduleHandler),
         (r'/api/pco/active-plan', PcoActivePlanHandler),
