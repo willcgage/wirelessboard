@@ -7,6 +7,12 @@ import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from '
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 import {
+  connectBlocker,
+  connectSummary,
+  isConnected,
+  storedCredentialsNote,
+} from './pco-connect.mjs';
+import {
   NEXT_PLAN,
   planLabel,
   nextPlanOptionLabel,
@@ -25,6 +31,9 @@ import {
 } from './clear-assignments.mjs';
 
 const noop = () => {};
+
+/** The last answer from `api/pco/connect`, or null if none this session (#120). */
+let lastConnect = null;
 
 /**
  * What the server last said "next upcoming" resolves to (#120).
@@ -625,18 +634,33 @@ function ensurePcoCredentialStatusElement() {
   return el;
 }
 
+/**
+ * The credential line under the token field.
+ *
+ * ⚠️ Since #120 the Connect button owns this message, and the old copy here
+ * said the wrong thing — "then save to store them securely", when saving is no
+ * longer how credentials are stored. Where Connect's own line exists this one
+ * stays empty rather than contradicting it; two status lines about one fact is
+ * exactly the clutter #120 is about.
+ */
 function renderPcoCredentialStatus(authMeta = {}) {
   const statusEl = ensurePcoCredentialStatusElement();
   if (!statusEl) return;
-  const hasCreds = !!authMeta.has_credentials;
   statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+
+  if (document.getElementById('pco-connect-status')) {
+    statusEl.textContent = '';
+    return;
+  }
+
+  const hasCreds = !!authMeta.has_credentials;
   if (hasCreds) {
     statusEl.classList.add('text-success');
     const suffix = authMeta.credential_id ? ` (${authMeta.credential_id})` : '';
-    statusEl.textContent = `Credentials stored in system keyring${suffix}. Leave token and secret blank to keep them.`;
+    statusEl.textContent = `Credentials stored in system keyring${suffix}.`;
   } else {
     statusEl.classList.add('text-muted');
-    statusEl.textContent = 'Enter your Planning Center token and secret, then save to store them securely.';
+    statusEl.textContent = 'Enter your Planning Center token and secret, then press Connect.';
   }
 }
 
@@ -3475,6 +3499,9 @@ function showPCOView() {
   // answer is re-fetched with the list rather than carried over from whenever
   // the panel was last open.
   nextPlanInfo = null;
+  lastConnect = null;
+  setConnectStatus('', null);
+  applyConnectedState();
   // Step 2 needs the service type list before it is any use.
   loadPcoServiceTypes();
   renderPcoTeamChoices(null);
@@ -3749,6 +3776,9 @@ export function bindPcoHandlers() {
     } else if (t.id === 'pco-note-preview') {
       e.preventDefault();
       handleNotePreview();
+    } else if (t.id === 'pco-connect') {
+      e.preventDefault();
+      handlePcoConnect();
     } else if (t.id === 'pco-refresh-plans') {
       e.preventDefault();
       refreshPlansList();
@@ -3797,6 +3827,114 @@ function refreshNextPlan() {
     });
 }
 
+/** Paint the line beside the Connect button. */
+function setConnectStatus(text, level) {
+  const el = document.getElementById('pco-connect-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'small';
+  if (level && level !== 'ok') {
+    el.classList.add(STATUS_CLASSES[level === 'error' ? 'error' : level] || 'text-muted');
+  } else if (level === 'ok') {
+    el.classList.add(STATUS_CLASSES.success);
+  } else {
+    el.classList.add('text-muted');
+  }
+}
+
+/**
+ * Connect: check the credentials against Planning Center, then store them (#120).
+ *
+ * ⛔ Deliberately not part of the form's Save. Saving used to be the only way
+ * to store a token, and nothing exercised it until the operator tried to fetch
+ * plans — so setup was save → fetch → find out it was wrong → save again, and
+ * a bad token sat in the keyring looking like a good one.
+ *
+ * ⚠️ The token and secret go in the request body, never the query string: a
+ * URL ends up in logs, in history, and in the referrer of the next request.
+ */
+function handlePcoConnect() {
+  const tokenEl = document.getElementById('pco-token');
+  const secretEl = document.getElementById('pco-secret');
+  const btn = document.getElementById('pco-connect');
+  const token = tokenEl ? tokenEl.value : '';
+  const secret = secretEl ? secretEl.value : '';
+
+  const blocker = connectBlocker(token, secret);
+  if (blocker) {
+    setConnectStatus(blocker, 'warn');
+    appendPcoLog(blocker, 'warn');
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  setConnectStatus('Checking with Planning Center…', null);
+  appendPcoLog('Checking the PCO token and secret...');
+
+  fetch('api/pco/connect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: token.trim(), secret: secret.trim() }),
+  })
+    .then((r) => r.json())
+    .then((resp) => {
+      lastConnect = resp && typeof resp === 'object' ? resp : null;
+      const summary = connectSummary(resp);
+      setConnectStatus(summary.text, summary.level);
+      appendPcoLog(summary.text, summary.level === 'ok' ? 'info' : summary.level);
+
+      if (resp && resp.ok) {
+        // ⚠️ Clear the fields now they are in the keyring. Leaving a secret on
+        // screen in a room where a board is on a wall is its own problem, and
+        // a populated field also reads as "not saved yet".
+        if (tokenEl) tokenEl.value = '';
+        if (secretEl) secretEl.value = '';
+        if (micboard.config && micboard.config.pco) {
+          micboard.config.pco.auth = { ...(micboard.config.pco.auth || {}), has_credentials: true };
+          micboard.config.pco.enabled = true;
+        }
+        // Connecting turns the integration on server-side, so the checkbox has
+        // to agree -- otherwise a later Save would quietly switch it back off.
+        const enabledEl = document.getElementById('pco-enabled');
+        if (enabledEl) enabledEl.checked = true;
+        applyConnectedState();
+        refreshPlansList({ auto: true });
+      }
+    })
+    .catch((err) => {
+      lastConnect = { ok: false, error: formatError(err) };
+      const summary = connectSummary(lastConnect);
+      setConnectStatus(summary.text, summary.level);
+      appendPcoLog(`Connect failed: ${formatError(err)}`, 'error');
+    })
+    .finally(() => {
+      if (btn) btn.disabled = false;
+    });
+}
+
+/**
+ * Reflect whether the board has working credentials.
+ *
+ * ⚠️ Stored credentials count, not only a connect made in this session — a
+ * board set up months ago must not look like one that was never set up.
+ */
+function applyConnectedState() {
+  const authMeta = (micboard.config && micboard.config.pco && micboard.config.pco.auth) || {};
+  const hasStored = !!authMeta.has_credentials;
+  const connected = isConnected({ hasStoredCredentials: hasStored, lastConnect });
+
+  const refreshBtn = document.getElementById('pco-refresh-plans');
+  if (refreshBtn) refreshBtn.disabled = !connected;
+
+  // Only speak when nothing has been said this session; a fresh "Connected as
+  // ..." should not be overwritten by the generic stored-credentials note.
+  const statusEl = document.getElementById('pco-connect-status');
+  if (statusEl && !statusEl.textContent.trim()) {
+    setConnectStatus(storedCredentialsNote(hasStored), hasStored ? 'ok' : null);
+  }
+  return connected;
+}
+
 function refreshPlansList(options = {}) {
   const autoTrigger = !!(options && options.auto);
   const sel = document.getElementById('pco-plan-select');
@@ -3812,7 +3950,7 @@ function refreshPlansList(options = {}) {
   const pendingSecret = (secretInput && secretInput.value ? secretInput.value : '').trim();
 
   if (!enabled) {
-    if (sel) sel.innerHTML = '<option value="">Enable PCO and save settings to load plans.</option>';
+    if (sel) sel.innerHTML = '<option value="">Tick Enable PCO and save, then refresh plans.</option>';
     if (!autoTrigger) appendPcoLog('Enable the PCO integration and save before fetching plans.', 'warn');
     else appendPcoLog('Skipping plan fetch: integration is disabled.', 'info');
     return;
