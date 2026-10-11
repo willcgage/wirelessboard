@@ -798,7 +798,16 @@
           <div class="card-band">
             <p class="name"></p>
             <p class="mic_id"></p>
-            <p class="card-runtime"></p>
+            <!-- The battery, beside the time it is a measure of. The outline
+                 stays when nothing has been reported; only the fill goes. -->
+            <p class="card-runtime">
+              <svg class="batt-icon" viewBox="0 0 24 12" aria-hidden="true" focusable="false">
+                <rect class="batt-shell" x="0.6" y="0.6" width="19.8" height="10.8" rx="2.2"></rect>
+                <rect class="batt-cap" x="21.4" y="3.6" width="2.4" height="4.8" rx="1.2"></rect>
+                <rect class="batt-fill" x="2.4" y="2.4" width="16.2" height="7.2" rx="1.2"></rect>
+              </svg>
+              <span class="runtime-text"></span>
+            </p>
           </div>
         </div>
         <div class="electrode"></div>

@@ -2220,3 +2220,47 @@ a:link, a:visited, a:hover, a:active {
   margin: 0 0 0.15rem;
   text-align: center;
 }
+
+/* The battery in the card's band (#130).
+
+   Monochrome on purpose: the band already carries the status colour and the
+   chip already carries the word, so colouring this too would be a third voice
+   saying the same thing -- and on an amber band a red battery is unreadable. */
+.card-runtime {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.batt-icon {
+  flex: none;
+  width: 1.5em;
+  height: 0.75em;
+  overflow: visible;
+}
+
+.batt-shell,
+.batt-cap {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  opacity: 0.55;
+}
+
+.batt-cap {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* The fill is scaled rather than resized so it animates nothing and needs no
+   second element per level. */
+.batt-fill {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: left center;
+  transform: scaleX(var(--batt, 0));
+}
+
+.card-runtime.batt-unknown .batt-fill {
+  display: none;
+}

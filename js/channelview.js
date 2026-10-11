@@ -4,6 +4,7 @@ import { initChart, charts } from './chart-smoothie.js';
 import { seedTransmitters, autoRandom } from './demodata.js';
 import { updateEditor } from './dnd.js';
 import { deviceHeading } from './device-label.mjs';
+import { batteryFraction, batteryDescription } from './battery-icon.mjs';
 
 function allSlots() {
   const slot = micboard.config.slots;
@@ -61,10 +62,14 @@ function updateRuntime(slotSelector, data) {
 
   // The same figure on the card itself (#130). The drawer keeps its copy: it is
   // the detail view, and it is what a desk-mode board shows.
-  const onCard = slotSelector.querySelector('p.card-runtime');
+  //
+  // ⛔ Only the text node, never the whole element -- the battery icon lives in
+  // here too, and writing textContent would delete it.
+  const onCard = slotSelector.querySelector('p.card-runtime .runtime-text');
   if (onCard) {
     onCard.textContent = data.runtime || '';
   }
+  updateCardBattery(slotSelector, data);
 }
 
 /**
@@ -193,6 +198,26 @@ function updateStatus(slotSelector, data) {
 function updateIP(slotSelector, data) {
   slotSelector.querySelector('p.ip').innerHTML = data.ip;
   slotSelector.querySelector('p.rxinfo').innerHTML = `${data.type} CH ${data.channel}`;
+}
+
+/**
+ * The battery icon in the band (#130).
+ *
+ * A time on its own does not say what it measures, and on the vendors that
+ * report a level but no runtime the icon is the only thing there is to show.
+ */
+function updateCardBattery(slotSelector, data) {
+  const holder = slotSelector.querySelector('p.card-runtime');
+  if (!holder) {
+    return;
+  }
+  const fraction = batteryFraction(data && data.battery);
+
+  // ⛔ Unknown is not empty. An empty fill reads as "about to die"; the outline
+  // on its own reads as "nothing has told us", which is what 255 means.
+  holder.classList.toggle('batt-unknown', fraction === null);
+  holder.style.setProperty('--batt', fraction === null ? '0' : String(fraction));
+  holder.setAttribute('title', batteryDescription(data && data.battery, data && data.runtime));
 }
 
 const BatteryTable = {
