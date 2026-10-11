@@ -81,6 +81,7 @@ export function updateTvLayoutMetrics() {
     gap,
     arrangement: micboard.arrangement,
     shape: micboard.cardShape,
+    columns: micboard.columns,
   });
 
   container.style.setProperty('--tvmode-rows', rows.toString());

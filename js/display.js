@@ -4,11 +4,11 @@ import { updateGIFBackgrounds } from './gif.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
   ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES, TOP_BAR_SHOWN,
-  nextOption,
+  COLUMN_CHOICES, nextOption,
 } from './board-layout.mjs';
 import {
   writePref, safeStorage,
-  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
 } from './view-prefs.mjs';
 
 function swapClass(selector, currentClass, newClass) {
@@ -133,6 +133,21 @@ export function cycleTypeSize() {
   applyBoardLayout();
   updateHash();
   return micboard.typeSize;
+}
+
+/**
+ * How many columns the board may use (#112).
+ *
+ * Cycles like the controls above rather than taking a number, so it fits the
+ * one-key-per-control shape. `auto` is in the list, so a few presses always
+ * gets back to the board deciding for itself.
+ */
+export function cycleColumns() {
+  micboard.columns = nextOption(COLUMN_CHOICES, micboard.columns);
+  writePref({ storage: safeStorage(), key: COLUMNS_KEY, value: micboard.columns });
+  applyBoardLayout();
+  updateHash();
+  return micboard.columns;
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   TOP_BAR_STATES,
   isArrangement, isCardShape, isTextPosition, isTypeSize, isEdgePlacement, isTopBarState,
   migrateArrangement, migrateCardShape,
+  COLUMN_CHOICES, COLUMNS_AUTO, isColumnChoice, columnCeiling,
 } from './board-layout.mjs';
 
 const WIDE = { slotCount: 12, maxColumns: 12 };
@@ -348,4 +349,96 @@ test('migration passes current values through and refuses nonsense', () => {
   assert.equal(migrateArrangement('sideways'), null);
   assert.equal(migrateCardShape(''), null);
   assert.equal(migrateArrangement(undefined), null);
+});
+
+// --------------------------------------------------------------------------
+// Columns on screen (#112) -- a ceiling, not an exact count
+// --------------------------------------------------------------------------
+
+test('auto leaves every arrangement exactly as it was', () => {
+  for (const arrangement of ARRANGEMENTS) {
+    assert.equal(
+      columnsFor({ ...WIDE, arrangement, columns: 'auto' }),
+      columnsFor({ ...WIDE, arrangement }),
+      `${arrangement} changed under an explicit auto`,
+    );
+  }
+});
+
+test('a ceiling caps the arrangement rather than replacing it', () => {
+  // row would take all twelve; the ceiling stops it at six.
+  assert.equal(columnsFor({
+    slotCount: 12, maxColumns: 4, arrangement: 'row', columns: '6',
+  }), 6);
+  // fit would take four at this width, and the wider ceiling must not widen it:
+  // the narrower of the two always wins, so cards never go under the slot width
+  // unless something explicitly asks them to.
+  assert.equal(columnsFor({
+    slotCount: 12, maxColumns: 4, arrangement: 'fit', columns: '8',
+  }), 4);
+  // grid balances to 4x3 for twelve; a ceiling of 10 is no constraint at all.
+  assert.equal(
+    columnsFor({ ...WIDE, arrangement: 'grid', columns: '10' }),
+    columnsFor({ ...WIDE, arrangement: 'grid' }),
+  );
+});
+
+test('a ceiling never invents columns there are no channels for', () => {
+  assert.equal(columnsFor({
+    slotCount: 3, maxColumns: 12, arrangement: 'row', columns: '12',
+  }), 3);
+  assert.equal(columnsFor({
+    slotCount: 1, maxColumns: 12, arrangement: 'fit', columns: '8',
+  }), 1);
+});
+
+test('stacking ignores the ceiling, because one is already fewer', () => {
+  assert.equal(columnsFor({ ...WIDE, arrangement: 'column', columns: '4' }), 1);
+});
+
+test('⛔ a ceiling wraps channels onto more rows and never drops one', () => {
+  // The whole risk of this control: a board that quietly shows eight of twelve
+  // during a service. Paging (#113) is how a board shows fewer on purpose;
+  // until then every channel has to be on the board somewhere.
+  for (const ceiling of ['4', '6', '8', '10', '12']) {
+    const layout = computeLayout({
+      slotCount: 12,
+      containerWidth: 1920,
+      availableHeight: 1040,
+      arrangement: 'row',
+      columns: ceiling,
+    });
+    assert.ok(
+      layout.columns * layout.rows >= 12,
+      `ceiling ${ceiling} left room for only ${layout.columns * layout.rows} of 12`,
+    );
+    assert.equal(layout.columns, Number(ceiling));
+  }
+});
+
+test('a ceiling still divides the height so the rows fit the page', () => {
+  const layout = computeLayout({
+    slotCount: 12,
+    containerWidth: 1920,
+    availableHeight: 1000,
+    gap: 0,
+    arrangement: 'row',
+    columns: '6',
+  });
+  assert.equal(layout.rows, 2);
+  assert.equal(layout.rowHeight, 500);
+  assert.equal(layout.scrolls, false);
+});
+
+test('the column validators accept exactly the supported values', () => {
+  for (const choice of COLUMN_CHOICES) {
+    assert.ok(isColumnChoice(choice), `${choice} should be valid`);
+  }
+  for (const junk of ['5', '0', '-4', 'lots', '', null, undefined, 6]) {
+    assert.ok(!isColumnChoice(junk), `${junk} should be refused`);
+  }
+  assert.equal(columnCeiling('auto'), null);
+  assert.equal(columnCeiling('nonsense'), null);
+  assert.equal(columnCeiling('8'), 8);
+  assert.equal(COLUMNS_AUTO, 'auto');
 });

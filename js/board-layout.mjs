@@ -31,6 +31,40 @@
  */
 export const ARRANGEMENTS = ['fit', 'row', 'column', 'grid'];
 
+/**
+ * How many columns the operator will allow on screen (#112).
+ *
+ * ⭐ A **ceiling, not an exact count**, which is what lets it compose with the
+ * arrangements rather than fight them: `fit` still packs as many as fit and
+ * simply stops at this number, `row` stops asking for every channel on one
+ * line, and `column` is unaffected because one is already fewer than any
+ * ceiling. One control, no precedence argument.
+ *
+ * ⛔ A channel over the ceiling wraps onto another row. It is never dropped.
+ * Showing fewer channels than exist is paging (#113) and needs a way to bring
+ * the rest round; a density control that quietly hid four channels during a
+ * service would be worse than no control at all.
+ *
+ * Strings because that is what a hash carries and what storage returns, and
+ * because `auto` has to live in the same list as the numbers.
+ */
+export const COLUMN_CHOICES = ['auto', '4', '6', '8', '10', '12'];
+
+/** The default: whatever the arrangement would have chosen on its own. */
+export const COLUMNS_AUTO = COLUMN_CHOICES[0];
+
+export function isColumnChoice(value) {
+  return COLUMN_CHOICES.includes(value);
+}
+
+/** The ceiling as a number, or null when the operator has not asked for one. */
+export function columnCeiling(value) {
+  if (!isColumnChoice(value) || value === COLUMNS_AUTO) {
+    return null;
+  }
+  return Number(value);
+}
+
 /** The shape of one card. Deliberately a different vocabulary from above. */
 export const CARD_SHAPES = ['auto', 'wide', 'tall'];
 
@@ -173,12 +207,18 @@ export function isEdgePlacement(value) {
  * Twelve channels on a 1920px screen means ~155px cards, and that is the trade
  * being asked for.
  */
-export function columnsFor({ slotCount, maxColumns, arrangement = 'fit' }) {
+export function columnsFor({
+  slotCount, maxColumns, arrangement = 'fit', columns = COLUMNS_AUTO,
+}) {
   const n = toCount(slotCount);
   const fits = toCount(maxColumns);
+  const ceiling = columnCeiling(columns);
+  // Applied to whatever the arrangement decides, so the two never contradict
+  // each other: the arrangement picks a shape, this caps how wide it may get.
+  const capped = (c) => (ceiling === null ? c : Math.max(1, Math.min(c, ceiling)));
 
   if (arrangement === 'row') {
-    return n;
+    return capped(n);
   }
 
   if (arrangement === 'column') {
@@ -191,10 +231,10 @@ export function columnsFor({ slotCount, maxColumns, arrangement = 'fit' }) {
     while (c < n && Math.ceil(n / c) > c) {
       c += 1;
     }
-    return Math.max(1, Math.min(fits, c));
+    return capped(Math.max(1, Math.min(fits, c)));
   }
 
-  return Math.max(1, Math.min(fits, n));
+  return capped(Math.max(1, Math.min(fits, n)));
 }
 
 /**
@@ -237,13 +277,15 @@ export function rowHeightFor({
 
 export function computeLayout({
   slotCount, containerWidth, availableHeight, slotWidth = 420, gap = 0,
-  arrangement = 'fit', shape = 'auto',
+  arrangement = 'fit', shape = 'auto', columns: columnChoice = COLUMNS_AUTO,
 }) {
   const n = toCount(slotCount);
   const width = Number(slotWidth) > 0 ? Number(slotWidth) : 420;
   const maxColumns = Math.max(1, Math.floor((Number(containerWidth) + gap) / (width + gap)) || 1);
 
-  const columns = columnsFor({ slotCount: n, maxColumns, arrangement });
+  const columns = columnsFor({
+    slotCount: n, maxColumns, arrangement, columns: columnChoice,
+  });
   const rows = Math.max(1, Math.ceil(n / columns));
 
   // The width a card will actually be given. `fit` and `grid` never ask for

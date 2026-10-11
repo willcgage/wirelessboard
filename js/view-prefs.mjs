@@ -28,6 +28,7 @@ export const CARD_SHAPE_KEY = 'wirelessboard.slotAspect';
 export const TEXT_POSITION_KEY = 'wirelessboard.textPosition';
 export const TYPE_SIZE_KEY = 'wirelessboard.typeSize';
 export const TOP_BAR_KEY = 'wirelessboard.topBar';
+export const COLUMNS_KEY = 'wirelessboard.columns';
 
 export function safeStorage() {
   try {

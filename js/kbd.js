@@ -5,6 +5,7 @@ import {
 import {
   toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
   cycleArrangement, cycleCardShape, cycleTextPosition, cycleTypeSize, cycleTopBar,
+  cycleColumns,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
@@ -91,6 +92,14 @@ function bindingTable() {
       keys: ['a'],
       hud: 'Card shape: auto, 16:9, 3:4 (TV mode).',
       run: () => cycleCardShape(),
+    },
+    {
+      // A ceiling rather than an exact count, so it works alongside O instead
+      // of overriding it. Anything over the ceiling wraps onto another row --
+      // the board never shows fewer channels than it has.
+      keys: ['c'],
+      hud: 'Columns on screen: auto, then at most 4, 6, 8, 10, 12 (TV mode).',
+      run: () => cycleColumns(),
     },
     {
       // "Placement", not "position": the card's third line *is* a position --
