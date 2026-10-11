@@ -1485,6 +1485,55 @@ body.topbar-hidden .navbar {
   display: none;
 }
 
+/* ⛔ The way back, and the one piece of chrome `H` must never hide (#110).
+
+   Hiding the bar used to leave a keyboard-less board with nothing on screen to
+   press: no bar, no menu, and `?` and `H` both need keys. The preference is
+   stored per device, so it survived a reload too -- the only remedies were
+   editing the URL hash or clearing local storage.
+
+   It appears only while the bar is hidden, because while the bar is there the
+   bar *is* the way in, and a wall display should carry no more chrome than it
+   has to. Quiet at rest, legible on hover, focus or touch. */
+.topbar-restore {
+  display: none;
+}
+
+body.topbar-hidden .topbar-restore {
+  position: fixed;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 1040;
+
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(215, 215, 215, 0.35);
+  border-radius: 50%;
+  background: rgba(38, 38, 38, 0.72);
+  color: var(--color-white);
+  opacity: 0.38;
+  transition: opacity 0.15s ease-in-out;
+}
+
+body.topbar-hidden .topbar-restore:hover,
+body.topbar-hidden .topbar-restore:focus-visible {
+  opacity: 1;
+}
+
+body.topbar-hidden .topbar-restore:focus-visible {
+  outline: 2px solid var(--color-white);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-restore {
+    transition: none;
+  }
+}
+
 .navbar-toggler {
   padding-left: 1em;
   padding-right: 1em;

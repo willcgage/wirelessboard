@@ -74,6 +74,16 @@ export const TYPE_SIZES = ['medium', 'small', 'large'];
 export const TOP_BAR_STATES = ['shown', 'hidden'];
 
 /**
+ * The state that puts the bar back.
+ *
+ * Named rather than written as a string wherever something needs to restore the
+ * bar instead of cycling it: `H` toggles, but the escape control added for #110
+ * only ever moves one way, and a literal 'shown' in another module is a rename
+ * waiting to go unnoticed.
+ */
+export const TOP_BAR_SHOWN = TOP_BAR_STATES[0];
+
+/**
  * 1.11.0 shipped the old names and boards have them stored. Map rather than
  * discard: silently resetting somebody's wall display to the default because
  * the vocabulary changed is a worse greeting than a near-equivalent layout.

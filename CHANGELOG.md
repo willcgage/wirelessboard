@@ -8,7 +8,7 @@
 - _Nothing yet._
 
 ### Fixed
-- _Nothing yet._
+- **Hiding the top bar no longer leaves a touchscreen with no way back.** Pressing `H` hides the Wirelessboard bar, and the bar is the only thing on the board you can click — so on a tablet or phone, with no keyboard to press `H` again, there was nothing left to touch. Worse, the choice is remembered per device, so the board came back that way after a restart and the only fixes were editing the address bar or clearing the browser's stored data. A small button now appears in the bottom corner whenever the bar is hidden, and brings it straight back. It shows up only while the bar is hidden, so a board in normal use looks exactly as it did.
 
 ## [1.16.1] - 2026-09-13
 Makes SLX-D usable from the configuration page.
