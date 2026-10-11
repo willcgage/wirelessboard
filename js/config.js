@@ -6,6 +6,14 @@ import { discoveryHint } from './discovery-hint.mjs';
 import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from './background-key.mjs';
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
+import {
+  CLEAR_ASSIGNMENT,
+  parseSelection,
+  assignedSlots,
+  clearUpdates,
+  clearAllConfirmation,
+  clearedSummary,
+} from './clear-assignments.mjs';
 
 const noop = () => {};
 
@@ -1631,6 +1639,13 @@ function applyExtendedNameChanges(updates) {
     if (assignRow) {
       const extCell = assignRow.querySelector('.pco-ext-name');
       if (extCell) extCell.textContent = value;
+      // A cleared slot's dropdown goes back to "leave it alone" (#135). Left on
+      // "clear this slot" it would clear again on the next Apply, which looks
+      // like the clear never took.
+      if (!value) {
+        const sel = assignRow.querySelector('select.pco-person-select');
+        if (sel) sel.value = '';
+      }
     }
   });
 }
@@ -3074,6 +3089,8 @@ function applyPcoMappingToForm(mapping) {
   if (elStrategy) elStrategy.value = m.strategy || DEFAULT_PCO_STRATEGY;
   if (elNumberFallback) elNumberFallback.checked = m.position_number_fallback === true;
   if (elSeed) elSeed.checked = m.seed_extended_id === true;
+  const elClearUnmatched = document.getElementById('pco-clear-unmatched');
+  if (elClearUnmatched) elClearUnmatched.checked = m.clear_unmatched === true;
   renderPcoTeamChoices(null);
 }
 
@@ -3200,6 +3217,7 @@ function buildPcoPayload() {
   const strategy = (document.getElementById('pco-strategy')?.value || '').trim() || DEFAULT_PCO_STRATEGY;
   const numberFallbackEl = document.getElementById('pco-number-fallback');
   const seedExtendedIdEl = document.getElementById('pco-seed-extended-id');
+  const clearUnmatchedEl = document.getElementById('pco-clear-unmatched');
   const payload = {
     enabled,
     services: {
@@ -3212,6 +3230,7 @@ function buildPcoPayload() {
       team_name_filter: teamFilterRaw.split(',').map((s) => s.trim()).filter((s) => s),
       position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : false,
       seed_extended_id: seedExtendedIdEl ? !!seedExtendedIdEl.checked : false,
+      clear_unmatched: clearUnmatchedEl ? !!clearUnmatchedEl.checked : false,
     },
   };
   if (serviceTypeId) {
@@ -3641,8 +3660,25 @@ function handlePcoSync(dryRun = false) {
         summaryParts.push(`${resp.updates || 0} update${(resp.updates || 0) === 1 ? '' : 's'}`);
       }
       if (unmatched.length) summaryParts.push(`${unmatched.length} unmatched`);
+      // What the sync takes *off* the board (#135). A preview has to say this
+      // before an operator agrees to it -- removing the wrong name is the one
+      // part of a sync that cannot be undone by syncing again.
+      const clearable = Array.isArray(resp.clearable) ? resp.clearable : [];
+      if (clearable.length) {
+        const n = resp.dry_run ? clearable.length : (resp.cleared || 0);
+        summaryParts.push(
+          `<span class="text-warning">${n} slot${n === 1 ? '' : 's'} `
+          + `${resp.dry_run ? 'would be cleared' : 'cleared'}</span>`,
+        );
+      }
       if (conflicts.length) summaryParts.push(`<span class="text-danger">${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}</span>`);
       if (summaryEl) summaryEl.innerHTML = summaryParts.join(' — ');
+
+      if (clearable.length) {
+        // Names them, so an unwanted clear can be put back by hand.
+        const which = clearable.map((c) => `slot ${c.slot} (${c.name || 'unnamed'})`).join(', ');
+        appendPcoLog(`${resp.dry_run ? 'Would clear' : 'Cleared'}: ${which}`, 'warn');
+      }
 
       appendPcoLog(
         `${resp.dry_run ? 'Preview' : 'Sync'} complete for plan ${planId}: `
@@ -3856,7 +3892,14 @@ function buildAssignmentTable(ppl) {
   // Create a sorted copy by slot number
   const sorted = slots.slice().sort((a, b) => (a.slot || 0) - (b.slot || 0));
   // Create a shared select options fragment from people list
-  const optionsHTML = ['<option value="">-- choose --</option>']
+  // ⛔ Two different blanks. "-- choose --" means "leave this slot as it is",
+  // which is what most rows want; CLEAR_ASSIGNMENT means "take the person off
+  // it". Before #135 there was only the first, so once a name was on a slot the
+  // only way off was the Slot Configuration page.
+  const optionsHTML = [
+    '<option value="">-- choose --</option>',
+    `<option value="${CLEAR_ASSIGNMENT}">— clear this slot —</option>`,
+  ]
     .concat(ppl.map((p) => {
       const notesArr = Array.isArray(p.notes) ? p.notes : [];
       const extra = notesArr.length ? notesArr.join(' | ') : '';
@@ -3978,7 +4021,56 @@ document.addEventListener('click', (e) => {
     const sels = document.querySelectorAll('#pco-assign-table select.pco-person-select');
     Array.from(sels).forEach((sel) => { sel.value = ''; });
   }
+  if (t.id === 'pco-clear-assignments') {
+    e.preventDefault();
+    clearAllAssignments();
+  }
 }, { passive: false });
+
+/**
+ * Take people off slots (#135).
+ *
+ * ⚠️ Clears the name and keeps `extended_id`: the position is what a later sync
+ * matches on and is often something the operator set deliberately. A slot keeps
+ * its role when the person leaves it.
+ */
+function clearSlotAssignments(slotNumbers) {
+  const summary = document.getElementById('pco-clear-summary');
+  const updates = clearUpdates(slotNumbers);
+  if (!updates.length) {
+    if (summary) summary.textContent = clearedSummary(0);
+    return;
+  }
+
+  appendPcoLog(`Clearing ${updates.length} slot assignment(s)...`);
+  postJSON('api/slot', updates, () => {
+    if (summary) summary.textContent = clearedSummary(updates.length);
+    appendPcoLog(`Cleared ${updates.length} slot assignment(s).`);
+    // Handles the local config, the Config page input, the assign row and the
+    // dropdown; it already treats an empty name as "clear".
+    try { applyExtendedNameChanges(updates); } catch (e) {
+      appendPcoLog(`Unable to refresh names locally: ${formatError(e)}`, 'warn');
+    }
+  }, (err) => {
+    appendPcoLog(`Failed to clear assignments: ${formatError(err)}`, 'error');
+  });
+}
+
+function clearAllAssignments() {
+  const slots = assignedSlots((micboard.config && micboard.config.slots) || []);
+  const summary = document.getElementById('pco-clear-summary');
+  const question = clearAllConfirmation(slots.length);
+  if (!question) {
+    if (summary) summary.textContent = clearedSummary(0);
+    return;
+  }
+  if (!window.confirm(question)) {
+    return;
+  }
+  // Lists them before clearing, so an accidental yes is recoverable by hand.
+  appendPcoLog(`Clearing assignments on slot(s): ${slots.join(', ')}`);
+  clearSlotAssignments(slots);
+}
 
 function applyAssignmentsFromSelects() {
   const summary = document.getElementById('pco-assign-summary');
@@ -3992,9 +4084,17 @@ function applyAssignmentsFromSelects() {
   Array.from(sels).forEach((sel) => {
     const slotStr = sel.getAttribute('data-slot') || '';
     const slot = Number.parseInt(slotStr, 10);
-    const name = sel.value ? decodeURIComponent(sel.value) : '';
-    if (!Number.isFinite(slot) || !name) return;
+    if (!Number.isFinite(slot)) return;
 
+    // An explicit clear is a real update; a blank is "leave it alone".
+    const choice = parseSelection(sel.value);
+    if (choice.action === 'skip') return;
+    if (choice.action === 'clear') {
+      updates.push({ slot, extended_name: '' });
+      return;
+    }
+
+    const { name } = choice;
     const update = { slot, extended_name: name };
 
     // Record the position, not the person. Names change every week; the
@@ -4012,7 +4112,7 @@ function applyAssignmentsFromSelects() {
   });
 
   if (updates.length === 0) {
-    if (summary) summary.innerHTML = '<span class="text-warning">Select at least one person.</span>';
+    if (summary) summary.innerHTML = '<span class="text-warning">Select at least one person, or choose “clear this slot”.</span>';
     appendPcoLog('No assignments selected to apply.', 'warn');
     return;
   }

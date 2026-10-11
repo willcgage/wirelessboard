@@ -379,6 +379,21 @@
                     Fill empty slot IDs with the position name
                   </label>
                 </div>
+                <!-- Off by default on purpose (#135): on, a sync makes the board
+                     match the plan exactly, which also takes the spare handheld
+                     off the visiting speaker nobody told Planning Center about. -->
+                <div class="form-check mt-2">
+                  <input type="checkbox" class="form-check-input" id="pco-clear-unmatched">
+                  <label class="form-check-label" for="pco-clear-unmatched">
+                    Clear slots this plan does not fill
+                  </label>
+                  <div class="form-text">
+                    A sync normally only writes names, so whoever was scheduled last week stays on
+                    their slot until a later plan replaces them. With this on, a sync takes the
+                    person off any slot the new plan has nobody for &mdash; including one you
+                    assigned by hand. The slot keeps its ID, so it still matches next week.
+                  </div>
+                </div>
               </div>
             </div>
             <div class="form-row mt-3">
@@ -451,10 +466,27 @@
               have an ID are left alone.
             </div>
           </div>
-          <div class="d-flex gap-2 mt-2">
+          <div class="d-flex flex-wrap gap-2 mt-2">
             <button type="button" id="pco-autofill-assignments" class="btn btn-success">Auto-Fill From Notes</button>
             <button type="button" id="pco-apply-assignments" class="btn btn-primary">Apply Assignments</button>
-            <button type="button" id="pco-clear-assignment-selects" class="btn btn-outline-secondary">Clear Selections</button>
+            <!-- Renamed in #135. It was "Clear Selections", which sat a few
+                 pixels from a button that clears the board itself -- two very
+                 different things reading almost the same. -->
+            <button type="button" id="pco-clear-assignment-selects" class="btn btn-outline-secondary">Reset Dropdowns</button>
+          </div>
+          <!-- Taking people off slots, which until #135 meant a trip to the Slot
+               Configuration page to empty one field and save everything. -->
+          <div class="d-flex flex-wrap gap-2 mt-3 pt-3 border-top">
+            <button type="button" id="pco-clear-assignments" class="btn btn-outline-warning">
+              Clear all assignments
+            </button>
+            <span id="pco-clear-summary" class="small align-self-center"></span>
+          </div>
+          <div class="form-text">
+            For moving to the next plan. Takes everybody off every slot on the board &mdash;
+            it says how many and asks first. Slot IDs are kept, so next week&rsquo;s plan still
+            matches. To clear one slot, pick &ldquo;clear this slot&rdquo; in its dropdown and
+            apply.
           </div>
         </div>
       </div>
