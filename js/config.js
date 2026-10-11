@@ -5,6 +5,7 @@ import { resolveSlotType } from './slot-rules.mjs';
 import { discoveryHint } from './discovery-hint.mjs';
 import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from './background-key.mjs';
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
+import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 
 const noop = () => {};
 
@@ -2539,6 +2540,31 @@ function closePCOView() {
 }
 
 /**
+ * Which boards a change here reaches (#116).
+ *
+ * The split is real and nothing said so: the view panel writes to this
+ * browser, while everything on this page is the server's and lands on every
+ * connected board at once.
+ */
+function renderConfigScopeNote() {
+  const note = document.getElementById('config-scope-note');
+  if (!note) {
+    return;
+  }
+  note.textContent = scopeNote('global', micboard.viewers);
+
+  // ⚠️ The config view opens before the first payload lands, so the count is
+  // not known yet when this first runs. Follow it rather than printing one
+  // stale sentence and leaving it there.
+  if (!note.dataset.bound) {
+    note.dataset.bound = 'true';
+    window.addEventListener('wirelessboard:viewers', () => {
+      note.textContent = scopeNote('global', micboard.viewers);
+    });
+  }
+}
+
+/**
  * The groups panel (#114).
  *
  * ⭐ Built with createElement rather than innerHTML: these strings are people's
@@ -2686,6 +2712,7 @@ export function initConfigEditor(force = false) {
   ensureConfigHealthBindings();
   loadConfigHealth();
 
+  renderConfigScopeNote();
   renderGroupSummary();
 
   // Render slot list (replacement for missing renderSlotList)
@@ -2890,6 +2917,15 @@ export function initConfigEditor(force = false) {
           `Nothing was saved. Choose a device type for ${described}, or clear the row to discard it.`,
           'error',
         );
+        return;
+      }
+
+      // ⛔ Only when somebody else is watching, and it names the cost: reconfig
+      // drops every receiver socket for ~2 seconds, so this can blank a wall
+      // mid-service. A prompt that always appeared would be dismissed unread.
+      const warning = globalChangeWarning(micboard.viewers, { receivers: true });
+      if (warning && !window.confirm(warning)) {
+        setConfigSaveStatus('Save cancelled.', 'info');
         return;
       }
 

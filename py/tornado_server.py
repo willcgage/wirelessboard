@@ -197,6 +197,11 @@ def wirelessboard_json(network_devices):
         'discovered': discovered,
         'discovery_status': discover.get_dcid_status(),
         'discovery_scan': discover.get_scan_status(),
+        # How many boards are looking at this server (#116). The split between
+        # "this device" and "everyone" already existed and nothing said so; a
+        # save from a phone reloads every one of these and drops the receivers
+        # for a couple of seconds, which is worth knowing before pressing it.
+        'viewers': SocketHandler.viewer_count(),
     }, sort_keys=True, indent=4)
 
 
@@ -244,6 +249,16 @@ class SocketHandler(websocket.WebSocketHandler):
 
     def on_close(self):
         self.clients.remove(self)
+
+    @classmethod
+    def viewer_count(cls):
+        """Boards currently connected, this one included.
+
+        ⚠️ Boards, not people: two tabs on one laptop are two of these, and the
+        server has no way to tell them apart. Everything shown to an operator
+        says "boards" for that reason.
+        """
+        return len(cls.clients)
 
     @classmethod
     def close_all_ws(cls):

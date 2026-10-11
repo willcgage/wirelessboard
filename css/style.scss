@@ -2264,3 +2264,12 @@ a:link, a:visited, a:hover, a:active {
 .card-runtime.batt-unknown .batt-fill {
   display: none;
 }
+
+/* Which boards a pane's changes reach (#116). Quiet, because it is a standing
+   fact rather than a warning -- the confirmation does the warning, and only
+   when somebody else is actually connected. */
+.config-scope-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
