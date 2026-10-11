@@ -362,6 +362,78 @@ def _plan_is_really_gone(plan_id: str, headers: Dict[str, str]) -> bool:
     return _LAST_HTTP_ERROR == 404
 
 
+# Where a service type sits in the Services folder tree (#120 profiles).
+#
+# ⭐ Cached because the shape of a church's folders changes about never, while a
+# sync asks for it every time -- and the walk is one request per level, on the
+# path an operator is waiting on. Ten minutes is long enough that a Sunday's
+# syncs pay for it once and short enough that reorganising folders does not
+# need a restart.
+_FOLDER_CHAIN: Dict[str, Tuple[float, Tuple[str, ...]]] = {}
+_FOLDER_CHAIN_TTL_SECONDS = 600
+
+# ⛔ A folder tree should be a handful deep. The limit is not a tuning knob, it
+# is a guard against a cycle in the data turning a sync into an infinite loop
+# of HTTP calls -- which on a single-threaded server is the whole board gone.
+_FOLDER_CHAIN_MAX_DEPTH = 12
+
+
+def _parent_folder_id(payload: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The Folder a service type or folder hangs from, if any.
+
+    Reads `relationships.parent` and accepts it only when it really is a
+    Folder: a service type's parent is a Folder, but nothing promises that
+    stays true, and silently treating some other resource as a folder would
+    match profiles to the wrong plans.
+    """
+    if not payload:
+        return None
+    rel = ((payload.get('data') or {}).get('relationships') or {})
+    for key in ('parent', 'folder'):
+        data = (rel.get(key) or {}).get('data') or {}
+        if not data:
+            continue
+        if str(data.get('type') or '').lower() != 'folder':
+            continue
+        folder_id = data.get('id')
+        if folder_id is not None:
+            return str(folder_id)
+    return None
+
+
+def folder_chain(service_type_id: Any, headers: Dict[str, str]) -> Tuple[str, ...]:
+    """Folder ids above a service type, nearest first, then its ancestors.
+
+    Empty when the service type sits at the top level, which is the common case
+    for a church that never made folders.
+    """
+    stid = str(service_type_id or '').strip()
+    if not stid:
+        return ()
+
+    cached = _FOLDER_CHAIN.get(stid)
+    if cached and time.monotonic() < cached[0]:
+        return cached[1]
+
+    chain: List[str] = []
+    current = _parent_folder_id(_http_get(f"{BASE_URL}/service_types/{stid}", headers))
+    seen = set()
+    while current and current not in seen and len(chain) < _FOLDER_CHAIN_MAX_DEPTH:
+        chain.append(current)
+        seen.add(current)
+        current = _parent_folder_id(_http_get(f"{BASE_URL}/folders/{current}", headers))
+
+    result = tuple(chain)
+    _FOLDER_CHAIN[stid] = (time.monotonic() + _FOLDER_CHAIN_TTL_SECONDS, result)
+    return result
+
+
+def forget_folder_chains() -> None:
+    """Drop the folder cache. For tests, and for a config save that may have
+    changed which service type is in play."""
+    _FOLDER_CHAIN.clear()
+
+
 def _plan_is_known_missing(plan_id) -> bool:
     if plan_id is None:
         return False
@@ -1473,8 +1545,21 @@ def resolve_sync(
     if stid is None and not profile_override and pco_profiles.profiles_of(pco_cfg):
         stid = _get_plan_service_type_id(plan_id, headers)
 
+    # ⚠️ The folder walk is one request per level. Only taken when some profile
+    # actually binds to a folder and nothing more specific could already have
+    # won -- a board whose profiles are all service-type-bound or hand-picked
+    # pays nothing for a feature it is not using.
+    folders: Tuple[str, ...] = ()
+    if (
+        stid is not None
+        and not profile_override
+        and not pco_profiles.profiles_for_service_type(pco_cfg, stid)
+        and pco_profiles.binds_anywhere(pco_cfg)
+    ):
+        folders = folder_chain(stid, headers)
+
     profile, profile_reason, profile_error = pco_profiles.select_profile(
-        pco_cfg, stid, profile_override)
+        pco_cfg, stid, profile_override, folders)
     if profile_error:
         return {"ok": False, "error": profile_error}
 
@@ -1536,6 +1621,17 @@ def _validate_mapping(mapping: Dict[str, Any], profile: Optional[Dict[str, Any]]
     return None
 
 
+def _profile_binding(profile: Optional[Dict[str, Any]]) -> Optional[str]:
+    """How a profile is attached, for the panel to show beside its name."""
+    if not profile:
+        return None
+    if profile.get('service_type_id'):
+        return 'service_type'
+    if profile.get('folder_id'):
+        return 'folder'
+    return None
+
+
 def _profile_report(profile: Optional[Dict[str, Any]], reason: str) -> Dict[str, Any]:
     """What the board says about which rules it used.
 
@@ -1548,6 +1644,7 @@ def _profile_report(profile: Optional[Dict[str, Any]], reason: str) -> Dict[str,
         "id": (profile or {}).get('id') or None,
         "name": (profile or {}).get('name') or (profile or {}).get('id') or None,
         "reason": reason,
+        "bound_to": _profile_binding(profile),
         "description": pco_profiles.describe_selection(profile, reason),
     }
 

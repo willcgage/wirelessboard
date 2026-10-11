@@ -352,7 +352,7 @@ class TestItReachesTheSync:
         # what profiles make non-obvious.
         result = plan.resolve_sync(self.cfg())
 
-        assert set(result['profile']) == {'id', 'name', 'reason', 'description'}
+        assert set(result['profile']) == {'id', 'name', 'reason', 'bound_to', 'description'}
 
     def test_an_explicit_plan_costs_one_lookup_to_find_its_service_type(self, monkeypatch):
         # ⚠️ `_select_plan` returns no service type for an explicitly chosen
@@ -439,3 +439,159 @@ class TestItReachesTheSync:
         cfg['profiles'][2]['mapping']['strategy'] = 'whatever'
 
         assert plan.resolve_sync(cfg)['ok'] is True
+
+
+class TestFolderBinding:
+    """⭐ Churches organise Services into folders, and the maintainer's board
+    covers Sunday Morning, Sunday Night, Wednesday Youth and special services.
+
+    A folder binding is one rule covering every service type filed under it --
+    including ones created later, which a service-type binding cannot do.
+
+    ⛔ Templates are deliberately absent. Planning Center copies a template into
+    a plan rather than linking it, so a plan carries no reference back and
+    nothing the board can read says which template it came from. Hand-picking
+    is the answer there, not a binding that cannot exist.
+    """
+
+    CFG = {
+        'mapping': {'strategy': 'position_or_note', 'team_name_filter': ['Everyone']},
+        'profiles': [
+            {'id': 'weekend', 'name': 'Weekend', 'folder_id': '100',
+             'mapping': {'team_name_filter': ['Vocal', 'Band']}},
+            {'id': 'youth', 'name': 'Youth', 'folder_id': '200',
+             'mapping': {'team_name_filter': ['Youth Band'], 'clear_unmatched': True}},
+            {'id': 'sunday-night', 'name': 'Sunday Night', 'service_type_id': '55',
+             'mapping': {'team_name_filter': ['Evening Band']}},
+        ],
+    }
+
+    def test_a_folder_binding_matches_a_service_type_inside_it(self):
+        profile, reason, error = pco_profiles.select_profile(
+            self.CFG, service_type_id='12', folder_ids=('100',))
+
+        assert error is None
+        assert profile['id'] == 'weekend'
+        assert reason == 'folder'
+
+    def test_a_service_type_binding_beats_a_folder_one(self):
+        # The more specific statement wins, as everywhere else here.
+        profile, reason, _error = pco_profiles.select_profile(
+            self.CFG, service_type_id='55', folder_ids=('100',))
+
+        assert profile['id'] == 'sunday-night'
+        assert reason == 'service_type'
+
+    def test_the_nearest_folder_wins(self):
+        # ⭐ What makes nesting useful: "Youth" inside "Weekend" beats
+        # "Weekend", so one general rule covers a whole tree while a single
+        # branch overrides it. Same precedence as a stylesheet.
+        profile, _reason, _error = pco_profiles.select_profile(
+            self.CFG, service_type_id='77', folder_ids=('200', '100'))
+
+        assert profile['id'] == 'youth'
+
+    def test_an_ancestor_folder_still_matches_when_nothing_nearer_does(self):
+        profile, _reason, _error = pco_profiles.select_profile(
+            self.CFG, service_type_id='77', folder_ids=('999', '100'))
+
+        assert profile['id'] == 'weekend'
+
+    def test_a_service_type_in_no_matching_folder_uses_the_board_settings(self):
+        profile, reason, _error = pco_profiles.select_profile(
+            self.CFG, service_type_id='77', folder_ids=('900', '901'))
+
+        assert (profile, reason) == (None, 'base')
+
+    def test_a_hand_pick_still_beats_a_folder(self):
+        profile, reason, _error = pco_profiles.select_profile(
+            self.CFG, service_type_id='12', folder_ids=('100',), profile_override='youth')
+
+        assert (profile['id'], reason) == ('youth', 'chosen')
+
+    def test_folder_ids_survive_ints(self):
+        assert pco_profiles.select_profile(
+            {'profiles': [{'id': 'p', 'folder_id': 100}]},
+            service_type_id='12', folder_ids=('100',))[0]['id'] == 'p'
+
+    def test_binds_anywhere_is_false_without_folder_bindings(self):
+        # ⚠️ The gate on the folder walk, which costs one request per level.
+        assert pco_profiles.binds_anywhere({'profiles': [
+            {'id': 'a', 'service_type_id': '12'}, {'id': 'b'}]}) is False
+
+    def test_binds_anywhere_is_true_with_one(self):
+        assert pco_profiles.binds_anywhere(self.CFG) is True
+
+    def test_two_profiles_claiming_one_folder_are_reported(self):
+        cfg = {'profiles': [
+            {'id': 'a', 'name': 'Weekend', 'folder_id': '100'},
+            {'id': 'b', 'name': 'Weekend (old)', 'folder_id': '100'},
+        ]}
+
+        clash = pco_profiles.binding_conflicts(cfg)[0]
+
+        assert clash['kind'] == 'folder'
+        assert clash['folder_id'] == '100'
+        assert clash['winner'] == 'Weekend'
+
+    def test_the_description_says_it_matched_on_a_folder(self):
+        # The operator has to be able to tell "this matched because of the
+        # folder" from "this matched because of the service type", or a
+        # surprising profile choice is unexplainable.
+        profile = pco_profiles.profile_by_id(self.CFG, 'youth')
+
+        assert 'folder' in pco_profiles.describe_selection(profile, 'folder')
+
+
+class TestFolderWalkIsNotPaidForTwice:
+    """⚠️ The walk is one request per level on the path an operator waits on."""
+
+    @pytest.fixture
+    def sync(self, monkeypatch):
+        import pco
+
+        monkeypatch.setattr(pco, '_select_plan', lambda *a, **k: (34, '77', None))
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_configured_slots', lambda: [])
+        walked = []
+        monkeypatch.setattr(pco, 'folder_chain',
+                            lambda stid, headers: walked.append(stid) or ('100',))
+        pco._walked = walked
+        return pco
+
+    def auth(self, profiles):
+        return {'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
+                'profiles': profiles}
+
+    def test_no_folder_bindings_means_no_walk(self, sync):
+        sync.resolve_sync(self.auth([{'id': 'a', 'service_type_id': '99'}]))
+
+        assert sync._walked == []
+
+    def test_a_matching_service_type_binding_short_circuits_the_walk(self, sync):
+        # Nothing a folder could say would change the answer, so nothing is asked.
+        result = sync.resolve_sync(self.auth([
+            {'id': 'exact', 'service_type_id': '34'},
+            {'id': 'broad', 'folder_id': '100'},
+        ]))
+
+        assert sync._walked == []
+        assert result['profile']['id'] == 'exact'
+
+    def test_a_hand_pick_short_circuits_it_too(self, sync):
+        sync.resolve_sync(self.auth([{'id': 'a', 'folder_id': '100'}]),
+                          profile_override='a')
+
+        assert sync._walked == []
+
+    def test_it_walks_when_a_folder_binding_could_actually_win(self, sync):
+        result = sync.resolve_sync(self.auth([{'id': 'weekend', 'folder_id': '100'}]))
+
+        assert sync._walked == [34]
+        assert result['profile']['id'] == 'weekend'
+        assert result['profile']['reason'] == 'folder'
+
+    def test_the_report_says_how_the_profile_is_attached(self, sync):
+        result = sync.resolve_sync(self.auth([{'id': 'weekend', 'folder_id': '100'}]))
+
+        assert result['profile']['bound_to'] == 'folder'
