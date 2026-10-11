@@ -8,7 +8,9 @@ import { initLiveData } from './data.js';
 import { groupEditToggle, initEditor } from './dnd.js';
 import { slotEditToggle } from './extended.js';
 import { keybindings } from './kbd.js';
-import { setBackground, setInfoDrawer, applyBoardLayout } from './display.js';
+import {
+  setBackground, setInfoDrawer, applyBoardLayout, showTopBar,
+} from './display.js';
 import { setTimeMode } from './chart-smoothie.js';
 import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule, scheduleBackgroundFilenameGuide,
@@ -327,6 +329,17 @@ function mapGroups() {
       if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
       resetViews();
     });
+  }
+
+  // The escape control for a hidden bar (#110). Bound unconditionally: it is
+  // the only route back on a board with no keyboard, so it must not depend on
+  // any of the panes above having rendered.
+  const topBarRestore = document.getElementById('topbar-restore');
+  if (topBarRestore && !topBarRestore.dataset.bound) {
+    topBarRestore.addEventListener('click', () => {
+      showTopBar();
+    });
+    topBarRestore.dataset.bound = 'true';
   }
 
   const goGroupEdit = document.getElementById('go-groupedit');

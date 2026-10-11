@@ -3,7 +3,8 @@ import { micboard, updateHash } from './app.js';
 import { updateGIFBackgrounds } from './gif.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES, nextOption,
+  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES, TOP_BAR_SHOWN,
+  nextOption,
 } from './board-layout.mjs';
 import {
   writePref, safeStorage,
@@ -132,6 +133,23 @@ export function cycleTypeSize() {
   applyBoardLayout();
   updateHash();
   return micboard.typeSize;
+}
+
+/**
+ * Put the bar back, whatever state it is in.
+ *
+ * ⛔ Deliberately not a toggle. `H` cycles, which is right for a keyboard; this
+ * drives the on-screen escape control (#110), which exists precisely because
+ * the bar is already gone and there is no keyboard to press `H` on. A control
+ * that could hide the bar again would be able to recreate the dead end it was
+ * added to remove.
+ */
+export function showTopBar() {
+  micboard.topBar = TOP_BAR_SHOWN;
+  writePref({ storage: safeStorage(), key: TOP_BAR_KEY, value: micboard.topBar });
+  applyBoardLayout();
+  updateHash();
+  return micboard.topBar;
 }
 
 /** Two states, so cycling is a toggle -- same shape as the controls above. */
