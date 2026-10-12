@@ -1285,6 +1285,70 @@ def get_group_by_number(group_number):
             return group
     return None
 
+# How long a group may hold the wall. ⚠️ The same bounds the browser applies in
+# `rotation.mjs`; if these two ever disagree the board and the editor disagree
+# about what was saved, which is the kind of difference nobody looks for.
+MIN_GROUP_DWELL = 5
+MAX_GROUP_DWELL = 600
+
+
+def _normalize_dwell(value) -> Optional[int]:
+    """Seconds, bounded — or None for "use the board's default"."""
+    if value is None or value == '':
+        return None
+    try:
+        seconds = int(value)
+    except (TypeError, ValueError):
+        return None
+    if seconds <= 0:
+        return None
+    return max(MIN_GROUP_DWELL, min(seconds, MAX_GROUP_DWELL))
+
+
+def reorder_groups(order) -> List[Dict[str, Any]]:
+    """Put the groups in the given order of group numbers.
+
+    ⭐ The list order *is* the rotation order (#113), so this is not cosmetic —
+    reordering here changes what the room sees and in what sequence.
+
+    ⚠️ Groups the caller did not mention keep their relative order and follow
+    the ones it did. A stale editor that has not seen a group just added must
+    not be able to delete it by omission.
+    """
+    groups = config_tree.get('groups')
+    if not isinstance(groups, list):
+        return []
+
+    wanted = []
+    for number in (order or []):
+        try:
+            wanted.append(int(number))
+        except (TypeError, ValueError):
+            continue
+
+    by_number = {}
+    for group in groups:
+        if isinstance(group, dict):
+            try:
+                by_number[int(group.get('group'))] = group
+            except (TypeError, ValueError):
+                continue
+
+    ordered = []
+    for number in wanted:
+        group = by_number.pop(number, None)
+        if group is not None:
+            ordered.append(group)
+    # Whatever was not named, in the order it already had.
+    for group in groups:
+        if isinstance(group, dict) and group in by_number.values():
+            ordered.append(group)
+
+    config_tree['groups'] = ordered
+    save_current_config()
+    return ordered
+
+
 def update_group(data):
     """Apply a group change, editing only the fields the payload carries.
 
@@ -1309,6 +1373,20 @@ def update_group(data):
     for field in ('slots', 'title', 'hide_charts'):
         if field in data:
             group[field] = data[field]
+
+    # ⛔ The wall's rotation reads these (#113), so a bad value does not produce
+    # a wrong-looking list -- it produces a wall that holds one group for an
+    # hour or skips a group nobody meant to skip. Normalised here rather than
+    # trusted, and still absent-means-not-editing like the three above.
+    if 'rotate' in data:
+        group['rotate'] = data['rotate'] is True
+
+    if 'dwell' in data:
+        dwell = _normalize_dwell(data['dwell'])
+        if dwell is None:
+            group.pop('dwell', None)
+        else:
+            group['dwell'] = dwell
 
     save_current_config()
 

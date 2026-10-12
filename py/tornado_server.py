@@ -678,6 +678,16 @@ class GroupUpdateHandler(web.RequestHandler):
 
     def post(self):
         data = json.loads(self.request.body)
+
+        # ⭐ Reordering is its own shape, because list order *is* the rotation
+        # order (#113) -- sending it as a field on one group would mean every
+        # group had to agree about where every other one sits.
+        if isinstance(data, dict) and 'order' in data:
+            groups = config.reorder_groups(data.get('order'))
+            self.set_header('Content-Type', 'application/json')
+            self.write(json.dumps({'ok': True, 'order': [g.get('group') for g in groups]}))
+            return
+
         config.update_group(data)
         logger.debug('Group update payload: %s', data)
         self.write(data)
