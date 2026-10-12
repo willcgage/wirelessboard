@@ -2,23 +2,172 @@
 
 ## [Unreleased]
 ### Added
-- **The board now says which settings are yours and which are everybody's.** The View panel says its settings change this device only; the configuration page says its changes reach every connected board, and shows how many are connected. If anyone else is watching, saving the configuration asks first and says what it will cost — "this will reload 2 other boards and briefly disconnect the receivers" — because a save tears down and rebuilds every receiver connection, which is a real interruption during a service. With nobody else connected you are never asked.
-- **Every view setting can now be changed without a keyboard.** The small button in the bottom corner of the board opens a View panel holding all of them — display mode, arrangement, columns on screen, card shape, text band, status colour, text size and the top bar. Each row shows the key it answers to, so the panel teaches the shortcuts rather than replacing them, and every key keeps working exactly as before. This matters most on a tablet or phone, where there was previously no way to reach any of these.
-- **The configuration page now shows your groups, and what is in none of them.** A new Groups panel lists every group with its channels and a count, and — the part the board's own editor could never answer — a row for channels that are in no group at all. Those channels are invisible to anyone viewing a group rather than the whole board, and until now nothing told you. Group names can be changed from here too. It also flags a group pointing at a slot that no longer exists, which until now accumulated silently.
-- **The status colour can now fill the whole card or just the text band.** Press `W` in TV mode to switch. The band is the new default; the full card is how the board looked before. Worth trying both on the actual wall — on a card with a photo, the full-card colour is mostly hidden behind the picture, which is why the band exists.
-- **You can now cap how many columns the board uses.** Press `C` in TV mode to cycle between letting the board decide and allowing at most 4, 6, 8, 10 or 12 across. Twelve channels on a wide screen gives you slivers about 155 pixels wide; capping at six makes each card twice that and puts the rest on a second row. It is a ceiling rather than an exact number, so it works alongside the arrangement key rather than overriding it — and nothing is ever hidden: channels that do not fit the width wrap onto another row. Like the other view settings, the choice is remembered on that device and can be set from a link.
+- _Nothing yet._
 
 ### Changed
-- **The arrangements are named for what they do.** "One row" is now "Side by side" and "one column" is "Stacked", each with a small picture of the result, because the old names described the grid rather than what you see — the setting that fills the screen with twelve columns was called a row. Nothing stored changes, so saved boards and shared links carry on working.
-- **The time remaining now has a battery beside it.** A small battery icon sits next to the figure on each card, filled to the level the receiver reports, so the number is obviously a battery reading rather than a timer. On a channel where nothing has reported a level the icon stays as an empty outline — which reads as "no information", not as a flat battery. Receivers that report a level but no runtime now have something to show as well.
-- **Each card now says which handheld or bodypack it is.** The heading above every card carries the equipment's own name — HH-1, BP-9 — and nothing else, so somebody walking up to the rack can see what to pick up. Receivers are usually labelled with both the equipment and a person ("HH-1 Dave"), and the board was printing that whole label as a heading while also showing the person on the card, so the same name appeared twice and the equipment was buried in the middle of it. A slot whose receiver has not reported its channel name yet shows its slot number instead.
-- **The card has been rebuilt so the photo is never covered by text.** The name, position and battery runtime now sit in a band along one edge of the card, and the band carries the channel's status colour. Above it the photograph is left completely alone — no dimming, no tint, nothing printed over a face. The channel's own name moves up into a heading above each card, where it lines up across the board instead of being repeated inside every card.
-- **A channel that needs attention now says so in words.** A small badge in the corner of the card reads "Replace", "Low" or "RX error" next to its symbol, rather than relying on the colour alone — which never worked for anyone who has trouble telling red from amber, and works even less well over a photograph. Healthy channels stay unmarked.
-- **Narrow cards drop what they have no room for.** At twelve across, a card keeps the face, the name and the time remaining and leaves the position out, instead of wrapping "Teaching" into fragments down the side. You choose how many channels to see; the card works out what fits.
-- **`P` now has two settings instead of three.** The text band sits at the bottom of the card or the top. "Middle" is gone: the band is solid, and a solid band across the middle cuts the photograph in half. Boards that had it set to middle move to bottom on their own.
+- _Nothing yet._
 
 ### Fixed
 - _Nothing yet._
+
+## [2.0.0-beta.1] - 2026-10-12
+The 2.0 redesign, for testing before it goes anywhere near a service.
+
+This is a **beta**. It is the first build of a substantial rework: the card has been rebuilt around
+the photograph, the keyboard shortcuts have been retired in favour of controls you can tap, and the
+Planning Center panel has been pulled apart into the three jobs it was doing at once. Please try it
+on a board that is *not* running a service.
+
+⛔ **Nothing in this release has been used on real hardware or during a real service.** Every part of
+it has been tested and rendered on a development machine, which is not the same thing. The parts
+most worth exercising first, because a surprise there would hurt most: switching between groups,
+automatic re-sync writing to the configuration on its own, and the Planning Center Live timer.
+
+⛔ **Existing boards will not be offered this update.** It is published as a pre-release, which the
+in-app update check deliberately ignores. Install it by hand on a board you are happy to break.
+
+### ⛔ The keyboard shortcuts are gone
+**Every keyboard shortcut except `Escape` has been removed.** The board was operated with about
+twenty single-key shortcuts, which worked well at a desk and not at all on the tablets and phones
+this runs on — the screens with no keyboard were exactly the ones that could reach nothing. Every
+one of them is now a control you can tap:
+
+- The **gear in the bottom corner** opens a View panel holding everything about *this screen*:
+  display mode, which group is showing, arrangement, columns, card shape, status colour, text size,
+  backgrounds, the service-position strip, paging, fullscreen, the status stripe, the battery and
+  chart drawer, the top bar, and the display-only lock.
+- The **Menu** holds everything that changes *every board*: slot names, group editing,
+  configuration, the background library, Planning Center, the scannable URL and demo mode.
+- `Escape` still returns to the board, because getting out of a full-screen pane is not a shortcut.
+
+The `?` shortcuts overlay has gone with them, and the Quick Start card now points at the gear.
+
+⚠️ If you had muscle memory for `T`, `O`, `G` or any of the others, it will not work any more. This
+is the change most likely to feel wrong, and the one most worth telling us about.
+
+### Added
+- **The board now says which settings are yours and which are everybody's.** The View panel says its
+  settings change this device only; the configuration page says its changes reach every connected
+  board, and shows how many are connected. If anyone else is watching, saving the configuration asks
+  first and says what it will cost — "this will reload 2 other boards and briefly disconnect the
+  receivers" — because a save tears down and rebuilds every receiver connection, which is a real
+  interruption during a service. With nobody else connected you are never asked.
+- **A screen can be locked to display only.** For a tablet screwed to a wall, or a phone handed to a
+  volunteer so they can watch battery levels: the lock hides the editors, the configuration page,
+  the background library and Planning Center on that device, and refuses demo mode. View settings
+  still work, because none of them leave that browser. ⚠️ It is a guard against accidents, not a
+  security control — the same switch turns it off, and the server has no password of any kind.
+- **The board can page through its groups on a timer.** When there are more channels than fit, the
+  wall cycles through the groups rather than shrinking every card. A board whose channels all fit
+  never pages. Each group can be given its own time on screen, and a group can be left out of the
+  rotation entirely.
+- **Every channel now shows time remaining, even when the receiver will not say.** Where a receiver
+  reports only a battery level, the board works the remaining time out from how fast that level is
+  falling. ⛔ An estimate is always marked as one, with a `~` and a dotted underline — an estimate
+  shown as a measurement is worse than no estimate at all. When there is not enough to go on, the
+  board says nothing rather than guessing.
+- **The configuration page now shows your groups, and what is in none of them.** A Groups panel
+  lists every group with its channels and a count, and — the part the board's own editor could never
+  answer — a row for channels in no group at all. Those are invisible to anyone viewing a group
+  rather than the whole board, and until now nothing told you. It also flags a group pointing at a
+  slot that no longer exists.
+- **You can cap how many columns the board uses.** Twelve channels on a wide screen gives slivers
+  about 155 pixels wide; capping at six makes each card twice that and puts the rest on a second
+  row. It is a ceiling rather than an exact number, and nothing is ever hidden — channels that do
+  not fit wrap onto another row.
+- **Adding receivers now adds all their channels.** "Add all discovered devices" used to add one
+  channel per receiver, so a four-channel receiver appeared as one row and the other three had to be
+  typed in by hand. Discovered receivers now bring their channels with them, and the configuration
+  page groups the rows by receiver so a rack is readable as a rack.
+- **Photos can be chosen per person instead of only matched by filename.** The background library
+  now lets you pick the file for a channel directly. Filename matching still works exactly as before
+  and remains the default; this is for the cases where it cannot — two people with the same name, or
+  a photo nobody wants to rename.
+- **Slots can be cleared from the Planning Center panel.** Taking somebody off a slot used to mean a
+  trip to the configuration page to empty one field and save everything. There is now a "clear this
+  slot" choice per channel and a "clear all assignments" button that says how many it will affect
+  and asks first. Slot IDs are kept, so next week's plan still matches.
+
+### Added — Planning Center
+- **Connecting is its own action, and it checks before it stores.** Enter the token and secret and
+  press Connect: it authenticates against Planning Center first and only then saves to the system
+  keyring. Setting up used to be save, fetch, discover it was wrong, save again — with a bad token
+  stored in the meantime looking like a good one. ⛔ Connecting does not switch the integration on;
+  that stays your decision and a save is what changes it.
+- **The plan list opens on the next upcoming service, and names it.** "Next upcoming — Oct 12",
+  rather than an empty dropdown you had to go looking in every week. ⛔ Syncing on "next" resolves
+  the plan at the moment you sync, so a board left running for a week does not sync last Sunday.
+- **Preview is now a list of what will change on your board.** It used to show what the plan
+  contained — position, person, team. It now shows one row per slot: who is on it now, who would be
+  after, and why. Contested slots come first, slots already correct are folded away, and a board
+  that needs no changes says so outright instead of reporting "0 updates".
+- **Rule sets, for different kinds of service.** Sunday morning, Wednesday youth and a Christmas Eve
+  service rarely want the same matching rules. A rule set can be bound to a service type or a
+  calendar folder and applies itself; anything it does not override is inherited, so a rule set that
+  only wants a different team filter says only that.
+- **The board can tell you when the plan has changed in Planning Center.** A plan edited an hour
+  before a service is normal, and the board otherwise goes on showing the names it synced. A bar
+  across the bottom says the names may be out of date and how long ago it checked. Watching is
+  opt-in and stops once the service is over.
+- **And it can re-sync by itself, if you ask it to.** Off by default and settable per rule set, so
+  youth can be automatic while the main service stays manual. ⛔ When it runs it says what it did,
+  including what it took *off* the board — the half you cannot undo by syncing again. A slot two
+  people both claim is never guessed at.
+- **An optional strip showing where the service has got to.** The current item, a timer, and what is
+  next, in Planning Center's own three timer modes — full item length, end item on time, end service
+  on time. Past zero the timer turns over and counts up, exactly as Live does. ⚠️ Live is often not
+  running, and the strip says so plainly rather than showing a stale position as though it were
+  current. Each screen chooses where to put it, including an unused card space on the wall.
+
+### Changed
+- **The card has been rebuilt so the photo is never covered by text.** The name, position and
+  battery runtime sit in a band along the bottom of the card, and the band carries the channel's
+  status colour. Above it the photograph is left completely alone — no dimming, no tint, nothing
+  printed over a face.
+- **Each card says which handheld or bodypack it is.** The heading above every card carries the
+  equipment's own name — HH-1, BP-9 — and nothing else, so somebody walking up to the rack can see
+  what to pick up. Receivers are usually labelled with both the equipment and a person ("HH-1
+  Dave"), and the board was printing that whole label as a heading *and* showing the person on the
+  card, so the same name appeared twice.
+- **A channel that needs attention says so in words.** A small badge reads "Replace", "Low" or "RX
+  error" next to its symbol, rather than relying on colour alone — which never worked for anyone who
+  has trouble telling red from amber, and works even less well over a photograph. Healthy channels
+  stay unmarked.
+- **The time remaining has a battery beside it.** Filled to the level the receiver reports. On a
+  channel where nothing has reported a level the icon stays an empty outline — which reads as "no
+  information", not as a flat battery.
+- **Narrow cards drop what they have no room for.** At twelve across, a card keeps the face, the
+  name and the time remaining and leaves the position out, instead of wrapping "Teaching" into
+  fragments down the side. You choose how many channels to see; the card works out what fits.
+- **The arrangements are named for what they do.** "One row" is now "Side by side" and "one column"
+  is "Stacked", each with a small picture of the result, because the old names described the grid
+  rather than what you see. Nothing stored changes, so saved boards and shared links carry on
+  working.
+- **The Planning Center panel is in three parts instead of one long form.** Connect, then This week
+  — the plan, Preview and Sync — and everything rarely touched folded away under Setup. The weekly
+  job no longer inherits the setup job's friction, and the preview appears beside the button that
+  produces it rather than at the bottom of the page under a heading called "PCO API Log".
+- **Two people scheduled on the same slot are flagged and skipped.** The board used to write
+  whichever name it resolved last, which was right about half the time and looked exactly as
+  confident as a name that was right. The slot is now left exactly as it was, and the panel names
+  both claimants so somebody can decide before the service.
+- **Controls in the View panel are big enough to tap.** They were 22 pixels tall in a panel whose
+  entire reason for existing is screens with no keyboard.
+
+### Fixed
+- **Deleting a channel no longer moves other people's names onto other channels.** Slot numbers were
+  renumbered from the top every time the configuration changed, while groups and assignments kept
+  pointing at the old numbers — so removing one channel silently moved people and groups onto
+  different slots, and it looked like it had worked. Slot numbers are now an identity: a row keeps
+  its number, and a new row takes one past the highest. Deleted numbers leave gaps, which is
+  correct.
+- **Opening the configuration page before the board had loaded no longer wipes it.** It offered four
+  empty rows, and saving those replaced every configured channel with nothing. It now waits, and
+  says it is waiting.
+- **Hiding the top bar no longer leaves a touchscreen with no way back.** A small gear appears in the
+  bottom corner whenever the bar is hidden, and now opens the whole View panel.
+- **A failed Planning Center check is no longer read as an all-clear.** A dead network used to look
+  like "nothing has changed". It now says it could not ask, and any standing warning stays up.
 
 ## [1.16.2] - 2026-10-11
 A way back out of a hidden top bar, and a round of updates.
