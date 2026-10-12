@@ -6,6 +6,7 @@ import { discoveryHint } from './discovery-hint.mjs';
 import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from './background-key.mjs';
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
+import { assignNumbers } from './slot-numbering.mjs';
 import {
   OVERRIDABLE,
   uniqueId,
@@ -615,14 +616,27 @@ function renderDiscoveredDeviceList() {
   });
 }
 
+/**
+ * Give every configuration row its slot number (#147).
+ *
+ * ⛔ Rows that already have a number **keep it**. This used to renumber from 1
+ * in document order, and because groups store slot numbers — and Planning
+ * Center assignments and `config_mix` resolve through them — deleting a
+ * channel handed other people's channels to other groups.
+ *
+ * Reproduced on a board before fixing: Vocals = [1,2] = Alice and Bob, Band =
+ * [3,4] = Carol and Dave. Delete Bob, save, and the slots became 1, 2, 3 while
+ * the groups still said [1,2] and [3,4] — so Carol was in Vocals. Every group
+ * had the right shape and every name was a real name.
+ */
 function updateSlotID() {
-  const rows = document.querySelectorAll('#editor_holder .cfg-row');
-  let slot = 1;
-  Array.from(rows).forEach((row) => {
+  const rows = Array.from(document.querySelectorAll('#editor_holder .cfg-row'));
+  const numbers = assignNumbers(rows.map((row) => row.id || null));
+  rows.forEach((row, index) => {
+    const slot = numbers[index];
     row.id = `slot-${slot}`;
     const label = row.querySelector('.slot-number label');
     if (label) label.textContent = slot;
-    slot += 1;
   });
 }
 
@@ -1621,7 +1635,11 @@ function applyDeviceNameUpdates(devices) {
     const slotNum = parseInt(entry.slot, 10);
     if (!Number.isFinite(slotNum)) return;
     const name = entry.name || '';
-    const row = document.getElementById(`slot-${slotNum}`);
+    // ⛔ Scoped to the editor. The board's channel cards use the same
+    // `slot-N` ids and come first in the document, so a bare getElementById
+    // returns the card -- which has no `.cfg-*` fields, so this silently did
+    // nothing. Found while reproducing #147.
+    const row = document.querySelector(`#editor_holder #slot-${slotNum}`);
     if (row) {
       const input = row.querySelector('.cfg-device-name');
       if (input) input.value = name;
@@ -1703,7 +1721,8 @@ function applyExtendedNameChanges(updates) {
       }
     }
 
-    const cfgRow = document.getElementById(`slot-${slot}`);
+    // Scoped for the same reason as above: the board card wins a bare lookup.
+    const cfgRow = document.querySelector(`#editor_holder #slot-${slot}`);
     if (cfgRow) {
       const input = cfgRow.querySelector('.cfg-name');
       if (input) input.value = value;
