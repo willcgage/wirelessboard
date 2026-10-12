@@ -11,7 +11,8 @@ import { controlFor, isValidValue } from './view-controls.mjs';
 import { PLACEMENTS } from './live-strip.mjs';
 import { refreshLiveStrip } from './live-strip-view.js';
 import { ROTATION_STATES } from './rotation-states.mjs';
-import { LOCK_STATES, isLocked } from './viewer-lock.mjs';
+import { LOCK_STATES, isLocked, lockedJustNowNote } from './viewer-lock.mjs';
+import { showLockNote, hideLockNote } from './viewer-lock-view.js';
 import { startRotation, stopRotation } from './rotation-view.js';
 import {
   writePref, safeStorage,
@@ -267,6 +268,16 @@ export function cycleViewerLock() {
   micboard.viewerLock = nextOption(LOCK_STATES, micboard.viewerLock);
   writePref({ storage: safeStorage(), key: VIEWER_LOCK_KEY, value: micboard.viewerLock });
   applyBoardLayout();
+  if (isLocked(micboard.viewerLock)) {
+    // ⚠️ Say so. `K` sits among keys people press on purpose, and a board that
+    // silently emptied its own menu would be alarming to whoever hit it by
+    // accident -- the one direction of this toggle that is a surprise.
+    showLockNote(lockedJustNowNote());
+  } else {
+    // ⛔ And take it away on the way back, or a board that has just been
+    // unlocked spends four seconds saying it is locked.
+    hideLockNote();
+  }
   // ⛔ No updateHash(). The lock has no hash parameter on purpose -- a link
   // that switched it off would make it no guard at all.
   return micboard.viewerLock;

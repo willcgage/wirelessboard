@@ -14,7 +14,7 @@ import path from 'node:path';
 
 import {
   LOCK_STATES, LOCK_LABELS, GUARDED_ACTIONS, GUARDED_CALLS,
-  isLocked, allows, refusalNote, lockedMenuNote, lockDescription,
+  isLocked, allows, refusalNote, lockedMenuNote, lockDescription, lockedJustNowNote,
 } from './viewer-lock.mjs';
 import { VIEW_CONTROLS, controlFor, isSwitch } from './view-controls.mjs';
 
@@ -66,6 +66,15 @@ test('a refusal says what was refused and how to undo it', () => {
   assert.match(note, /configuration editor/);
   assert.match(note, /view settings/i);
   assert.equal(refusalNote('fullscreen'), null, 'nothing to say about an action that is allowed');
+});
+
+test('⚠️ a key that locks the board says it did', () => {
+  // `K` sits among keys people press on purpose. Locking is the surprising
+  // direction of the toggle -- the menu empties and the editors vanish -- so
+  // the one thing it must not do is happen silently.
+  const note = lockedJustNowNote();
+  assert.match(note, /locked/i);
+  assert.match(note, /gear/i, 'and name the way back, which is not the keyboard');
 });
 
 test('the menu says why its items are missing', () => {

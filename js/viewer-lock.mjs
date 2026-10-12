@@ -74,6 +74,18 @@ export function refusalNote(action) {
   return `This board is locked to display only, so ${what} is not available. Unlock it in view settings.`;
 }
 
+/**
+ * What a board says when a key just locked it.
+ *
+ * ⛔ Only for the key. Someone who flipped the switch in the panel is looking
+ * at the switch and does not need telling -- but `K` is one keystroke away
+ * from several others, and a board that silently hid its own menu mid-service
+ * would be alarming to whoever did it by accident.
+ */
+export function lockedJustNowNote() {
+  return 'Locked to display only. The gear in the corner unlocks it.';
+}
+
 /** The line the menu shows in place of the editors it has hidden. */
 export function lockedMenuNote() {
   return 'Locked to display only — unlock in view settings.';

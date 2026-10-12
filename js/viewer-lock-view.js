@@ -14,7 +14,27 @@ const SHOWN_FOR_MS = 4000;
 let timer = null;
 
 export function showLockRefusal(action) {
-  const text = refusalNote(action);
+  return showLockNote(refusalNote(action));
+}
+
+/**
+ * Take the note away now, rather than leaving it to time out.
+ *
+ * ⛔ Unlocking while "Locked to display only" is still on screen leaves the
+ * board stating the opposite of its own state for four seconds.
+ */
+export function hideLockNote() {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  const toast = typeof document !== 'undefined' ? document.getElementById(TOAST_ID) : null;
+  if (toast && toast.parentElement) {
+    toast.parentElement.removeChild(toast);
+  }
+}
+
+export function showLockNote(text) {
   if (!text || typeof document === 'undefined' || !document.body) {
     return null;
   }
