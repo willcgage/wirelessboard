@@ -3632,9 +3632,23 @@ const DEFAULT_PCO_STRATEGY = 'position_or_note';
  * ⚠️ Deep-copied: they are edited in place, and editing the live config object
  * would apply changes the operator has not saved -- and could not cancel.
  */
-/** Load the watch settings (#140). */
+// Planning Center's own three, in its own words. ⛔ The values are the stored
+// vocabulary and `pco_live.timer_mode` rejects anything else, so this list and
+// that tuple have to agree (#121).
+const TIMER_MODES = ['full_item_length', 'end_item_on_time', 'end_service_on_time'];
+
+/** Load the watch settings (#140) and the Live strip's (#121). */
 function applyPcoWatchToForm(pcoCfg) {
   const cfg = pcoCfg || {};
+  // ⚠️ Server settings, not matching rules and not per screen: following Live
+  // spends one Planning Center account's allowance on behalf of every board.
+  const liveStripEl = document.getElementById('pco-live-strip');
+  if (liveStripEl) liveStripEl.checked = cfg.live_strip === true;
+  const liveTimerEl = document.getElementById('pco-live-timer-mode');
+  if (liveTimerEl) {
+    liveTimerEl.value = TIMER_MODES.includes(cfg.live_timer_mode)
+      ? cfg.live_timer_mode : 'full_item_length';
+  }
   const watchEl = document.getElementById('pco-watch-active');
   if (watchEl) watchEl.checked = cfg.watch_active_plan === true;
   const interval = document.getElementById('pco-watch-interval');
@@ -3805,6 +3819,8 @@ function buildPcoPayload() {
   const seedExtendedIdEl = document.getElementById('pco-seed-extended-id');
   const clearUnmatchedEl = document.getElementById('pco-clear-unmatched');
   const autoSyncEl = document.getElementById('pco-auto-sync');
+  const liveStripEl = document.getElementById('pco-live-strip');
+  const liveTimerEl = document.getElementById('pco-live-timer-mode');
   const payload = {
     enabled,
     services: {
@@ -3837,6 +3853,14 @@ function buildPcoPayload() {
   if (Number.isFinite(interval)) payload.watch_interval_seconds = interval;
   const grace = Number.parseInt(document.getElementById('pco-watch-grace')?.value, 10);
   if (Number.isFinite(grace)) payload.watch_grace_minutes = grace;
+
+  // The service-position strip (#121). ⛔ Server settings: following Live at
+  // all, and which of Planning Center's three timers to use. *Where* the strip
+  // sits is per screen and lives in view preferences, not here.
+  payload.live_strip = liveStripEl ? !!liveStripEl.checked : false;
+  if (liveTimerEl && TIMER_MODES.includes(liveTimerEl.value)) {
+    payload.live_timer_mode = liveTimerEl.value;
+  }
   if (token || secret) {
     payload.auth = { token, secret };
   }

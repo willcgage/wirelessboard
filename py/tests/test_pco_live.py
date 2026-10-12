@@ -153,9 +153,11 @@ class TestReadingTheApiPayload:
         described = pco_live.describe_item(
             {'title': 'Worship', 'item_type': 'song'},
             {'length': 900, 'live_start_at': '2026-10-11T15:00:00Z'},
+            '5',
         )
 
         assert described == {
+            'id': '5',
             'title': 'Worship',
             'type': 'song',
             'length': 900,
@@ -164,8 +166,18 @@ class TestReadingTheApiPayload:
 
     def test_a_bare_item_describes_cleanly(self):
         assert pco_live.describe_item({}, {}) == {
-            'title': '', 'type': '', 'length': None, 'started_at': None,
+            'id': None, 'title': '', 'type': '', 'length': None, 'started_at': None,
         }
+
+    def test_the_id_comes_from_beside_the_attributes_not_inside_them(self):
+        # ⛔ JSON:API puts the id at the resource level, and `item_from` hands
+        # back only `attributes` -- so reading it from there is a silent None
+        # that makes "End item on time" never match anything (#121). It was
+        # written that way once; this is why it is passed in.
+        attrs = {'title': 'Worship', 'id': 'not-this-one'}
+
+        assert pco_live.describe_item(attrs, {}, '5')['id'] == '5'
+        assert pco_live.describe_item(attrs, {})['id'] is None
 
     def test_a_non_numeric_length_is_dropped_rather_than_crashing(self):
         assert pco_live.describe_item({}, {'length': 'about ten minutes'})['length'] is None

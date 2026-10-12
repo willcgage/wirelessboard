@@ -12,6 +12,7 @@ import pco_live
 import pco_mapping
 import pco_auto_sync
 import pco_profiles
+import pco_running_order
 import sync_diff
 from pco_credentials import CredentialError, ensure_credentials
 
@@ -1508,6 +1509,19 @@ _AUTO_SYNC_TRIED: set = set()
 _PLAN_END: Dict[str, Tuple[float, Optional[str], bool]] = {}
 _PLAN_END_TTL_SECONDS = 900
 
+# The running order, for "End item on time" (#121). a Cached hard: this is read
+# on every Live tick, and a running order is a dozen rows that change perhaps
+# twice in a morning. Only the mode that needs it ever calls for it, so a board
+# on either of the other two never makes this request at all.
+_RUNNING_ORDER: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
+_RUNNING_ORDER_TTL_SECONDS = 600
+# Which (plan, item) pairs have already caused a forced refetch. An item that
+# genuinely is not in the plan -- deleted while Live still points at it -- must
+# not refetch the whole order every tick for the rest of the service.
+_RUNNING_ORDER_FORCED: set = set()
+
+_PLAN_START: Dict[str, Tuple[float, List[Tuple[int, int]]]] = {}
+
 
 def _parse_iso(value: Optional[str]) -> Optional[datetime.datetime]:
     """Planning Center timestamps, which end in Z rather than +00:00."""
@@ -1523,6 +1537,137 @@ def _parse_iso(value: Optional[str]) -> Optional[datetime.datetime]:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=datetime.timezone.utc)
     return parsed
+
+
+def _rows(payload: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The `data` array of a collection response, however it arrives.
+
+    ⚠️ A single-resource endpoint returns an object here, not a list, and
+    iterating that walks its *keys* -- which fails with the useless
+    'str object has no attribute get' rather than saying what was wrong.
+    """
+    data = (payload or {}).get('data')
+    if isinstance(data, list):
+        return [row for row in data if isinstance(row, dict)]
+    return [data] if isinstance(data, dict) else []
+
+
+def _plan_time_windows(plan_id: str, headers: Dict[str, str]) -> List[Tuple[int, int]]:
+    """Every (start, end) this plan is scheduled for, as epochs.
+
+    ⚠️ A plan can have several service times -- a 9am and an 11am are one plan
+    here -- which is why this is a list rather than a pair.
+    """
+    key = str(plan_id or '')
+    if not key:
+        return []
+    cached = _PLAN_START.get(key)
+    if cached and time.monotonic() < cached[0]:
+        return cached[1]
+
+    data = _http_get(f"{BASE_URL}/plans/{key}/plan_times", headers, params={"per_page": 50})
+    windows: List[Tuple[int, int]] = []
+    for row in _rows(data):
+        attrs = row.get('attributes') or {}
+        starts = _parse_iso(attrs.get('starts_at'))
+        ends = _parse_iso(attrs.get('ends_at'))
+        if starts:
+            windows.append((int(starts.timestamp()),
+                            int(ends.timestamp()) if ends else int(starts.timestamp())))
+    windows.sort()
+    if data is not None:
+        # Same rule as `plan_end`: a failed lookup is not cached, or one blip
+        # stops the board timing anything for the next fifteen minutes.
+        _PLAN_START[key] = (time.monotonic() + _PLAN_END_TTL_SECONDS, windows)
+    return windows
+
+
+def plan_start(plan_id: str, headers: Dict[str, str], now: Optional[float] = None) -> Optional[int]:
+    """When the service currently running was scheduled to start.
+
+    ⛔ The *latest* service time that has already begun, not the earliest. A
+    plan with a 9am and an 11am is one plan, and during the 11am service every
+    item's scheduled time is two hours later than the plan's first start --
+    anchoring to the earliest would report the whole service as two hours late.
+
+    Falls back to the first scheduled time, which is the right answer before
+    anything has started.
+    """
+    windows = _plan_time_windows(plan_id, headers)
+    if not windows:
+        return None
+    moment = time.time() if now is None else now
+    started = [start for start, _end in windows if start <= moment]
+    return started[-1] if started else windows[0][0]
+
+
+def running_order(
+    plan_id: str,
+    headers: Dict[str, str],
+    force: bool = False,
+) -> List[Dict[str, Any]]:
+    """The plan's items, in order, with their lengths.
+
+    ⛔ Only called by the one timer mode that needs it. The other two are
+    arithmetic on numbers the Live edges already carry, and this is a request
+    per plan that would otherwise be made on every tick of every board.
+    """
+    key = str(plan_id or '')
+    if not key:
+        return []
+    cached = _RUNNING_ORDER.get(key)
+    if cached and not force and time.monotonic() < cached[0]:
+        return cached[1]
+
+    data = _http_get(f"{BASE_URL}/plans/{key}/items", headers, params={"per_page": 100})
+    if data is None:
+        # Keep whatever we had. A failed fetch is not an empty running order,
+        # and an empty one would silently turn the timer off.
+        return cached[1] if cached else []
+
+    items = [{
+        'id': str(row.get('id') or ''),
+        'title': ((row.get('attributes') or {}).get('title') or '').strip(),
+        'length': (row.get('attributes') or {}).get('length'),
+    } for row in _rows(data)]
+    _RUNNING_ORDER[key] = (time.monotonic() + _RUNNING_ORDER_TTL_SECONDS, items)
+    return items
+
+
+def forget_running_order() -> None:
+    _RUNNING_ORDER.clear()
+    _RUNNING_ORDER_FORCED.clear()
+    _PLAN_START.clear()
+
+
+def scheduled_end_of(
+    plan_id: str,
+    headers: Dict[str, str],
+    item_id: Optional[str],
+    now: Optional[float] = None,
+) -> Optional[int]:
+    """When the item Live is on was meant to finish (#121).
+
+    ⚠️ Refetches once when the cached order has never heard of the item --
+    somebody adding a song mid-service is normal -- but only once per item, or
+    an item that is genuinely gone would refetch every tick until the service
+    ended.
+    """
+    if not item_id:
+        return None
+    start = plan_start(plan_id, headers, now)
+    if start is None:
+        return None
+
+    schedule = pco_running_order.build_schedule(running_order(plan_id, headers), start)
+    if pco_running_order.is_stale(schedule, item_id):
+        marker = (str(plan_id), str(item_id))
+        if marker in _RUNNING_ORDER_FORCED:
+            return None
+        _RUNNING_ORDER_FORCED.add(marker)
+        schedule = pco_running_order.build_schedule(
+            running_order(plan_id, headers, force=True), start)
+    return pco_running_order.scheduled_end_for(schedule, item_id)
 
 
 def plan_end(plan_id: str, headers: Dict[str, str]) -> Tuple[Optional[str], bool]:
@@ -1637,7 +1782,7 @@ def _item_time(payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     times = data.get('attributes') or {}
     item_id = (((data.get('relationships') or {}).get('item') or {}).get('data') or {}).get('id')
     attrs = pco_live.item_from((payload or {}).get('included') or [], item_id)
-    return pco_live.describe_item(attrs, times)
+    return pco_live.describe_item(attrs, times, item_id)
 
 
 def live_status() -> Dict[str, Any]:
@@ -1695,15 +1840,23 @@ def live_status() -> Dict[str, Any]:
     # it, and `plan_end` is cached anyway so a long service pays once.
     mode = pco_live.timer_mode(pco_cfg.get('live_timer_mode'))
     service_end = None
+    scheduled_end = None
     if mode == 'end_service_on_time':
         ends_at, _finished = plan_end(plan_id, headers)
         parsed_end = _parse_iso(ends_at)
         service_end = int(parsed_end.timestamp()) if parsed_end else None
+    elif mode == 'end_item_on_time':
+        # ⛔ The one mode that needs the whole running order (#121).
+        # Everything it costs sits behind this branch, so a board on either
+        # other mode makes no extra request at all.
+        scheduled_end = scheduled_end_of(
+            plan_id, headers, (current or {}).get('id'), asked_at)
 
     timer = pco_live.item_timer(
         mode,
         elapsed=elapsed,
         length=(current or {}).get('length'),
+        scheduled_end=scheduled_end,
         service_end=service_end,
         now=asked_at,
     )

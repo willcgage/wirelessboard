@@ -50,9 +50,20 @@ def item_from(included: List[Dict[str, Any]], item_id: Any) -> Dict[str, Any]:
     return {}
 
 
-def describe_item(attrs: Dict[str, Any], times: Dict[str, Any]) -> Dict[str, Any]:
-    """One item on the running order, as the strip needs it."""
+def describe_item(
+    attrs: Dict[str, Any],
+    times: Dict[str, Any],
+    item_id: Any = None,
+) -> Dict[str, Any]:
+    """One item on the running order, as the strip needs it.
+
+    ⛔ `item_id` is passed in rather than read out of `attrs`. JSON:API puts
+    the id beside `attributes`, not inside it, and `item_from` hands back only
+    the attributes -- so reading `attrs['id']` is a silent `None` that makes
+    "End item on time" quietly never match anything (#121).
+    """
     return {
+        'id': str(item_id or '') or None,
         'title': (attrs.get('title') or '').strip(),
         'type': (attrs.get('item_type') or '').strip(),
         # `length` is the planned duration in seconds. `length_offset` is how
