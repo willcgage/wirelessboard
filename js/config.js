@@ -3674,6 +3674,8 @@ function applyPcoMappingToForm(mapping) {
   if (elSeed) elSeed.checked = m.seed_extended_id === true;
   const elClearUnmatched = document.getElementById('pco-clear-unmatched');
   if (elClearUnmatched) elClearUnmatched.checked = m.clear_unmatched === true;
+  const elAutoSync = document.getElementById('pco-auto-sync');
+  if (elAutoSync) elAutoSync.checked = m.auto_sync === true;
 
   renderPcoTeamChoices(null);
 }
@@ -3802,6 +3804,7 @@ function buildPcoPayload() {
   const numberFallbackEl = document.getElementById('pco-number-fallback');
   const seedExtendedIdEl = document.getElementById('pco-seed-extended-id');
   const clearUnmatchedEl = document.getElementById('pco-clear-unmatched');
+  const autoSyncEl = document.getElementById('pco-auto-sync');
   const payload = {
     enabled,
     services: {
@@ -3815,6 +3818,7 @@ function buildPcoPayload() {
       position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : false,
       seed_extended_id: seedExtendedIdEl ? !!seedExtendedIdEl.checked : false,
       clear_unmatched: clearUnmatchedEl ? !!clearUnmatchedEl.checked : false,
+      auto_sync: autoSyncEl ? !!autoSyncEl.checked : false,
     },
   };
   if (serviceTypeId) {
@@ -4621,6 +4625,7 @@ function currentBoardMappingValue(key) {
     position_number_fallback: 'pco-number-fallback',
     seed_extended_id: 'pco-seed-extended-id',
     clear_unmatched: 'pco-clear-unmatched',
+    auto_sync: 'pco-auto-sync',
   }[key];
   const node = el ? document.getElementById(el) : null;
   if (!node) return key === 'team_name_filter' ? [] : '';
