@@ -114,6 +114,90 @@ def state_label(state: str, *, age_seconds: Optional[int] = None) -> str:
     return ''
 
 
+# Planning Center's own three timing modes, by their names (#121). A board that
+# invented a fourth would be teaching operators something they then could not
+# use anywhere else.
+TIMER_MODES = ('full_item_length', 'end_item_on_time', 'end_service_on_time')
+DEFAULT_TIMER_MODE = 'full_item_length'
+
+TIMER_LABELS = {
+    'full_item_length': 'Full item length',
+    'end_item_on_time': 'End item on time',
+    'end_service_on_time': 'End service on time',
+}
+
+
+def timer_mode(value: Any) -> str:
+    """The configured mode, or Planning Center's default."""
+    text = str(value or '').strip().lower()
+    return text if text in TIMER_MODES else DEFAULT_TIMER_MODE
+
+
+def item_timer(
+    mode: str,
+    *,
+    elapsed: Optional[int],
+    length: Optional[int],
+    scheduled_end: Optional[int] = None,
+    service_end: Optional[int] = None,
+    now: Optional[float] = None,
+) -> Dict[str, Any]:
+    """How much time the current item has, under one of Planning Center's modes.
+
+    Returns ``{'seconds', 'over', 'mode', 'known'}`` where ``seconds`` counts
+    **down** to zero and then keeps going as ``over``.
+
+    ⭐ Mirrors Live's own behaviour deliberately: the timer runs down, and once
+    an item is late it turns over and counts up. An operator who knows Live
+    reads this without being taught, which is worth more than any cleverness
+    this board could add.
+
+    ⚠️ ``known`` is false whenever the inputs for a mode are missing. A timer
+    that silently falls back to a different mode is worse than one that says it
+    cannot tell: the number would look right and mean something else.
+    """
+    mode = timer_mode(mode)
+
+    if mode == 'end_service_on_time':
+        remaining = _countdown(service_end, now)
+    elif mode == 'end_item_on_time':
+        remaining = _countdown(scheduled_end, now)
+    else:
+        remaining = None if (elapsed is None or not length) else length - elapsed
+
+    if remaining is None:
+        return {'seconds': None, 'over': False, 'mode': mode, 'known': False}
+
+    return {
+        'seconds': abs(int(remaining)),
+        'over': remaining < 0,
+        'mode': mode,
+        'known': True,
+    }
+
+
+def _countdown(target_epoch: Optional[int], now: Optional[float]) -> Optional[int]:
+    if target_epoch is None or now is None:
+        return None
+    return int(target_epoch - now)
+
+
+def format_clock(seconds: Optional[int]) -> str:
+    """m:ss, or h:mm:ss once it is worth the extra field.
+
+    ⚠️ No leading zero on the minutes under an hour. "5:03" is a duration;
+    "05:03" reads as a clock time, and this sits next to one.
+    """
+    if seconds is None:
+        return '--:--'
+    total = max(0, int(seconds))
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f'{hours}:{minutes:02d}:{secs:02d}'
+    return f'{minutes}:{secs:02d}'
+
+
 def elapsed_seconds(started_at_epoch: Optional[float], now: float) -> Optional[int]:
     """How long the current item has been running."""
     if not started_at_epoch:

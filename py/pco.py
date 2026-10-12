@@ -1681,6 +1681,24 @@ def live_status() -> Dict[str, Any]:
     started = _parse_iso(current.get('started_at')) if current else None
     elapsed = pco_live.elapsed_seconds(started.timestamp() if started else None, asked_at)
 
+    # ⚠️ Only fetched for the mode that needs it. "End service on time" is the
+    # one that counts to the end of the service; the other two never look at
+    # it, and `plan_end` is cached anyway so a long service pays once.
+    mode = pco_live.timer_mode(pco_cfg.get('live_timer_mode'))
+    service_end = None
+    if mode == 'end_service_on_time':
+        ends_at, _finished = plan_end(plan_id, headers)
+        parsed_end = _parse_iso(ends_at)
+        service_end = int(parsed_end.timestamp()) if parsed_end else None
+
+    timer = pco_live.item_timer(
+        mode,
+        elapsed=elapsed,
+        length=(current or {}).get('length'),
+        service_end=service_end,
+        now=asked_at,
+    )
+
     return {
         'state': state,
         'label': pco_live.state_label(state),
@@ -1689,6 +1707,9 @@ def live_status() -> Dict[str, Any]:
         'next': nxt,
         'elapsed': elapsed,
         'over_by': pco_live.running_over(elapsed, (current or {}).get('length')),
+        'timer': timer,
+        'timer_label': pco_live.TIMER_LABELS.get(mode, ''),
+        'clock': pco_live.format_clock(timer.get('seconds')),
         'asked_at': asked_at,
     }
 

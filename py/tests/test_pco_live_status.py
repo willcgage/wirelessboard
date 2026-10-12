@@ -223,3 +223,76 @@ class TestFailuresAreStatesNotExceptions:
         pco.live_status()
 
         assert writes == []
+
+
+class TestTheTimerReachesTheStrip:
+    def test_the_default_mode_counts_the_item_down(self, live_on, monkeypatch):
+        pco.record_sync('77', 'stamp', None)
+        monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(length=900))
+        monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
+
+        result = pco.live_status()
+
+        assert result['timer'] == {
+            'seconds': 300, 'over': False, 'mode': 'full_item_length', 'known': True}
+        assert result['clock'] == '5:00'
+
+    def test_an_overrunning_item_counts_up(self, live_on, monkeypatch):
+        pco.record_sync('77', 'stamp', None)
+        monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(length=300))
+        monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
+
+        result = pco.live_status()
+
+        assert result['timer']['over'] is True
+        assert result['clock'] == '5:00'
+
+    def test_end_service_on_time_asks_for_the_service_end(self, monkeypatch):
+        monkeypatch.setattr(pco, 'get_pco_config', lambda: {
+            'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
+            'live_strip': True, 'live_timer_mode': 'end_service_on_time'})
+        pco.record_sync('77', 'stamp', None)
+        monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
+        monkeypatch.setattr(pco, 'plan_end', lambda *a, **k: ('2026-10-11T16:00:00+00:00', False))
+        monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
+
+        result = pco.live_status()
+
+        # An hour of service, ten minutes in.
+        assert result['timer']['mode'] == 'end_service_on_time'
+        assert result['clock'] == '50:00'
+
+    def test_the_other_modes_never_ask_for_the_service_end(self, live_on, monkeypatch):
+        # ⚠️ Full item length does not need it, and paying for it every tick
+        # would be the same mistake the watcher made before #140 was gated.
+        pco.record_sync('77', 'stamp', None)
+        monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
+
+        def explode(*_a, **_k):
+            raise AssertionError('full item length must not look up the service end')
+
+        monkeypatch.setattr(pco, 'plan_end', explode)
+
+        assert pco.live_status()['timer']['mode'] == 'full_item_length'
+
+    def test_a_mode_that_cannot_be_computed_says_so(self, monkeypatch):
+        # ⛔ End item on time needs the running order, which this board does
+        # not fetch yet. It must report "cannot tell" rather than quietly
+        # showing the item length instead.
+        monkeypatch.setattr(pco, 'get_pco_config', lambda: {
+            'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
+            'live_strip': True, 'live_timer_mode': 'end_item_on_time'})
+        pco.record_sync('77', 'stamp', None)
+        monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(length=900))
+        monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
+
+        result = pco.live_status()
+
+        assert result['timer']['known'] is False
+        assert result['clock'] == '--:--'
+
+    def test_the_mode_is_named_for_the_strip_to_show(self, live_on, monkeypatch):
+        pco.record_sync('77', 'stamp', None)
+        monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
+
+        assert pco.live_status()['timer_label'] == 'Full item length'
