@@ -1,6 +1,7 @@
 import { micboard, updateHash } from './app.js';
 
 import { updateGIFBackgrounds } from './gif.js';
+import { renderGroup } from './channelview.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
   ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES,
@@ -9,11 +10,14 @@ import {
 import { controlFor, isValidValue } from './view-controls.mjs';
 import { PLACEMENTS } from './live-strip.mjs';
 import { refreshLiveStrip } from './live-strip-view.js';
+import { ROTATION_STATES } from './rotation-states.mjs';
+import { startRotation, stopRotation } from './rotation-view.js';
 import {
   writePref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
   LIVE_PLACEMENT_KEY,
+  ROTATION_KEY,
 } from './view-prefs.mjs';
 
 function swapClass(selector, currentClass, newClass) {
@@ -190,6 +194,28 @@ export function cycleTypeSize() {
  * pocket wants the top. Whether to follow Live at all is a server setting,
  * because it spends one Planning Center account's allowance for everybody.
  */
+/**
+ * Whether this screen pages through its groups (#113).
+ *
+ * ⛔ Per device. The rotation's content -- which groups, in what order, for how
+ * long -- is global and lives in `config.json`; whether *this* screen pages is
+ * local, because the wall rotates and the FOH laptop watching the same server
+ * does not.
+ */
+export function cycleRotation() {
+  micboard.rotation = nextOption(ROTATION_STATES, micboard.rotation);
+  writePref({ storage: safeStorage(), key: ROTATION_KEY, value: micboard.rotation });
+  if (micboard.rotation === 'on') {
+    startRotation();
+  } else {
+    stopRotation();
+    // Back to whatever the board was showing before it started paging.
+    renderGroup(micboard.group || 0);
+  }
+  updateHash();
+  return micboard.rotation;
+}
+
 export function cycleLivePlacement() {
   micboard.livePlacement = nextOption(PLACEMENTS, micboard.livePlacement);
   writePref({ storage: safeStorage(), key: LIVE_PLACEMENT_KEY, value: micboard.livePlacement });

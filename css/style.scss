@@ -2452,3 +2452,32 @@ body.live-strip-top .wirelessboard-board {
 body.live-strip-bottom .wirelessboard-board {
   padding-bottom: 2.25rem;
 }
+
+/* The rotation bar (#113).
+
+   ⚠️ Quiet. It says which group is showing and whether the timer is held, and
+   nothing else -- the point of the rotation is the channels, not the chrome.
+   Bottom-left, because the bottom-right corner already belongs to the restore
+   gear and the service-position strip claims the full width when it is there. */
+.rotation-bar {
+  position: fixed;
+  left: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px));
+  z-index: 1015;
+  padding: 0.25rem 0.75rem;
+  background: rgba(38, 38, 38, 0.85);
+  color: rgba(255, 255, 255, 0.8);
+  border-top-right-radius: 4px;
+  font-size: 0.85rem;
+}
+
+/* A rotation that simply stops looks like a frozen board, which is the one
+   impression this must never give -- so a hold is coloured, not silent. */
+.rotation-bar.is-held {
+  color: #ffd866;
+}
+
+/* Keeps the rotation bar off the service strip when both are at the bottom. */
+body.live-strip-bottom .rotation-bar {
+  bottom: calc(2.5rem + env(safe-area-inset-bottom, 0px));
+}

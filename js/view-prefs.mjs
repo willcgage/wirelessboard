@@ -34,6 +34,10 @@ export const WASH_KEY = 'wirelessboard.wash';
 // is server-side, because it spends one Planning Center account's API calls
 // for everybody (#116's line, #121's strip).
 export const LIVE_PLACEMENT_KEY = 'wirelessboard.livePlacement';
+// ⭐ The rotation's *content* is global -- which groups, in what order, for how
+// long -- but whether this screen pages is local. The wall rotates; the FOH
+// laptop showing the same server does not (#113, and #116's line).
+export const ROTATION_KEY = 'wirelessboard.rotation';
 
 export function safeStorage() {
   try {

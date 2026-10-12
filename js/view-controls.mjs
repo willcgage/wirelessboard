@@ -23,11 +23,22 @@ import {
 } from './board-layout.mjs';
 import {
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY,
-  TOP_BAR_KEY, COLUMNS_KEY, WASH_KEY, LIVE_PLACEMENT_KEY,
+  TOP_BAR_KEY, COLUMNS_KEY, WASH_KEY, LIVE_PLACEMENT_KEY, ROTATION_KEY,
 } from './view-prefs.mjs';
 import { PLACEMENTS, PLACEMENT_LABELS } from './live-strip.mjs';
+import { ROTATION_STATES, ROTATION_LABELS } from './rotation-states.mjs';
 
 export const VIEW_CONTROLS = [
+  {
+    id: 'rotation',
+    key: 'r',
+    label: 'Page through groups',
+    group: 'Layout',
+    storageKey: ROTATION_KEY,
+    options: ROTATION_STATES,
+    optionLabels: ROTATION_LABELS,
+    optionGlyphs: { off: '–', on: '⟳' },
+  },
   {
     id: 'livePlacement',
     key: 'l',

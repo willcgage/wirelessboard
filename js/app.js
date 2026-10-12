@@ -27,9 +27,12 @@ import {
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
   LIVE_PLACEMENT_KEY,
+  ROTATION_KEY,
 } from './view-prefs.mjs';
 import { PLACEMENTS, DEFAULT_PLACEMENT } from './live-strip.mjs';
+import { ROTATION_STATES } from './rotation-states.mjs';
 import { startLiveStrip } from './live-strip-view.js';
+import { startRotation, noteInteraction } from './rotation-view.js';
 
 import '../css/colors.scss';
 import '../css/style.scss';
@@ -54,6 +57,7 @@ micboard.topBar = 'shown';
 micboard.columns = 'auto';
 micboard.wash = 'band';
 micboard.livePlacement = 'bottom';
+micboard.rotation = 'off';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -497,6 +501,13 @@ function readURLParameters() {
     isValid: isWashStyle,
     fallback: 'band',
   });
+  micboard.rotation = resolvePref({
+    hashValue: micboard.url.rotate,
+    storage,
+    key: ROTATION_KEY,
+    isValid: (v) => ROTATION_STATES.includes(v),
+    fallback: 'off',
+  });
   micboard.livePlacement = resolvePref({
     hashValue: micboard.url.live,
     storage,
@@ -745,6 +756,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // ⚠️ Its own slow timer, not the board payload's. The Live position changes
   // every few minutes; the board's data arrives several times a second (#121).
   try { startLiveStrip(() => micboard.livePlacement); } catch (_) {}
+  // ⚠️ Always started: the driver itself decides each tick whether there is
+  // anything to page, so turning rotation on needs no restart and a board
+  // where everything fits pays one cheap check a second.
+  try { if (micboard.rotation === 'on') startRotation(); } catch (_) {}
+  // Somebody using the board stops the page moving under their hand.
+  try {
+    ['keydown', 'pointerdown', 'wheel'].forEach((evt) => {
+      window.addEventListener(evt, noteInteraction, { passive: true });
+    });
+  } catch (_) {}
   try { scheduleBackgroundFilenameGuide(); } catch (_) {}
 
   if (micboard.url.demo === 'true' && micboard.url.settings !== 'true' && micboard.url.settings !== 'logs' && micboard.url.pco !== 'true') {
