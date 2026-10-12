@@ -67,7 +67,18 @@ function updateRuntime(slotSelector, data) {
   // here too, and writing textContent would delete it.
   const onCard = slotSelector.querySelector('p.card-runtime .runtime-text');
   if (onCard) {
-    onCard.textContent = data.runtime || '';
+    // ⛔ An estimate is marked as one (#109). The board works the number out
+    // from the battery level falling where the receiver will not say, and a
+    // calculated figure shown exactly like a measured one is worse than no
+    // figure -- somebody plans a service around it.
+    const estimated = data.runtime_source === 'estimated';
+    onCard.textContent = data.runtime ? `${estimated ? '~' : ''}${data.runtime}` : '';
+    onCard.classList.toggle('is-estimated', estimated && !!data.runtime);
+    if (estimated && data.runtime) {
+      onCard.setAttribute('title', 'Estimated from the battery level falling; this receiver does not report a runtime.');
+    } else {
+      onCard.removeAttribute('title');
+    }
   }
   updateCardBattery(slotSelector, data);
 }
@@ -309,6 +320,12 @@ function updateSelector(slotSelector, data) {
     updateBattery(slotSelector, data);
   });
   updateCheck(data, 'runtime', () => {
+    updateRuntime(slotSelector, data);
+  });
+  // ⚠️ Its own check: a runtime can stop being reported and start being
+  // estimated without the number itself changing, and the card has to stop
+  // claiming it was measured.
+  updateCheck(data, 'runtime_source', () => {
     updateRuntime(slotSelector, data);
   });
   updateCheck(data, 'antenna', () => {
