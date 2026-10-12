@@ -208,7 +208,10 @@ function invokeUpdateHash() {
 // slot's IP and channel. SLX-D shipped in 1.16.0 missing from this list, and a
 // save wrote a slot the loader could not read. py/tests/test_vendor_seam.py
 // checks it against vendor.supported_types().
-const NET_DEVICE_TYPES = ['axtd', 'ulxd', 'qlxd', 'uhfr', 'slxd', 'slxdplus', 'p10t'];
+const NET_DEVICE_TYPES = [
+  'axtd', 'ulxd', 'qlxd', 'uhfr', 'slxd', 'slxdplus', 'p10t',
+  'atw-r5220', 'atw-r5220dan', 'atw-dr3120', 'atw-dr3120dan', 'atw-r3210n',
+];
 
 const DISCOVERY_DEFAULTS = {
   auto: true,

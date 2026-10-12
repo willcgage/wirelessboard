@@ -28,7 +28,9 @@ class ShureNetworkDevice:
         self.rx_com_status = 'DISCONNECTED'
         self.writeQueue = queue.Queue()
         self.f = None
+        self.frame_remainder = ''
         self.socket_watchdog = int(time.perf_counter())
+        self.next_query_at = 0.0
         self.raw = defaultdict(dict)
         self.adapter = vendor.adapter_for(type)
 
@@ -58,6 +60,7 @@ class ShureNetworkDevice:
         if self.f is not None:
             self.f.close()
             self.f = None
+        self.frame_remainder = ''
         self.set_rx_com_status('DISCONNECTED')
         self.socket_watchdog = int(time.perf_counter())
 
@@ -82,6 +85,14 @@ class ShureNetworkDevice:
     def parse_raw_rx(self, data):
         self.adapter.parse(self, data)
 
+    def frame_messages(self, data):
+        buffered = getattr(self.adapter, 'frame_buffered', None)
+        if buffered is None:
+            return self.adapter.frame(self.type, data)
+        messages, self.frame_remainder = buffered(
+            self.type, data, self.frame_remainder)
+        return messages
+
     def get_channels(self):
         channels = []
         for channel in self.channels:
@@ -93,6 +104,29 @@ class ShureNetworkDevice:
 
     def get_query_strings(self):
         return self.adapter.query(self.type, self.get_channels())
+
+    def poll_interval(self):
+        """Seconds between periodic queries for this receiver's adapter."""
+        interval = getattr(self.adapter, 'POLL_INTERVAL', 10)
+        try:
+            interval = float(interval)
+        except (TypeError, ValueError):
+            return 10.0
+        return interval if interval > 0 else 10.0
+
+    def enqueue_query_if_due(self, now):
+        """Queue one periodic query batch when this receiver is due.
+
+        Polling belongs to the adapter rather than the global service loop:
+        Audio-Technica TCP receivers must see traffic before their five-second
+        watchdog, whereas the established Shure cadence is ten seconds.
+        """
+        if self.rx_com_status != 'CONNECTED' or now < self.next_query_at:
+            return False
+        for string in self.get_query_strings():
+            self.writeQueue.put(string)
+        self.next_query_at = now + self.poll_interval()
+        return True
 
     def enable_metering(self, interval):
         for command in self.adapter.meter_start(self.type, self.get_channels(), interval):
