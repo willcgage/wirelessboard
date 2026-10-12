@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 import config
+import pco_live
 import pco_mapping
 import pco_profiles
 from pco_credentials import CredentialError, ensure_credentials
@@ -1600,6 +1601,96 @@ def watch_has_finished(pco_cfg: Dict[str, Any], plan_id: str, headers: Dict[str,
     if grace:
         return f'the service ended more than {grace} minutes ago'
     return 'the service has ended'
+
+
+def _live_enabled(pco_cfg: Dict[str, Any]) -> bool:
+    """⛔ Off by default, and it must stay that way. Live is not running for
+    most services here, and a strip nobody asked for that spends API calls
+    saying "Live not running" is worse than no strip."""
+    return (pco_cfg or {}).get('live_strip', False) is True
+
+
+def _item_time(payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """One ItemTime from a Live edge, with its Item folded in.
+
+    Returns None when the edge is empty, which is what Planning Center gives
+    for a plan Live has never been started on -- the only honest test for "is
+    it running", since the API has no flag for it.
+    """
+    data = (payload or {}).get('data')
+    if not data:
+        return None
+    if isinstance(data, list):
+        data = data[0] if data else None
+    if not data:
+        return None
+
+    times = data.get('attributes') or {}
+    item_id = (((data.get('relationships') or {}).get('item') or {}).get('data') or {}).get('id')
+    attrs = pco_live.item_from((payload or {}).get('included') or [], item_id)
+    return pco_live.describe_item(attrs, times)
+
+
+def live_status() -> Dict[str, Any]:
+    """Where the service has got to, or why that cannot be said (#121).
+
+    ⚠️ Follows the plan the board last synced, not the next upcoming one. The
+    strip is about what is on screen now.
+
+    ⛔ Every failure is reported as a state rather than an exception: a strip
+    that disappears when the network hiccups is one nobody trusts to mean
+    anything when it is absent.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError:
+        return {'state': 'off'}
+
+    if not _live_enabled(pco_cfg):
+        return {'state': 'off'}
+
+    plan_id = last_sync().get('plan_id')
+    if not plan_id:
+        return {'state': 'no_plan', 'label': pco_live.state_label('no_plan')}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+
+    params = {'include': 'item'}
+    current_raw = _http_get(f"{BASE_URL}/plans/{plan_id}/live/current_item_time", headers, params)
+    if current_raw is None:
+        return {
+            'state': 'error',
+            'label': pco_live.state_label('error'),
+            'plan_id': plan_id,
+            'detail': _fetch_error('Unable to read the live position'),
+        }
+
+    current = _item_time(current_raw)
+    # ⚠️ Only asked for when something is actually running. A plan nobody has
+    # started Live on would otherwise pay for two requests a tick, forever.
+    nxt = None
+    if current and current.get('started_at'):
+        nxt = _item_time(
+            _http_get(f"{BASE_URL}/plans/{plan_id}/live/next_item_time", headers, params))
+
+    asked_at = time.time()
+    state = pco_live.live_state(
+        enabled=True, plan_id=plan_id, current=current, asked_at=asked_at, now=asked_at)
+
+    started = _parse_iso(current.get('started_at')) if current else None
+    elapsed = pco_live.elapsed_seconds(started.timestamp() if started else None, asked_at)
+
+    return {
+        'state': state,
+        'label': pco_live.state_label(state),
+        'plan_id': plan_id,
+        'current': current,
+        'next': nxt,
+        'elapsed': elapsed,
+        'over_by': pco_live.running_over(elapsed, (current or {}).get('length')),
+        'asked_at': asked_at,
+    }
 
 
 def watch_interval_seconds(pco_cfg: Optional[Dict[str, Any]] = None) -> int:

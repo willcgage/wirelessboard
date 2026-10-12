@@ -877,6 +877,21 @@ class PcoActivePlanHandler(web.RequestHandler):
         self.write(json.dumps(result))
 
 
+class PcoLiveHandler(web.RequestHandler):
+    """Where the service has got to (#121).
+
+    ⛔ Read-only, and every failure comes back as a state rather than a status
+    code: the strip's whole value is that its silence means something, so it
+    must be able to say *why* it has nothing to show.
+    """
+
+    async def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        result = await _run_pco(pco.live_status)
+        self.write(json.dumps(result))
+
+
 class PcoNextPlanHandler(web.RequestHandler):
     """Which plan "next upcoming" means right now (#120).
 
@@ -1314,6 +1329,7 @@ def twisted():
         (r'/api/pco/next-plan', PcoNextPlanHandler),
         (r'/api/pco/schedule', PcoScheduleHandler),
         (r'/api/pco/active-plan', PcoActivePlanHandler),
+        (r'/api/pco/live', PcoLiveHandler),
         (r'/api/pco/connect', PcoConnectHandler),
         (r'/api/pco/people', PcoPeopleHandler),
         (r'/api/pco/teams', PcoTeamsHandler),
