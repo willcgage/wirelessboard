@@ -7,10 +7,13 @@ import {
   COLUMN_CHOICES, WASH_STYLES, nextOption,
 } from './board-layout.mjs';
 import { controlFor, isValidValue } from './view-controls.mjs';
+import { PLACEMENTS } from './live-strip.mjs';
+import { refreshLiveStrip } from './live-strip-view.js';
 import {
   writePref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
+  LIVE_PLACEMENT_KEY,
 } from './view-prefs.mjs';
 
 function swapClass(selector, currentClass, newClass) {
@@ -180,6 +183,24 @@ export function cycleTypeSize() {
 /**
  * Whether the status colour owns the band or the whole card (#130).
  */
+/**
+ * Where the service-position strip sits (#121).
+ *
+ * ⚠️ Per device, not per board. The wall wants the spare card; a phone in a
+ * pocket wants the top. Whether to follow Live at all is a server setting,
+ * because it spends one Planning Center account's allowance for everybody.
+ */
+export function cycleLivePlacement() {
+  micboard.livePlacement = nextOption(PLACEMENTS, micboard.livePlacement);
+  writePref({ storage: safeStorage(), key: LIVE_PLACEMENT_KEY, value: micboard.livePlacement });
+  applyBoardLayout();
+  // ⚠️ Redraw now. Waiting for the next poll means up to fifteen seconds of an
+  // operator thinking the key is broken and pressing it again.
+  refreshLiveStrip(micboard.livePlacement);
+  updateHash();
+  return micboard.livePlacement;
+}
+
 export function cycleWash() {
   micboard.wash = nextOption(WASH_STYLES, micboard.wash);
   writePref({ storage: safeStorage(), key: WASH_KEY, value: micboard.wash });

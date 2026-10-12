@@ -26,7 +26,10 @@ import {
   resolvePref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
+  LIVE_PLACEMENT_KEY,
 } from './view-prefs.mjs';
+import { PLACEMENTS, DEFAULT_PLACEMENT } from './live-strip.mjs';
+import { startLiveStrip } from './live-strip-view.js';
 
 import '../css/colors.scss';
 import '../css/style.scss';
@@ -50,6 +53,7 @@ micboard.typeSize = 'medium';
 micboard.topBar = 'shown';
 micboard.columns = 'auto';
 micboard.wash = 'band';
+micboard.livePlacement = 'bottom';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -493,6 +497,13 @@ function readURLParameters() {
     isValid: isWashStyle,
     fallback: 'band',
   });
+  micboard.livePlacement = resolvePref({
+    hashValue: micboard.url.live,
+    storage,
+    key: LIVE_PLACEMENT_KEY,
+    isValid: (v) => PLACEMENTS.includes(v),
+    fallback: DEFAULT_PLACEMENT,
+  });
 
   if (micboard.url.settings === 'logs') {
     micboard.configTab = 'logs';
@@ -711,6 +722,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // pass, so a remembered portrait board does not paint as fit-to-page first.
   try { applyBoardLayout(); } catch (_) {}
   try { startTvLayoutWatchers(); } catch (_) {}
+  // ⚠️ Its own slow timer, not the board payload's. The Live position changes
+  // every few minutes; the board's data arrives several times a second (#121).
+  try { startLiveStrip(() => micboard.livePlacement); } catch (_) {}
   try { scheduleBackgroundFilenameGuide(); } catch (_) {}
 
   if (micboard.url.demo === 'true' && micboard.url.settings !== 'true' && micboard.url.settings !== 'logs' && micboard.url.pco !== 'true') {

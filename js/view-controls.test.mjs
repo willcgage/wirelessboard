@@ -21,6 +21,7 @@ import {
   ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES,
   COLUMN_CHOICES, WASH_STYLES,
 } from './board-layout.mjs';
+import { PLACEMENTS } from './live-strip.mjs';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const kbd = fs.readFileSync(path.join(ROOT, 'js', 'kbd.js'), 'utf8').replace(/\r\n/g, '\n');
@@ -34,6 +35,9 @@ test('every control names a vocabulary the board actually has', () => {
     topBar: TOP_BAR_STATES,
     columns: COLUMN_CHOICES,
     wash: WASH_STYLES,
+    // ⚠️ The only vocabulary not from board-layout: where the service strip
+    // sits is a property of the strip, not of the grid (#121).
+    livePlacement: PLACEMENTS,
   };
 
   VIEW_CONTROLS.forEach((control) => {
