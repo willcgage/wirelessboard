@@ -110,6 +110,73 @@ def ensure_background_defaults() -> Dict[str, Any]:
     return defaults
 
 
+def _media_key(name: Any) -> str:
+    """The same normalisation the browser's `backgroundKey` uses.
+
+    ⛔ Must stay trim-and-lowercase and nothing more. The browser looks these up
+    with its own key, and any difference between the two -- collapsing internal
+    spaces, stripping punctuation -- means a choice that saves and never
+    resolves, which looks exactly like the photo not existing.
+    """
+    if not isinstance(name, str):
+        return ''
+    return name.strip().lower()
+
+
+def ensure_media_assignments() -> Dict[str, str]:
+    """Photos and videos chosen for a person by hand (#145).
+
+    ⭐ Keyed on the **person**, not the slot, so the choice follows them when a
+    sync moves them to another channel -- the behaviour filename matching
+    already had. It is also what lets two people called Dave have different
+    photos, which a filename key cannot express at all.
+    """
+    media = config_tree.get('media')
+    if not isinstance(media, dict):
+        media = {}
+
+    raw = media.get('assignments')
+    cleaned: Dict[str, str] = {}
+    if isinstance(raw, dict):
+        for name, filename in raw.items():
+            key = _media_key(name)
+            if key and isinstance(filename, str) and filename.strip():
+                cleaned[key] = filename.strip()
+
+    media['assignments'] = cleaned
+    config_tree['media'] = media
+    return cleaned
+
+
+def get_media_assignments() -> Dict[str, str]:
+    return dict(ensure_media_assignments())
+
+
+def set_media_assignment(name: Any, filename: Any) -> Dict[str, str]:
+    """Give a person a file, or take it away when `filename` is empty.
+
+    ⚠️ Stores the filename as given. Whether that file exists is the browser's
+    question at render time -- a chosen file that has gone falls back to the
+    filename match rather than to a blank card, and refusing to store one here
+    would make an operator fix an unrelated problem before they could record a
+    choice.
+    """
+    key = _media_key(name)
+    if not key:
+        raise ValueError('A photo is assigned to a person, and no person was named.')
+
+    assignments = ensure_media_assignments()
+    chosen = filename.strip() if isinstance(filename, str) else ''
+    if chosen:
+        assignments[key] = chosen
+    else:
+        assignments.pop(key, None)
+
+    config_tree['media']['assignments'] = assignments
+    save_current_config()
+    return dict(assignments)
+
+
 def get_background_defaults() -> Dict[str, Any]:
     return copy.deepcopy(ensure_background_defaults())
 

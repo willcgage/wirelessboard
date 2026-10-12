@@ -80,10 +80,50 @@ export function backgroundKey(name) {
  * the directory's own spelling: `/bg/<name>` is served straight off disk, and on
  * a case-sensitive filesystem asking for the lowercased form is a 404.
  */
-export function findBackgroundFile(name, mode, available) {
+/**
+ * The file a person has been given explicitly, if any (#145).
+ *
+ * ⛔ Keyed on the **person**, not the slot, so the photo follows them when a
+ * sync moves them to a different channel — the behaviour filename matching
+ * already had and the thing most worth not losing. The same normalisation as
+ * `backgroundKey`, so "Jane Smith" and "jane smith " are one person.
+ *
+ * ⚠️ This exists because naming a file after someone is a poor interface, not
+ * a poor rule. Two people called Dave, a person Planning Center calls Jim whose
+ * photo is Jimmy.jpg, a married name, an apostrophe — each of those breaks a
+ * name key, and none of them is unusual.
+ */
+export function explicitBackgroundFile(name, mode, assignments) {
+  const key = backgroundKey(name);
+  if (!key || !assignments || typeof assignments !== 'object') return '';
+
+  const chosen = assignments[key];
+  if (typeof chosen !== 'string' || !chosen.trim()) return '';
+
+  // ⚠️ Still has to suit the mode being displayed. A board showing video must
+  // not reach for somebody's jpg because that is what they were given; it has
+  // nothing to show for them, which is a different and honest answer.
+  const extensions = MEDIA_EXTENSIONS[mode];
+  if (!extensions) return '';
+  const lower = chosen.toLowerCase();
+  return extensions.some((ext) => lower.endsWith(ext)) ? chosen : '';
+}
+
+export function findBackgroundFile(name, mode, available, assignments) {
   const key = backgroundKey(name);
   const extensions = MEDIA_EXTENSIONS[mode];
   if (!key || !extensions || !Array.isArray(available)) return '';
+
+  // ⭐ An explicit choice wins. Filename matching stays exactly as it was and
+  // remains the answer for every board that has one — a folder of correctly
+  // named photos keeps working with nothing to migrate — but a choice someone
+  // actually made beats a guess from a filename.
+  //
+  // ⚠️ Only if the file is still there. A chosen file that has been deleted or
+  // renamed falls through to the filename match rather than showing nothing,
+  // so the board degrades to its old behaviour instead of to a blank card.
+  const chosen = explicitBackgroundFile(name, mode, assignments);
+  if (chosen && available.includes(chosen)) return chosen;
 
   // Format order is the outer loop, so a jpg always beats a png regardless of
   // how either is capitalised.

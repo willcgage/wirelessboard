@@ -955,6 +955,44 @@ class PcoNotesHandler(web.RequestHandler):
         self.write(json.dumps(result))
 
 
+class MediaAssignmentHandler(web.RequestHandler):
+    """Which photo or video a person has been given by hand (#145).
+
+    ⭐ This is the whole flow for a board with Planning Center switched off:
+    name the person on a slot, give them a file, done. Filename matching stays
+    as the fallback, so a folder of correctly named photos needs no migration.
+    """
+
+    def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.write(json.dumps({'ok': True, 'assignments': config.get_media_assignments()}))
+
+    def post(self):
+        self.set_header('Content-Type', 'application/json')
+        try:
+            body = json.loads(self.request.body.decode('utf-8') or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write('{"ok": false, "error": "Invalid JSON body"}')
+            return
+
+        try:
+            assignments = config.set_media_assignment(
+                (body or {}).get('name'), (body or {}).get('file'))
+        except ValueError as exc:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Storing a media assignment failed: %s', exc)
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': str(exc)}))
+            return
+
+        self.write(json.dumps({'ok': True, 'assignments': assignments}))
+
+
 class BackgroundDirectoryHandler(web.RequestHandler):
     def _set_headers(self):
         self.set_header('Content-Type', 'application/json')
@@ -1335,6 +1373,7 @@ def twisted():
         (r'/api/pco/teams', PcoTeamsHandler),
         (r'/api/pco/notes', PcoNotesHandler),
         (r'/api/backgrounds', BackgroundDirectoryHandler),
+        (r'/api/media/assignment', MediaAssignmentHandler),
         (r'/api/folders', FolderBrowseHandler),
         (r'/api/cloud/google-drive/config', GoogleDriveConfigHandler),
         (r'/api/cloud/google-drive/auth/start', GoogleDriveAuthStartHandler),

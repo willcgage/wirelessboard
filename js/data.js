@@ -1,6 +1,7 @@
 import 'whatwg-fetch';
 import { viewerCount } from './viewer-scope.mjs';
 import { renderPlanChangeNotice } from './plan-change-notice.js';
+import { updateGIFBackgrounds } from './gif.js';
 import {
   dataURL, ActivateMessageBoard, micboard, updateNavLinks, announceConfigLoaded,
 } from './app.js';
@@ -40,8 +41,21 @@ function JsonUpdate() {
         rx.tx.forEach(updateSlot);
       });
       micboard.connectionStatus = 'CONNECTED';
+      // ⚠️ A photo chosen on a laptop has to reach the wall. The media
+      // elements are only rebuilt when a slot updates, so without this a board
+      // showing somebody's old photo keeps showing it until the next time that
+      // channel changes -- which on a quiet board is never (#145).
+      const previousMedia = JSON.stringify(
+        (micboard.config && micboard.config.media && micboard.config.media.assignments) || {},
+      );
       micboard.config = data.config;
       announceConfigLoaded();
+      const nextMedia = JSON.stringify(
+        (data.config && data.config.media && data.config.media.assignments) || {},
+      );
+      if (previousMedia !== nextMedia) {
+        try { updateGIFBackgrounds(); } catch (_) { /* a board mid-render catches up next tick */ }
+      }
       // How many boards are watching this server (#116). Kept on micboard so
       // the config panes can say what a save is about to reach, and announced
       // when it changes -- the config view renders before the first payload

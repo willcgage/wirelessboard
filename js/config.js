@@ -3,7 +3,9 @@ import { Collapse, Modal } from 'bootstrap';
 import { postJSON } from './data.js';
 import { resolveSlotType } from './slot-rules.mjs';
 import { discoveryHint } from './discovery-hint.mjs';
-import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from './background-key.mjs';
+import {
+  backgroundNameForSlot, backgroundFilenames, findBackgroundFile, backgroundKey,
+} from './background-key.mjs';
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 import { assignNumbers } from './slot-numbering.mjs';
@@ -2061,7 +2063,60 @@ function decorateFilenameCell(cell, filename, exists) {
   cell.appendChild(statusEl);
 }
 
-export function renderBackgroundFilenameGuide() {
+export /**
+ * A chooser for one person's photo or video.
+ *
+ * ⛔ The blank option is "match by filename", not "no media". Removing a choice
+ * puts the person back on the rule the board has always used; it does not make
+ * their card blank.
+ */
+function mediaPicker(name, mode, available, onDisk, suggested) {
+  const key = backgroundKey(name);
+  const chosen = currentMediaAssignments()[key] || '';
+
+  const select = document.createElement('select');
+  select.className = 'form-select form-select-sm media-pick';
+  select.dataset.person = name;
+  select.dataset.mode = mode;
+
+  const fallback = document.createElement('option');
+  fallback.value = '';
+  // Says what the fallback will actually do for this person, which is the
+  // thing the old guide column existed to tell them.
+  fallback.textContent = onDisk
+    ? `Match by filename — ${onDisk}`
+    : `Match by filename — ${suggested}`;
+  select.appendChild(fallback);
+
+  available.forEach((file) => {
+    const option = document.createElement('option');
+    option.value = file;
+    option.textContent = file;
+    if (file === chosen) option.selected = true;
+    select.appendChild(option);
+  });
+
+  // ⚠️ A choice pointing at a file that has gone stays selectable and visible,
+  // rather than silently reverting to filename matching -- otherwise the only
+  // symptom of a renamed file is a photo quietly changing.
+  if (chosen && !available.includes(chosen)) {
+    const missing = document.createElement('option');
+    missing.value = chosen;
+    missing.textContent = `${chosen} — not in the folder`;
+    missing.selected = true;
+    select.appendChild(missing);
+  }
+
+  return select;
+}
+
+/** The choices the board is currently serving. */
+function currentMediaAssignments() {
+  const media = micboard.config && micboard.config.media;
+  return (media && typeof media.assignments === 'object') ? media.assignments : {};
+}
+
+function renderBackgroundFilenameGuide() {
   const table = document.getElementById('background-filename-table');
   if (!table) return;
   const tbody = table.querySelector('tbody');
@@ -2113,12 +2168,27 @@ export function renderBackgroundFilenameGuide() {
     }
     row.appendChild(nameCell);
 
+    // ⭐ A picker, not just a report. Naming a file after someone is a poor
+    // interface even though it is a fine rule: it means renaming files in
+    // Finder to match what Planning Center calls them, and it breaks on two
+    // people called Dave, on a married name, on an apostrophe (#145).
+    //
+    // ⚠️ Filename matching stays the default option, so a folder of correctly
+    // named photos keeps working and nothing has to be migrated.
     const imgCell = document.createElement('td');
-    decorateFilenameCell(imgCell, imgOnDisk || imgFilename, hasImg);
+    if (backgroundName && imgList.length) {
+      imgCell.appendChild(mediaPicker(backgroundName, 'IMG', imgList, imgOnDisk, imgFilename));
+    } else {
+      decorateFilenameCell(imgCell, imgOnDisk || imgFilename, hasImg);
+    }
     row.appendChild(imgCell);
 
     const videoCell = document.createElement('td');
-    decorateFilenameCell(videoCell, videoOnDisk || videoFilename, hasVideo);
+    if (backgroundName && mp4List.length) {
+      videoCell.appendChild(mediaPicker(backgroundName, 'MP4', mp4List, videoOnDisk, videoFilename));
+    } else {
+      decorateFilenameCell(videoCell, videoOnDisk || videoFilename, hasVideo);
+    }
     row.appendChild(videoCell);
 
     tbody.appendChild(row);
@@ -3225,6 +3295,29 @@ export function initConfigEditor(force = false) {
     editorHolder.dataset.headingsBound = 'true';
     editorHolder.addEventListener('change', (e) => {
       if (e.target.closest('.cfg-ip, .cfg-type')) renderReceiverHeadings();
+    });
+  }
+
+  // Saving a photo choice (#145). Delegated on the guide table, which is
+  // rebuilt whenever the slot list or the folder changes.
+  const guide = document.getElementById('background-filename-guide');
+  if (guide && guide.dataset.bound !== 'true') {
+    guide.dataset.bound = 'true';
+    guide.addEventListener('change', (e) => {
+      const select = e.target.closest('.media-pick');
+      if (!select) return;
+      postJSON(
+        'api/media/assignment',
+        { name: select.dataset.person, file: select.value },
+        (resp) => {
+          if (!resp || !resp.ok) return;
+          // Keep the served copy in step so the board picks it up without a
+          // reload; the next payload confirms it.
+          if (!micboard.config.media) micboard.config.media = {};
+          micboard.config.media.assignments = resp.assignments;
+          scheduleBackgroundFilenameGuide();
+        },
+      );
     });
   }
 
