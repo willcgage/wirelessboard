@@ -15,7 +15,7 @@
  */
 
 import {
-  controlGroups, optionsInOrder, optionLabel, isSwitch,
+  controlGroups, optionsInOrder, optionLabel, isSwitch, controlDescription,
 } from './view-controls.mjs';
 import { scopeNote } from './viewer-scope.mjs';
 
@@ -196,6 +196,14 @@ export function renderViewPanel() {
       row.appendChild(key);
 
       section.appendChild(row);
+
+      const described = controlDescription(control, board.viewOptionValue(control.id));
+      if (described) {
+        const note = document.createElement('p');
+        note.className = 'vp-row-note';
+        note.textContent = described;
+        section.appendChild(note);
+      }
     });
 
     body.appendChild(section);

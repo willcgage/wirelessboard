@@ -2491,3 +2491,59 @@ body.live-strip-bottom .rotation-bar {
   border-bottom: 1px dotted currentColor;
   opacity: 0.85;
 }
+
+/* The wall-tablet lock (#116).
+
+   ⛔ Hiding the menu items is the *presentation* half only. Every one of these
+   routes is also refused in JavaScript, because a stale menu, a keyboard, or a
+   `#settings=true` link would otherwise walk straight past a display rule. */
+[data-wb-locked-note] {
+  display: none;
+}
+
+body.viewer-locked {
+  [data-wb-global] {
+    display: none;
+  }
+
+  [data-wb-locked-note] {
+    display: list-item;
+  }
+}
+
+.wb-locked-note {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  white-space: normal;
+  max-width: 16rem;
+}
+
+/* Why a locked board ignored you.
+
+   ⚠️ Top-centre, not the bottom: the bottom edge is already taken by the
+   service-position strip and the plan-changed bar, and a toast that landed on
+   top of either would hide live information to explain a refused keypress. */
+.viewer-lock-toast {
+  position: fixed;
+  top: calc(1rem + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1080;
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 0.6rem 1rem;
+  border-radius: 0.4rem;
+  background: #1f2430;
+  color: #e8eaf0;
+  border: 1px solid #39414f;
+  box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.45);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+/* The one row in the view panel that needs a sentence under it (#116). */
+.vp-row-note {
+  margin: -0.25rem 0 0.6rem;
+  font-size: 0.8rem;
+  opacity: 0.7;
+  line-height: 1.35;
+}

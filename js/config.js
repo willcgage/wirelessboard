@@ -9,6 +9,8 @@ import {
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 import { DEFAULT_DWELL_SECONDS } from './rotation.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
+import { isLocked } from './viewer-lock.mjs';
+import { showLockRefusal } from './viewer-lock-view.js';
 import { assignNumbers } from './slot-numbering.mjs';
 import {
   channelsToAdd, allChannelsToAdd, addLabel,
@@ -3989,6 +3991,12 @@ if (typeof window !== 'undefined') {
 }
 
 function showPCOView() {
+  // ⛔ A locked device must not reach Planning Center either: a sync rewrites
+  // every slot name on every board (#116).
+  if (isLocked(micboard.viewerLock)) {
+    showLockRefusal('pco');
+    return;
+  }
   hideHUDOverlay();
   stopLogAutoRefresh(true);
   micboard.settingsMode = 'PCO';

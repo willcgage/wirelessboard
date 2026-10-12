@@ -23,6 +23,7 @@ import {
 } from './board-layout.mjs';
 import { PLACEMENTS } from './live-strip.mjs';
 import { ROTATION_STATES } from './rotation-states.mjs';
+import { LOCK_STATES } from './viewer-lock.mjs';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const kbd = fs.readFileSync(path.join(ROOT, 'js', 'kbd.js'), 'utf8').replace(/\r\n/g, '\n');
@@ -39,6 +40,7 @@ test('every control names a vocabulary the board actually has', () => {
     // sits is a property of the strip, not of the grid (#121).
     livePlacement: PLACEMENTS,
     rotation: ROTATION_STATES,
+    viewerLock: LOCK_STATES,
   };
 
   VIEW_CONTROLS.forEach((control) => {

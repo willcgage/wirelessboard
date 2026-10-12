@@ -24,9 +24,11 @@ import {
 import {
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY,
   TOP_BAR_KEY, COLUMNS_KEY, WASH_KEY, LIVE_PLACEMENT_KEY, ROTATION_KEY,
+  VIEWER_LOCK_KEY,
 } from './view-prefs.mjs';
 import { PLACEMENTS, PLACEMENT_LABELS } from './live-strip.mjs';
 import { ROTATION_STATES, ROTATION_LABELS } from './rotation-states.mjs';
+import { LOCK_STATES, LOCK_LABELS, lockDescription } from './viewer-lock.mjs';
 
 export const VIEW_CONTROLS = [
   {
@@ -122,6 +124,24 @@ export const VIEW_CONTROLS = [
     // Two states read better as a switch than as two buttons.
     switchOn: 'shown',
   },
+  {
+    // ⚠️ A state, not an action, which is why it belongs in this table at all:
+    // a locked board stays locked across a reload, and something has to show
+    // that it is. It sits beside the bar switch because both are about what
+    // the board offers rather than how a card looks.
+    id: 'viewerLock',
+    key: 'k',
+    label: 'Lock to display only',
+    group: 'On screen',
+    storageKey: VIEWER_LOCK_KEY,
+    options: LOCK_STATES,
+    optionLabels: LOCK_LABELS,
+    switchOn: 'on',
+    // ⭐ The only control that needs a sentence. Every other row's label says
+    // what it does; this one has to say what it does *not* do, because a
+    // control called "lock" invites being mistaken for a security control.
+    describe: lockDescription,
+  },
 ];
 
 /** The groups in the order the panel shows them, with their controls. */
@@ -167,6 +187,14 @@ export function optionLabel(control, value) {
 /** A switch is a control with exactly two states and an `on` value. */
 export function isSwitch(control) {
   return Boolean(control && control.switchOn && control.options.length === 2);
+}
+
+/** The sentence under a row, for the one control that needs one. */
+export function controlDescription(control, value) {
+  if (!control || typeof control.describe !== 'function') {
+    return null;
+  }
+  return control.describe(value) || null;
 }
 
 export function isValidValue(control, value) {

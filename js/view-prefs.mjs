@@ -37,6 +37,9 @@ export const LIVE_PLACEMENT_KEY = 'wirelessboard.livePlacement';
 // long -- but whether this screen pages is local. The wall rotates; the FOH
 // laptop showing the same server does not (#113, and #116's line).
 export const ROTATION_KEY = 'wirelessboard.rotation';
+// ⛔ The one view preference with no hash parameter. A lock a link can switch
+// off would not be an accident guard at all -- see `viewer-lock.mjs` (#116).
+export const VIEWER_LOCK_KEY = 'wirelessboard.viewerLock';
 
 export function safeStorage() {
   try {

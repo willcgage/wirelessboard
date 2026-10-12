@@ -23,14 +23,17 @@ import {
   isWashStyle, migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 import {
-  resolvePref, safeStorage,
+  resolvePref, readPref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
+  VIEWER_LOCK_KEY,
 } from './view-prefs.mjs';
 import { PLACEMENTS, DEFAULT_PLACEMENT } from './live-strip.mjs';
 import { ROTATION_STATES } from './rotation-states.mjs';
+import { LOCK_STATES, isLocked, allows } from './viewer-lock.mjs';
+import { showLockRefusal } from './viewer-lock-view.js';
 import { startLiveStrip } from './live-strip-view.js';
 import { startRotation, noteInteraction } from './rotation-view.js';
 
@@ -57,6 +60,7 @@ micboard.columns = 'auto';
 micboard.wash = 'band';
 micboard.livePlacement = 'bottom';
 micboard.rotation = 'off';
+micboard.viewerLock = 'off';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -204,6 +208,21 @@ export function hideHud() {
   syncHudPane('help');
 }
 
+/**
+ * Refuse an action on a locked device, and say so (#116).
+ *
+ * ⛔ Every pointer route to an editor goes through here. The menu items are
+ * hidden when locked, but hiding is presentation -- a stale menu, a keyboard,
+ * or a `#settings=true` link would all still reach them.
+ */
+function refuseWhenLocked(action) {
+  if (allows(micboard.viewerLock, action)) {
+    return false;
+  }
+  showLockRefusal(action);
+  return true;
+}
+
 function mapGroups() {
   const help = document.getElementById('hud');
   const goHud = document.getElementById('go-hud');
@@ -234,6 +253,7 @@ function mapGroups() {
   syncHudPane(help ? help.dataset.activePane : 'help');
 
   function openBackground() {
+    if (refuseWhenLocked('background-library')) return;
     micboard.settingsMode = 'BACKGROUND';
     micboard.url.settings = undefined;
     micboard.url.pco = undefined;
@@ -326,6 +346,7 @@ function mapGroups() {
   const goExtended = document.getElementById('go-extended');
   if (goExtended) {
     goExtended.addEventListener('click', () => {
+      if (refuseWhenLocked('slot-edit')) return;
       slotEditToggle();
       hideHud();
       resetViews();
@@ -335,6 +356,7 @@ function mapGroups() {
   const goConfig = document.getElementById('go-config');
   if (goConfig) {
     goConfig.addEventListener('click', () => {
+      if (refuseWhenLocked('config')) return;
       initConfigEditor();
       micboard.url.background = undefined;
       hideHud();
@@ -364,6 +386,7 @@ function mapGroups() {
   const goGroupEdit = document.getElementById('go-groupedit');
   if (goGroupEdit) {
     goGroupEdit.addEventListener('click', () => {
+      if (refuseWhenLocked('group-edit')) return;
       if (micboard.group !== 0) {
         groupEditToggle();
         hideHud();
@@ -497,6 +520,15 @@ function readURLParameters() {
     storage,
     key: ROTATION_KEY,
     isValid: (v) => ROTATION_STATES.includes(v),
+    fallback: 'off',
+  });
+  // ⛔ No hashValue. Every other preference here can come from a link, because
+  // every other preference is a look. A link that switched the lock off would
+  // leave it guarding nothing (#116, `viewer-lock.mjs`).
+  micboard.viewerLock = readPref({
+    storage,
+    key: VIEWER_LOCK_KEY,
+    isValid: (v) => LOCK_STATES.includes(v),
     fallback: 'off',
   });
   micboard.livePlacement = resolvePref({
@@ -666,7 +698,12 @@ function initialMap(callback) {
         }
         mapGroups();
 
-        if (micboard.config.slots.length < 1 && micboard.url.pco !== 'true') {
+        // ⚠️ Not on a locked device. A board with nothing configured is
+        // exactly the case where config should open itself -- but a locked
+        // wall tablet is also the case where it must not, and the lock is
+        // deliberate where the empty config is not.
+        if (micboard.config.slots.length < 1 && micboard.url.pco !== 'true'
+            && !isLocked(micboard.viewerLock)) {
           setTimeout(() => {
             initConfigEditor();
           }, 125);
@@ -767,7 +804,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initialMap(initLiveData);
   }
 
-  if (micboard.url.settings === 'true' || micboard.url.settings === 'logs') {
+  if ((micboard.url.settings === 'true' || micboard.url.settings === 'logs')
+      && !isLocked(micboard.viewerLock)) {
     setTimeout(() => {
       initConfigEditor();
       updateHash();
@@ -781,7 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (_) {}
     }, 100);
   }
-  if (micboard.url.pco === 'true') {
+  if (micboard.url.pco === 'true' && !isLocked(micboard.viewerLock)) {
     setTimeout(() => {
       // Use the PCO nav binding; clicking will also hide HUD via config.js
       const pcoNav = document.getElementById('go-pco');

@@ -11,6 +11,7 @@ import { controlFor, isValidValue } from './view-controls.mjs';
 import { PLACEMENTS } from './live-strip.mjs';
 import { refreshLiveStrip } from './live-strip-view.js';
 import { ROTATION_STATES } from './rotation-states.mjs';
+import { LOCK_STATES, isLocked } from './viewer-lock.mjs';
 import { startRotation, stopRotation } from './rotation-view.js';
 import {
   writePref, safeStorage,
@@ -18,6 +19,7 @@ import {
   WASH_KEY,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
+  VIEWER_LOCK_KEY,
 } from './view-prefs.mjs';
 
 function swapClass(selector, currentClass, newClass) {
@@ -102,6 +104,9 @@ function applyTopBarClass() {
   }
   TOP_BAR_STATES.forEach((state) => body.classList.remove(`topbar-${state}`));
   body.classList.add(`topbar-${micboard.topBar}`);
+  // ⛔ Also on <body>, and for the same reason: the menu it has to empty is in
+  // the navbar, which is a sibling of #container (#116).
+  body.classList.toggle('viewer-locked', isLocked(micboard.viewerLock));
 }
 
 export function applyBoardLayout() {
@@ -249,6 +254,22 @@ export function cycleTopBar() {
   applyBoardLayout();
   updateHash();
   return micboard.topBar;
+}
+
+/**
+ * Lock this device to display only (#116).
+ *
+ * ⚠️ Not a security control and the label says so. It stops a tap on a wall
+ * tablet reaching a configuration save, which drops every receiver socket for
+ * ~2 seconds and blanks every board in the building.
+ */
+export function cycleViewerLock() {
+  micboard.viewerLock = nextOption(LOCK_STATES, micboard.viewerLock);
+  writePref({ storage: safeStorage(), key: VIEWER_LOCK_KEY, value: micboard.viewerLock });
+  applyBoardLayout();
+  // ⛔ No updateHash(). The lock has no hash parameter on purpose -- a link
+  // that switched it off would make it no guard at all.
+  return micboard.viewerLock;
 }
 
 export function toggleDisplayMode() {
