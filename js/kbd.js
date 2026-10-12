@@ -7,6 +7,7 @@ import {
   cycleArrangement, cycleCardShape, cycleTextPosition, cycleTypeSize, cycleTopBar,
   cycleColumns, cycleWash,
   cycleLivePlacement,
+  cycleRotation,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
@@ -105,6 +106,11 @@ function bindingTable() {
       keys: ['l'],
       hud: 'Service position: hidden, top, bottom, or a spare card.',
       run: () => cycleLivePlacement(),
+    },
+    {
+      keys: ['r'],
+      hud: 'Page through the groups on a timer, when they do not all fit.',
+      run: () => cycleRotation(),
     },
     {
       // A ceiling rather than an exact count, so it works alongside O instead
