@@ -2599,3 +2599,84 @@ body.viewer-locked {
   color: var(--color-white);
   font-size: 0.8rem;
 }
+
+/* The sync diff (#120).
+
+   ⚠️ Colour is not the only signal -- every row carries a word in its own
+   column ("Replace", "Clear", "Left alone"), because this table is read under
+   pressure before a service and a colour-blind operator reading only hue would
+   see twelve identical rows. */
+.sync-name {
+  font-weight: 600;
+}
+
+/* ⛔ Solid, light, and never translucent. This table renders black text on a
+   white `th` -- it is built for a light surface -- but the PCO panel's own
+   background is transparent, so the dark board shows through behind it. A
+   translucent tint therefore lands on *black*, and the first version of this
+   was black text on a dark red wash. Set the colour outright. */
+.sync-row-skipped td {
+  background: #f8d7da;
+}
+
+.sync-row-clear td {
+  background: #fff3cd;
+}
+
+.sync-row-change td {
+  background: #cfe2ff;
+}
+
+.sync-row-assign td {
+  background: #d1e7dd;
+}
+
+/* The rows that are already right: present, legible, and not competing. */
+.sync-row-unchanged td {
+  background: #fff;
+  color: #6c757d;
+}
+
+.sync-row-fold td {
+  background: #fff;
+}
+
+/* Setup, collapsed (#120).
+
+   ⛔ Collapsing is presentation. Nothing inside here changes its default
+   because it is hidden -- the panel may say what is left to do, but it does
+   not take the admin's decisions for them. */
+.pco-setup > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.5rem 0;
+}
+
+.pco-setup > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pco-setup > summary::before {
+  content: '▸ ';
+  display: inline-block;
+  width: 1rem;
+}
+
+.pco-setup[open] > summary::before {
+  content: '▾ ';
+}
+
+/* The diff's headline (#120).
+
+   ⛔ It inherited Bootstrap's dark body colour (#212529) and the PCO panel's
+   background is transparent over a black board, so the single most important
+   sentence on the page was near-black on black. It read as grey only because
+   of antialiasing. */
+#pco-sync-summary:not(:empty) {
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(215, 215, 215, 0.25);
+  color: var(--color-white);
+  font-size: 1rem;
+}

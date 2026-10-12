@@ -9,6 +9,10 @@ import {
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 import { DEFAULT_DWELL_SECONDS } from './rotation.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
+import {
+  ACTION_LABELS, changedRows, unchangedRows, diffHeadline,
+  nameCell as diffNameCell, describeRow, rowClass, shouldFoldUnchanged, foldedLabel,
+} from './sync-diff.mjs';
 import { isLocked } from './viewer-lock.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
 import { assignNumbers } from './slot-numbering.mjs';
@@ -4104,22 +4108,43 @@ function handlePcoSave() {
   });
 }
 
-function describeSlotMatch(slot) {
-  if (!slot) return '';
-  const bits = [`slot ${slot.slot}`];
-  if (slot.kind) bits.push(slot.kind === 'iem' ? 'IEM' : 'mic');
-  else if (slot.type) bits.push(slot.type);
-  if (slot.extended_id) bits.push(`“${slot.extended_id}”`);
-  return bits.join(' · ');
+/**
+ * One row of the diff: what is on the slot, and what would be (#120).
+ *
+ * ⛔ textContent throughout. These are names from Planning Center and slot
+ * labels somebody typed, and this table is rebuilt from a network response.
+ */
+function diffRow(change) {
+  const tr = document.createElement('tr');
+  tr.className = rowClass(change.action);
+
+  const cells = [
+    String(change.slot ?? ''),
+    ACTION_LABELS[change.action] || change.action || '',
+    diffNameCell(change.from),
+    diffNameCell(change.to),
+    describeRow(change),
+  ];
+  cells.forEach((text, i) => {
+    const td = document.createElement('td');
+    td.textContent = text;
+    // The two name columns are the comparison; everything else is context.
+    if (i === 2 || i === 3) td.className = 'sync-name';
+    tr.appendChild(td);
+  });
+  return tr;
 }
 
-const MATCH_SOURCE_LABELS = {
-  position: 'team position',
-  note: 'note category',
-  bracket: '[ID] in name',
-};
-
-function renderSyncAssignments(details) {
+/**
+ * The preview, as a diff of the board (#120).
+ *
+ * ⭐ This replaced a table of position / person / team / slots / matched-by,
+ * which described the *plan*. An operator pressing Sync Now is agreeing to a
+ * change to their board, and the old table never showed who was on a slot
+ * already -- so the one question it could not answer was the only one worth
+ * asking.
+ */
+function renderSyncDiff(changes) {
   const tbl = document.getElementById('pco-assignments-table');
   const tbody = document.querySelector('#pco-assignments-table tbody');
   if (!tbl || !tbody) return;
@@ -4127,28 +4152,42 @@ function renderSyncAssignments(details) {
 
   const headRow = document.querySelector('#pco-assignments-table thead tr');
   if (headRow) {
-    headRow.innerHTML = '<th>Position</th><th>Person</th><th>Team</th><th>Slots</th><th>Matched by</th>';
+    headRow.innerHTML = '<th>Slot</th><th></th><th>On it now</th><th>After</th><th>Why</th>';
   }
 
-  details.forEach((item) => {
-    const tr = document.createElement('tr');
-    const slots = Array.isArray(item.slots) ? item.slots : [];
-    const cells = [
-      item.position || item.id || '',
-      item.name || '',
-      item.team || '',
-      slots.map(describeSlotMatch).join(', '),
-      MATCH_SOURCE_LABELS[item.matched_via] || item.matched_via || '',
-    ];
-    cells.forEach((text) => {
-      const td = document.createElement('td');
-      td.textContent = text;
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
-  });
+  const rows = Array.isArray(changes) ? changes : [];
+  changedRows(rows).forEach((change) => tbody.appendChild(diffRow(change)));
 
-  tbl.style.display = details.length ? 'block' : 'none';
+  // ⭐ The quiet rows are kept but folded: on a board that synced last week
+  // most rows are "already correct" and they bury the two that matter.
+  const quiet = unchangedRows(rows);
+  if (shouldFoldUnchanged(rows)) {
+    const tr = document.createElement('tr');
+    tr.className = 'sync-row-fold';
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'btn btn-link btn-sm p-0';
+    toggle.textContent = foldedLabel(rows);
+    toggle.addEventListener('click', () => {
+      const shown = tbody.querySelectorAll('tr.sync-row-unchanged').length > 0;
+      if (shown) {
+        tbody.querySelectorAll('tr.sync-row-unchanged').forEach((el) => el.remove());
+        toggle.textContent = foldedLabel(rows);
+      } else {
+        quiet.forEach((change) => tbody.appendChild(diffRow(change)));
+        toggle.textContent = 'Hide the slots that already match';
+      }
+    });
+    td.appendChild(toggle);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  } else {
+    quiet.forEach((change) => tbody.appendChild(diffRow(change)));
+  }
+
+  tbl.style.display = rows.length ? 'block' : 'none';
 }
 
 function renderSyncConflicts(conflicts) {
@@ -4269,36 +4308,23 @@ function handlePcoSync(dryRun = false) {
       const details = Array.isArray(resp.assignment_details) ? resp.assignment_details : [];
       const unmatched = Array.isArray(resp.unmatched) ? resp.unmatched : [];
       const conflicts = Array.isArray(resp.conflicts) ? resp.conflicts : [];
+      const changes = Array.isArray(resp.changes) ? resp.changes : [];
       const planId = resp.plan_id || '-';
       const slotsMatched = resp.slots_matched || 0;
-      const summaryParts = [
-        `Plan ${planId}`,
-        `${details.length} assignment${details.length === 1 ? '' : 's'}`,
-        `${slotsMatched} slot${slotsMatched === 1 ? '' : 's'} matched`,
-      ];
+      // ⭐ The diff's own sentence goes first (#120). "Plan 42 — 9 assignments
+      // — 9 slots matched" is all true and answers nothing: an operator wants
+      // to know what is about to happen to the board.
+      const summaryParts = [diffHeadline(changes, { dryRun: Boolean(resp.dry_run) })];
       if (resp.dry_run) {
         summaryParts.push('<strong>preview only — nothing saved</strong>');
-      } else {
-        summaryParts.push(`${resp.updates || 0} update${(resp.updates || 0) === 1 ? '' : 's'}`);
       }
+      summaryParts.push(`Plan ${planId}`);
       if (unmatched.length) summaryParts.push(`${unmatched.length} unmatched`);
-      // What the sync takes *off* the board (#135). A preview has to say this
-      // before an operator agrees to it -- removing the wrong name is the one
-      // part of a sync that cannot be undone by syncing again.
+      // ⛔ What a sync takes *off* the board, and what it refuses to guess at,
+      // used to be appended here (#135). The diff headline now says both, in
+      // the same sentence as everything else -- saying them twice made the
+      // line long enough that nobody would read either.
       const clearable = Array.isArray(resp.clearable) ? resp.clearable : [];
-      if (clearable.length) {
-        const n = resp.dry_run ? clearable.length : (resp.cleared || 0);
-        summaryParts.push(
-          `<span class="text-warning">${n} slot${n === 1 ? '' : 's'} `
-          + `${resp.dry_run ? 'would be cleared' : 'cleared'}</span>`,
-        );
-      }
-      if (conflicts.length) {
-        summaryParts.push(
-          `<span class="text-danger">${conflicts.length} slot${conflicts.length === 1 ? '' : 's'} skipped`
-          + ' (claimed by two people)</span>',
-        );
-      }
       if (summaryEl) summaryEl.innerHTML = summaryParts.join(' — ');
 
       if (clearable.length) {
@@ -4315,7 +4341,7 @@ function handlePcoSync(dryRun = false) {
         unmatched.length ? 'warn' : 'info',
       );
 
-      renderSyncAssignments(details);
+      renderSyncDiff(changes);
       renderSyncConflicts(conflicts);
       renderSyncUnmatched(unmatched);
     })
