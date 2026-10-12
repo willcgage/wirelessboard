@@ -169,9 +169,20 @@ def resolve_assignments(
 def find_conflicts(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Report slots claimed by more than one person.
 
-    Two people scheduled to the same position -- or two positions that collide via
-    the number fallback -- would otherwise silently overwrite each other, with the
-    last one processed winning.
+    Two people scheduled to the same position -- or two positions that collide
+    via the number fallback -- used to silently overwrite each other, with
+    whichever was processed last winning.
+
+    ⛔ **A contested slot is now skipped, not guessed at.** Last-one-wins put a
+    name on the board that was right half the time and looked exactly as
+    authoritative as one that was right. For a board whose whole job is who has
+    which microphone, "these two both claim HH-4, so it has been left alone" is
+    an answer an operator can act on in ten seconds; a confident wrong name is
+    one nobody knows to question.
+
+    ⚠️ The same rule whether the sync was pressed or automatic. A preview has
+    to predict the sync, and two conflict behaviours depending on how a sync
+    was triggered would make the preview lie.
     """
     claims: Dict[Any, List[Dict[str, str]]] = {}
     for entry in resolved:
@@ -188,9 +199,18 @@ def find_conflicts(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             conflicts.append({
                 'slot': slot_number,
                 'claimants': claimants,
-                'winner': claimants[-1]['name'],
+                # No winner any more. Kept as an explicit field rather than
+                # removed, so anything still reading it gets "nobody" instead
+                # of a KeyError or, worse, a stale name.
+                'winner': None,
+                'skipped': True,
             })
     return sorted(conflicts, key=lambda c: (c['slot'] is None, c['slot']))
+
+
+def conflicted_slots(conflicts: List[Dict[str, Any]]) -> set:
+    """The slot numbers a sync must leave alone."""
+    return {c.get('slot') for c in (conflicts or []) if c.get('slot') is not None}
 
 
 def slots_to_clear(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -239,14 +259,24 @@ def _clear_unmatched(stale: List[Dict[str, Any]]) -> int:
     return len(stale)
 
 
-def _apply_assignments(resolved: List[Dict[str, Any]], options: Dict[str, Any]) -> int:
+def _apply_assignments(
+    resolved: List[Dict[str, Any]],
+    options: Dict[str, Any],
+    skip_slots: Optional[set] = None,
+) -> int:
     """Write ``extended_name`` onto every resolved slot. Returns slots changed.
 
     Device names (live or manually entered) are preserved exactly as-is so PCO
     can never overwrite a channel label.  ``extended_id`` is left alone unless
     ``mapping.seed_extended_id`` is enabled and the slot has none yet.
+
+    ⛔ ``skip_slots`` are contested slots (see `find_conflicts`). They are left
+    exactly as they are: not written, and -- because a contested slot *was*
+    matched -- not cleared by `clear_unmatched` either. Both a guessed name and
+    a blank are answers the board would be inventing.
     """
     seed_extended_id = options.get('seed_extended_id', False)
+    skip = skip_slots or set()
     updated = 0
 
     for entry in resolved:
@@ -254,6 +284,8 @@ def _apply_assignments(resolved: List[Dict[str, Any]], options: Dict[str, Any]) 
         label = entry.get('label') or ''
         for match in entry.get('_matches') or []:
             slot = match['slot']
+            if slot.get('slot') in skip:
+                continue
 
             # Snapshot hardware naming before mutating the slot.
             preserved_names = {key: slot.get(key) for key in DEVICE_NAME_KEYS}
@@ -575,6 +607,40 @@ def list_service_types() -> Dict[str, Any]:
             "name": attrs.get('name')
         })
     return {"ok": True, "services": services}
+
+
+def list_folders() -> Dict[str, Any]:
+    """The Services folders, so a profile can be bound to one by name (#139).
+
+    ⚠️ Returns a flat list with each folder's parent, not a tree. The panel
+    needs to show "Weekend / Youth" so two folders called "Youth" in different
+    places can be told apart, and a flat list with parents lets it build that
+    without this function deciding how deep is too deep to display.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        logger.warning('PCO folders list aborted: %s', exc)
+        return {"ok": False, "error": str(exc)}
+
+    auth = pco_cfg['auth']
+    headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+    data = _http_get(f"{BASE_URL}/folders", headers, params={"per_page": 200})
+    if data is None:
+        return {"ok": False, "error": _fetch_error("Unable to fetch folders")}
+
+    folders = []
+    for item in (data.get('data') or []):
+        attrs = item.get('attributes') or {}
+        folders.append({
+            "id": item.get('id'),
+            "name": attrs.get('name') or '',
+            "parent_id": _parent_folder_id({'data': item}),
+        })
+    # ⚠️ An account with no folders is a normal answer, not a failure. Most
+    # churches have none, and the panel has to say "no folders" rather than
+    # "could not fetch folders".
+    return {"ok": True, "folders": folders}
 
 
 def list_plans_for_service(service_type_value) -> Dict[str, Any]:
@@ -1844,7 +1910,7 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
 
     cleared = 0
     if not dry_run:
-        updates = _apply_assignments(resolved, options)
+        updates = _apply_assignments(resolved, options, conflicted_slots(conflicts))
         if stale:
             cleared = _clear_unmatched(stale)
         if updates or cleared:
@@ -1857,10 +1923,9 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
 
     for conflict in conflicts:
         logger.warning(
-            'PCO sync: slot %s claimed by %s -- "%s" wins',
+            'PCO sync: slot %s claimed by %s -- left alone, nobody written',
             conflict['slot'],
             ', '.join(sorted({c['name'] for c in conflict['claimants']})),
-            conflict['winner'],
         )
 
     if profile.get('description'):
@@ -1896,6 +1961,14 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
         "dry_run": dry_run,
         "cleared": cleared,
         "clearable": clearable,
+        # ⚠️ Named, not just counted. "1 conflict" tells an operator something
+        # is wrong; "slot 4: Dave and Fatai both claim it, left alone" tells
+        # them what to do about it before the service starts.
+        "skipped": [
+            {"slot": c.get('slot'),
+             "claimants": sorted({x.get('name') or '' for x in c.get('claimants') or []})}
+            for c in conflicts
+        ],
         # ⚠️ Which rules ran is no longer obvious from the screen once profiles
         # exist, so every sync and every preview says so.
         "profile": profile,

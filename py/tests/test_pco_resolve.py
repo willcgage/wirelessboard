@@ -222,8 +222,12 @@ class TestFindConflicts:
         conflicts = pco.find_conflicts(resolved)
 
         assert [c['slot'] for c in conflicts] == [1]
-        assert conflicts[0]['winner'] == 'Brooke'
         assert sorted(c['name'] for c in conflicts[0]['claimants']) == ['Brooke', 'Fatai']
+        # ⛔ Nobody wins a contested slot any more. Last-one-wins put a name on
+        # the board that was right half the time and looked exactly as
+        # authoritative as one that was right.
+        assert conflicts[0]['winner'] is None
+        assert conflicts[0]['skipped'] is True
 
     def test_same_person_on_several_slots_is_not_a_conflict(self, slots):
         resolved, _ = pco.resolve_assignments(
@@ -374,3 +378,76 @@ class TestSeededSlotsMatchLaterPlans:
 
         assert resolved == []
         assert unmatched[0]['position'] == 'Drums'
+
+
+class TestContestedSlotsAreSkipped:
+    """⛔ A slot two people claim is left exactly as it was.
+
+    Last-one-wins wrote a name that was right about half the time and looked
+    exactly as authoritative as one that was right. On a board whose whole job
+    is who has which microphone, "these two both claim HH-4, so it has been
+    left alone" is something an operator fixes in ten seconds; a confident
+    wrong name is something nobody knows to question.
+    """
+
+    def contested(self, slots):
+        resolved, _ = pco.resolve_assignments([
+            person('Fatai', position='Vocal 1'),
+            person('Brooke', position='Mic 1'),
+        ], DEFAULT_OPTIONS)
+        return resolved, pco.find_conflicts(resolved)
+
+    def test_nothing_is_written_to_a_contested_slot(self, slots):
+        slots[0]['extended_name'] = 'Last week'
+        resolved, conflicts = self.contested(slots)
+
+        pco._apply_assignments(resolved, DEFAULT_OPTIONS, pco.conflicted_slots(conflicts))
+
+        assert slots[0]['extended_name'] == 'Last week'
+
+    def test_uncontested_slots_are_still_written(self, slots):
+        # The skip is surgical: one bad slot must not stop the other eleven.
+        resolved, conflicts = self.contested(slots)
+
+        pco._apply_assignments(resolved, DEFAULT_OPTIONS, pco.conflicted_slots(conflicts))
+
+        # Slot 9 is the IEM half of "Vocal 1" and nobody else claims it.
+        assert slots[2]['extended_name'] == 'Fatai'
+
+    def test_a_contested_slot_is_not_counted_as_an_update(self, slots):
+        resolved, conflicts = self.contested(slots)
+
+        updated = pco._apply_assignments(resolved, DEFAULT_OPTIONS, pco.conflicted_slots(conflicts))
+
+        assert updated == 1
+
+    def test_no_conflicts_means_nothing_is_skipped(self, slots):
+        resolved, _ = pco.resolve_assignments(
+            [person('Fatai', position='Vocal 1')], DEFAULT_OPTIONS)
+
+        assert pco.conflicted_slots(pco.find_conflicts(resolved)) == set()
+
+    def test_the_skip_set_is_just_the_slot_numbers(self, slots):
+        _resolved, conflicts = self.contested(slots)
+
+        assert pco.conflicted_slots(conflicts) == {1}
+
+    def test_seed_extended_id_does_not_touch_a_contested_slot_either(self, slots):
+        # ⚠️ Left exactly as it was means the slot ID too. Writing one would
+        # change what a *later* sync matches on, off the back of a plan the
+        # board could not read.
+        slots[0].pop('extended_id', None)
+        resolved, conflicts = self.contested(slots)
+        options = dict(DEFAULT_OPTIONS, seed_extended_id=True)
+
+        pco._apply_assignments(resolved, options, pco.conflicted_slots(conflicts))
+
+        assert 'extended_id' not in slots[0]
+
+    def test_a_contested_slot_is_not_cleared_either(self, slots):
+        # It *was* matched, just contested, so `clear_unmatched` never sees it.
+        # Both a guessed name and a blank would be the board inventing an answer.
+        slots[0]['extended_name'] = 'Last week'
+        resolved, _conflicts = self.contested(slots)
+
+        assert 1 not in [s['slot'] for s in pco.slots_to_clear(resolved)]

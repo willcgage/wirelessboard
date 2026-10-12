@@ -7,6 +7,17 @@ import { backgroundNameForSlot, backgroundFilenames, findBackgroundFile } from '
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 import {
+  OVERRIDABLE,
+  uniqueId,
+  bindingKind,
+  overriddenKeys,
+  describeBinding,
+  folderPath,
+  bindingIsDangling,
+  validateProfile,
+  toPayload as profilesToPayload,
+} from './profile-editor.mjs';
+import {
   connectBlocker,
   connectSummary,
   isConnected,
@@ -34,6 +45,17 @@ const noop = () => {};
 
 /** The last answer from `api/pco/connect`, or null if none this session (#120). */
 let lastConnect = null;
+
+/**
+ * The rule sets being edited, and what Planning Center has to bind them to.
+ *
+ * ⚠️ Held here rather than read back out of the DOM on save. A binding is an
+ * id while the panel shows a name, and round-tripping that through the markup
+ * is how a renamed folder turns into a profile bound to nothing.
+ */
+let pcoProfiles = [];
+let pcoServiceTypes = [];
+let pcoFolders = [];
 
 /**
  * What the server last said "next upcoming" resolves to (#120).
@@ -2945,6 +2967,7 @@ export function initConfigEditor(force = false) {
   if (elSecret) elSecret.value = '';
   renderPcoCredentialStatus(pco.auth || {});
   applyPcoMappingToForm(pco.mapping);
+  applyPcoProfilesToForm(pco);
 
   const addDisc = document.getElementById('add-discovered');
   if (addDisc) {
@@ -3091,6 +3114,7 @@ function populatePCOFormFromServer() {
         const s = p.services || {};
         if (elStid) elStid.value = s.service_type_id || '';
         applyPcoMappingToForm(p.mapping);
+        applyPcoProfilesToForm(p);
         ensureNotePreviewUI();
         renderPcoCredentialStatus(p.auth || {});
         appendPcoLog('Loaded saved PCO configuration.');
@@ -3126,6 +3150,20 @@ export function bindPcoNav() {
 // position is the default source and the note category is only a fallback.
 const DEFAULT_PCO_STRATEGY = 'position_or_note';
 
+/**
+ * Load the rule sets into the editor (#139).
+ *
+ * ⚠️ Deep-copied: they are edited in place, and editing the live config object
+ * would apply changes the operator has not saved -- and could not cancel.
+ */
+function applyPcoProfilesToForm(pcoCfg) {
+  const list = (pcoCfg && pcoCfg.profiles) || [];
+  pcoProfiles = Array.isArray(list)
+    ? list.map((profile) => ({ ...profile, mapping: { ...(profile.mapping || {}) } }))
+    : [];
+  renderPcoProfiles();
+}
+
 function applyPcoMappingToForm(mapping) {
   const m = mapping || {};
   const elCat = document.getElementById('pco-note-category');
@@ -3143,6 +3181,7 @@ function applyPcoMappingToForm(mapping) {
   if (elSeed) elSeed.checked = m.seed_extended_id === true;
   const elClearUnmatched = document.getElementById('pco-clear-unmatched');
   if (elClearUnmatched) elClearUnmatched.checked = m.clear_unmatched === true;
+
   renderPcoTeamChoices(null);
 }
 
@@ -3288,6 +3327,9 @@ function buildPcoPayload() {
   if (serviceTypeId) {
     payload.services.service_type_id = serviceTypeId;
   }
+  // ⚠️ Always sent, including as an empty list -- `update_pco_config` merges,
+  // so omitting the key would make removing the last rule set impossible.
+  payload.profiles = profilesToPayload(pcoProfiles);
   if (token || secret) {
     payload.auth = { token, secret };
   }
@@ -3504,6 +3546,9 @@ function showPCOView() {
   applyConnectedState();
   // Step 2 needs the service type list before it is any use.
   loadPcoServiceTypes();
+  // Step 6 needs service types *and* folders, so a binding can be shown by
+  // name rather than by the id that is actually stored.
+  loadPcoBindingTargets();
   renderPcoTeamChoices(null);
   appendPcoLog('Opened PCO settings view');
 }
@@ -3609,7 +3654,12 @@ function renderSyncConflicts(conflicts) {
 
   const heading = document.createElement('div');
   heading.className = 'text-danger';
-  heading.textContent = `${conflicts.length} slot${conflicts.length === 1 ? '' : 's'} claimed by more than one person:`;
+  // ⛔ Says what happened, not just that something did. A contested slot is
+  // left exactly as it was -- neither name written, and not cleared either --
+  // so the operator has to know the board is still showing whatever was there
+  // before, and that only they can settle it.
+  heading.textContent = `${conflicts.length} slot${conflicts.length === 1 ? '' : 's'} claimed by more than one person `
+    + '— left alone, nobody written:';
   target.appendChild(heading);
 
   const list = document.createElement('ul');
@@ -3617,10 +3667,15 @@ function renderSyncConflicts(conflicts) {
   conflicts.forEach((c) => {
     const names = (c.claimants || []).map((x) => x.name).filter(Boolean);
     const li = document.createElement('li');
-    li.textContent = `slot ${c.slot}: ${names.join(', ')} — “${c.winner}” wins`;
+    li.textContent = `slot ${c.slot}: ${names.join(' and ')} both claim it`;
     list.appendChild(li);
   });
   target.appendChild(list);
+
+  const note = document.createElement('div');
+  note.className = 'small text-muted mt-1';
+  note.textContent = 'Fix it in Planning Center and sync again, or set the name by hand below.';
+  target.appendChild(note);
 }
 
 function renderSyncUnmatched(unmatched) {
@@ -3733,7 +3788,12 @@ function handlePcoSync(dryRun = false) {
           + `${resp.dry_run ? 'would be cleared' : 'cleared'}</span>`,
         );
       }
-      if (conflicts.length) summaryParts.push(`<span class="text-danger">${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}</span>`);
+      if (conflicts.length) {
+        summaryParts.push(
+          `<span class="text-danger">${conflicts.length} slot${conflicts.length === 1 ? '' : 's'} skipped`
+          + ' (claimed by two people)</span>',
+        );
+      }
       if (summaryEl) summaryEl.innerHTML = summaryParts.join(' — ');
 
       if (clearable.length) {
@@ -3776,6 +3836,21 @@ export function bindPcoHandlers() {
     } else if (t.id === 'pco-note-preview') {
       e.preventDefault();
       handleNotePreview();
+    } else if (t.id === 'pco-profile-add') {
+      e.preventDefault();
+      pcoProfiles.push({
+        id: uniqueId('Rule set', pcoProfiles),
+        name: '',
+        mapping: {},
+      });
+      renderPcoProfiles();
+    } else if (t.classList && t.classList.contains('pco-profile-remove')) {
+      e.preventDefault();
+      const index = Number.parseInt(t.getAttribute('data-index'), 10);
+      if (Number.isFinite(index)) {
+        pcoProfiles.splice(index, 1);
+        renderPcoProfiles();
+      }
     } else if (t.id === 'pco-connect') {
       e.preventDefault();
       handlePcoConnect();
@@ -3932,6 +4007,145 @@ function applyConnectedState() {
     setConnectStatus(storedCredentialsNote(hasStored), hasStored ? 'ok' : null);
   }
   return connected;
+}
+
+/** Options for a profile's binding picker, grouped by kind. */
+function bindingOptionsHTML(profile) {
+  const kind = bindingKind(profile);
+  let chosen = '';
+  if (kind === 'service_type') chosen = `st:${profile.service_type_id}`;
+  if (kind === 'folder') chosen = `fo:${profile.folder_id}`;
+
+  const option = (value, label) => `<option value="${escapeHtml(value)}"${value === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+
+  const parts = [option('', 'Chosen by hand when syncing')];
+  if (pcoServiceTypes.length) {
+    parts.push('<optgroup label="Service type">');
+    pcoServiceTypes.forEach((st) => parts.push(option(`st:${st.id}`, st.name || `Service type ${st.id}`)));
+    parts.push('</optgroup>');
+  }
+  if (pcoFolders.length) {
+    parts.push('<optgroup label="Folder (covers every service type inside it)">');
+    pcoFolders.forEach((f) => parts.push(option(`fo:${f.id}`, folderPath(f, pcoFolders) || `Folder ${f.id}`)));
+    parts.push('</optgroup>');
+  }
+
+  // ⛔ A binding whose target is gone must stay selectable, or opening the
+  // panel silently rewrites it to "chosen by hand" and the operator never
+  // learns the folder was renamed.
+  if (chosen && !parts.some((part) => part.includes(`value="${chosen}"`))) {
+    parts.push(option(chosen, `${describeBinding(profile, { serviceTypes: pcoServiceTypes, folders: pcoFolders })}`));
+  }
+  return parts.join('');
+}
+
+/** The per-rule override controls for one profile. */
+function overrideRowsHTML(profile, index) {
+  const mapping = profile.mapping || {};
+  return OVERRIDABLE.map((entry) => {
+    const on = entry.key in mapping && mapping[entry.key] !== null;
+    const value = mapping[entry.key];
+    let control = '';
+    if (entry.key === 'strategy') {
+      control = `<select class="form-select form-select-sm pco-profile-value" data-index="${index}" data-key="${entry.key}"${on ? '' : ' disabled'}>
+        ${['position_or_note', 'position', 'note_or_brackets'].map((v) => `<option value="${v}"${v === value ? ' selected' : ''}>${v}</option>`).join('')}
+      </select>`;
+    } else if (entry.key === 'note_source') {
+      control = `<select class="form-select form-select-sm pco-profile-value" data-index="${index}" data-key="${entry.key}"${on ? '' : ' disabled'}>
+        ${['person', 'plan', 'auto'].map((v) => `<option value="${v}"${v === value ? ' selected' : ''}>${v}</option>`).join('')}
+      </select>`;
+    } else if (entry.key === 'team_name_filter') {
+      const text = Array.isArray(value) ? value.join(', ') : '';
+      control = `<input type="text" class="form-control form-control-sm pco-profile-value" data-index="${index}" data-key="${entry.key}" value="${escapeHtml(text)}" placeholder="Vocal, Band"${on ? '' : ' disabled'}>`;
+    } else if (entry.key === 'note_category') {
+      control = `<input type="text" class="form-control form-control-sm pco-profile-value" data-index="${index}" data-key="${entry.key}" value="${escapeHtml(value || '')}"${on ? '' : ' disabled'}>`;
+    } else {
+      control = `<div class="form-check mb-0"><input type="checkbox" class="form-check-input pco-profile-value" data-index="${index}" data-key="${entry.key}"${value ? ' checked' : ''}${on ? '' : ' disabled'}></div>`;
+    }
+
+    return `<div class="d-flex align-items-center gap-2 mb-1">
+      <div class="form-check mb-0" style="min-width:11rem">
+        <input type="checkbox" class="form-check-input pco-profile-override" id="po-${index}-${entry.key}" data-index="${index}" data-key="${entry.key}"${on ? ' checked' : ''}>
+        <label class="form-check-label small" for="po-${index}-${entry.key}">${escapeHtml(entry.label)}</label>
+      </div>
+      <div class="flex-grow-1">${control}</div>
+    </div>`;
+  }).join('');
+}
+
+/**
+ * Draw the rule sets.
+ *
+ * ⚠️ Every problem is shown on the card it belongs to rather than as one
+ * summary line. "Something is wrong with your rule sets" is not actionable on
+ * a Sunday morning.
+ */
+/** What the board's own form currently says for a mapping key. */
+function currentBoardMappingValue(key) {
+  const el = {
+    strategy: 'pco-strategy',
+    note_category: 'pco-note-category',
+    note_source: 'pco-note-source',
+    team_name_filter: 'pco-team-filter',
+    position_number_fallback: 'pco-number-fallback',
+    seed_extended_id: 'pco-seed-extended-id',
+    clear_unmatched: 'pco-clear-unmatched',
+  }[key];
+  const node = el ? document.getElementById(el) : null;
+  if (!node) return key === 'team_name_filter' ? [] : '';
+  if (node.type === 'checkbox') return !!node.checked;
+  if (key === 'team_name_filter') {
+    return node.value.split(',').map((x) => x.trim()).filter((x) => x);
+  }
+  return node.value;
+}
+
+function renderPcoProfiles() {
+  const host = document.getElementById('pco-profile-list');
+  if (!host) return;
+
+  if (!pcoProfiles.length) {
+    host.innerHTML = '<div class="small text-muted">No rule sets. Every plan uses the settings above.</div>';
+    return;
+  }
+
+  host.innerHTML = pcoProfiles.map((profile, index) => {
+    const problem = validateProfile(profile, pcoProfiles);
+    const dangling = bindingIsDangling(profile, {
+      serviceTypes: pcoServiceTypes, folders: pcoFolders,
+    });
+    const overrides = overriddenKeys(profile).length;
+
+    return `<div class="p-2 mb-2 border rounded">
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm pco-profile-name" data-index="${index}"
+               value="${escapeHtml(profile.name || '')}" placeholder="Name, e.g. Wednesday Youth" style="max-width:16rem">
+        <select class="form-select form-select-sm pco-profile-binding" data-index="${index}" style="max-width:22rem">
+          ${bindingOptionsHTML(profile)}
+        </select>
+        <button type="button" class="btn btn-outline-danger btn-sm pco-profile-remove" data-index="${index}">Remove</button>
+      </div>
+      <div class="small ${dangling ? 'text-danger' : 'text-muted'} mt-1">
+        ${escapeHtml(describeBinding(profile, { serviceTypes: pcoServiceTypes, folders: pcoFolders }))}
+        &mdash; ${overrides} rule${overrides === 1 ? '' : 's'} changed
+      </div>
+      ${problem ? `<div class="small text-warning mt-1">${escapeHtml(problem)}</div>` : ''}
+      <div class="mt-2">${overrideRowsHTML(profile, index)}</div>
+    </div>`;
+  }).join('');
+}
+
+/** Service types and folders, so bindings can be shown by name. */
+function loadPcoBindingTargets() {
+  const seen = (resp, key) => (resp && resp.ok && Array.isArray(resp[key]) ? resp[key] : []);
+  return Promise.all([
+    fetch(`api/pco/services?_=${Date.now()}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+    fetch(`api/pco/folders?_=${Date.now()}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+  ]).then(([services, folders]) => {
+    pcoServiceTypes = seen(services, 'services');
+    pcoFolders = seen(folders, 'folders');
+    renderPcoProfiles();
+  });
 }
 
 function refreshPlansList(options = {}) {
@@ -4193,6 +4407,62 @@ function buildAssignmentTable(ppl) {
 document.addEventListener('change', (e) => {
   const t = e.target;
   if (!t) return;
+  if (t.classList && t.classList.contains('pco-profile-name')) {
+    const profile = pcoProfiles[Number.parseInt(t.getAttribute('data-index'), 10)];
+    if (profile) {
+      profile.name = t.value;
+      // ⚠️ The id is set once, from the first name given, and never follows a
+      // rename. It is what a sync names when refusing an unknown profile, and
+      // a shifting id would break a hand-pick saved anywhere else.
+      if (!profile.id || /^rule-set(-\d+)?$/.test(profile.id)) {
+        profile.id = uniqueId(t.value, pcoProfiles.filter((p) => p !== profile));
+      }
+      renderPcoProfiles();
+    }
+    return;
+  }
+  if (t.classList && t.classList.contains('pco-profile-binding')) {
+    const profile = pcoProfiles[Number.parseInt(t.getAttribute('data-index'), 10)];
+    if (profile) {
+      delete profile.service_type_id;
+      delete profile.folder_id;
+      const [kind, id] = String(t.value || '').split(':');
+      if (kind === 'st' && id) profile.service_type_id = id;
+      if (kind === 'fo' && id) profile.folder_id = id;
+      renderPcoProfiles();
+    }
+    return;
+  }
+  if (t.classList && t.classList.contains('pco-profile-override')) {
+    const profile = pcoProfiles[Number.parseInt(t.getAttribute('data-index'), 10)];
+    const key = t.getAttribute('data-key');
+    if (profile && key) {
+      profile.mapping = profile.mapping || {};
+      if (t.checked) {
+        // Starts from whatever the board currently says, so turning an
+        // override on does not silently change the rule at the same time.
+        profile.mapping[key] = currentBoardMappingValue(key);
+      } else {
+        delete profile.mapping[key];
+      }
+      renderPcoProfiles();
+    }
+    return;
+  }
+  if (t.classList && t.classList.contains('pco-profile-value')) {
+    const profile = pcoProfiles[Number.parseInt(t.getAttribute('data-index'), 10)];
+    const key = t.getAttribute('data-key');
+    if (profile && key && profile.mapping && key in profile.mapping) {
+      if (t.type === 'checkbox') {
+        profile.mapping[key] = t.checked;
+      } else if (key === 'team_name_filter') {
+        profile.mapping[key] = t.value.split(',').map((x) => x.trim()).filter((x) => x);
+      } else {
+        profile.mapping[key] = t.value;
+      }
+    }
+    return;
+  }
   if (t.id === 'pco-plan-select') {
     const loadBtn = document.getElementById('pco-load-people');
     if (loadBtn) loadBtn.disabled = !selectedPlanId();
