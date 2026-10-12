@@ -765,6 +765,47 @@
                     <div id="device-name-status" class="small text-muted d-none"></div>
                   </div>
                 </div>
+                <!-- ⛔ The channel count is asked for, not inferred. A model
+                     string decides it, not the type: "axtd" is both AD4D at two
+                     channels and AD4Q at four, and the tables for SLX-D are
+                     empty because those model strings have never been seen. -->
+                <div class="row g-2 align-items-end mt-3 pt-3 border-top">
+                  <div class="col-12">
+                    <strong class="small">Add a receiver by hand</strong>
+                    <div class="form-text">
+                      For a receiver discovery cannot see &mdash; on another VLAN, or not yet
+                      switched on. Discovered receivers already know their channel count.
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-12">
+                    <label for="manual-rx-ip" class="form-label text-light small">IP</label>
+                    <input type="text" class="form-control form-control-sm" id="manual-rx-ip" placeholder="e.g. 192.168.1.50">
+                  </div>
+                  <div class="col-md-4 col-8">
+                    <label for="manual-rx-type" class="form-label text-light small">Model</label>
+                    <select class="form-select form-select-sm" id="manual-rx-type">
+                      <option value=""></option>
+                      <option value="axtd">Axient Digital (AD4D / AD4Q)</option>
+                      <option value="ulxd">ULX-D</option>
+                      <option value="qlxd">QLX-D</option>
+                      <option value="slxdplus">SLX-D+</option>
+                      <option value="slxd">SLX-D</option>
+                      <option value="uhfr">UHF-R</option>
+                      <option value="p10t">PSM 1000 (IEM)</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2 col-4">
+                    <label for="manual-rx-channels" class="form-label text-light small">Channels</label>
+                    <input type="number" class="form-control form-control-sm" id="manual-rx-channels" min="1" max="16" value="1">
+                  </div>
+                  <div class="col-md-2 col-12 d-grid">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="add-receiver">Add receiver</button>
+                  </div>
+                  <div class="col-12">
+                    <span id="manual-rx-status" class="small"></span>
+                  </div>
+                </div>
+
                 <div class="row mt-2">
                   <div class="col d-grid gap-2">
                     <button type="button" class="btn btn-outline-primary" id="add-config-row">Add Row</button>

@@ -11,6 +11,10 @@ import {
   channelsToAdd, allChannelsToAdd, addLabel,
 } from './receiver-expand.mjs';
 import {
+  groupRows, groupHeading, splitAddresses,
+  manualReceiverRows, manualReceiverBlocker,
+} from './receiver-groups.mjs';
+import {
   editorState, configuredCount, emptyingSaveWarning, waitingMessage,
 } from './config-readiness.mjs';
 import {
@@ -1633,6 +1637,7 @@ function appendChannelRows(rows) {
 
   updateSlotID();
   updateHiddenSlots();
+  renderReceiverHeadings();
   renderDiscoveredDeviceList();
   return rows.length;
 }
@@ -1661,12 +1666,121 @@ function addAllDiscoveredDevices() {
   }
 }
 
+/**
+ * Add a receiver that discovery cannot see.
+ *
+ * ⛔ Asks for the channel count rather than inferring it. A model string
+ * decides the count, not the type -- `axtd` is both AD4D at two channels and
+ * AD4Q at four, and the model tables for SLX-D are empty because those strings
+ * have never been observed. Guessing would quietly configure channels that are
+ * not there.
+ */
+function addManualReceiver() {
+  const status = document.getElementById('manual-rx-status');
+  const spec = {
+    ip: document.getElementById('manual-rx-ip')?.value,
+    type: document.getElementById('manual-rx-type')?.value,
+    channels: document.getElementById('manual-rx-channels')?.value,
+  };
+
+  const blocker = manualReceiverBlocker(spec);
+  if (blocker) {
+    if (status) {
+      status.className = 'small text-warning';
+      status.textContent = blocker;
+    }
+    return;
+  }
+
+  // Channels this receiver already has on screen are left alone, the same rule
+  // the discovered path follows.
+  const wanted = manualReceiverRows(spec);
+  const existing = channelsInEditor();
+  const rows = wanted.filter((row) => !existing.some(
+    (slot) => slot.ip === row.ip && slot.channel === row.channel,
+  ));
+
+  if (!rows.length) {
+    if (status) {
+      status.className = 'small text-muted';
+      status.textContent = 'Those channels are already in the list.';
+    }
+    return;
+  }
+
+  appendChannelRows(rows);
+  if (status) {
+    status.className = 'small text-success';
+    status.textContent = `Added ${rows.length} channel${rows.length === 1 ? '' : 's'} for ${spec.ip}.`;
+  }
+  const ipInput = document.getElementById('manual-rx-ip');
+  if (ipInput) ipInput.value = '';
+}
+
 /** One receiver, expanded the same way. */
 function addDiscoveredReceiver(ip) {
   const discovered = micboard.discovered || [];
   const device = discovered.find((d) => String(d.ip || '').trim() === String(ip || '').trim());
   if (!device) return;
   appendChannelRows(channelsToAdd(device, channelsInEditor()));
+}
+
+/** The human model names, so a heading does not say "axtd" at an operator. */
+function receiverTypeLabels() {
+  const labels = {};
+  const select = document.getElementById('manual-rx-type');
+  if (select) {
+    Array.from(select.options).forEach((opt) => {
+      if (opt.value) labels[opt.value] = opt.textContent.trim();
+    });
+  }
+  return labels;
+}
+
+/**
+ * Put a heading above each run of rows that share an address (#144).
+ *
+ * ⚠️ Headings only -- no rows are moved. The saved slots array is written in
+ * document order, so reordering here would change what the board shows for
+ * anyone whose channels are not in groups. A receiver whose channels have been
+ * separated therefore shows two headings, which is what the configuration
+ * actually says.
+ */
+function renderReceiverHeadings() {
+  const holder = document.getElementById('editor_holder');
+  if (!holder) return;
+
+  holder.querySelectorAll('.rx-heading').forEach((el) => el.remove());
+
+  const rows = Array.from(holder.querySelectorAll('.cfg-row'));
+  if (!rows.length) return;
+
+  const described = rows.map((row) => ({
+    ip: (row.querySelector('.cfg-ip')?.value || '').trim(),
+    type: (row.querySelector('.cfg-type')?.value || '').trim(),
+    device_name: (row.querySelector('.cfg-device-name')?.value || '').trim(),
+  }));
+
+  const groups = groupRows(described);
+  const labels = receiverTypeLabels();
+  const split = splitAddresses(groups);
+
+  groups.forEach((group) => {
+    const first = rows[group.rows[0].index];
+    if (!first) return;
+    const heading = document.createElement('div');
+    heading.className = 'rx-heading small text-muted mt-2';
+    heading.textContent = groupHeading(group, { typeLabels: labels });
+    if (group.ip && split.includes(group.ip)) {
+      // Almost never deliberate, and the reason a receiver "looks like two" is
+      // not visible from the rows themselves.
+      const note = document.createElement('span');
+      note.className = 'text-warning ms-2';
+      note.textContent = '— this receiver’s channels are split up';
+      heading.appendChild(note);
+    }
+    holder.insertBefore(heading, first);
+  });
 }
 
 function updateHiddenSlots() {
@@ -2965,8 +3079,11 @@ export function initConfigEditor(force = false) {
         holder.appendChild(t);
       }
       updateSlotID();
+      renderReceiverHeadings();
     }
   }
+  // Also for the configured-rows path above, which does not renumber anything.
+  renderReceiverHeadings();
   renderDiscoveredDeviceList();
 
   ensureDiscoveryFormBindings();
@@ -3101,6 +3218,22 @@ export function initConfigEditor(force = false) {
     });
   }
 
+  // ⚠️ Editing a row's address changes which receiver it belongs to, and a
+  // heading describing rows that have since moved is worse than no heading.
+  const editorHolder = document.getElementById('editor_holder');
+  if (editorHolder && editorHolder.dataset.headingsBound !== 'true') {
+    editorHolder.dataset.headingsBound = 'true';
+    editorHolder.addEventListener('change', (e) => {
+      if (e.target.closest('.cfg-ip, .cfg-type')) renderReceiverHeadings();
+    });
+  }
+
+  const addRx = document.getElementById('add-receiver');
+  if (addRx && addRx.dataset.bound !== 'true') {
+    addRx.dataset.bound = 'true';
+    addRx.addEventListener('click', () => addManualReceiver());
+  }
+
   const discoveredList = document.getElementById('discovered_list');
   if (discoveredList && discoveredList.dataset.bound !== 'true') {
     discoveredList.dataset.bound = 'true';
@@ -3210,6 +3343,7 @@ export function initConfigEditor(force = false) {
         const row = btn.closest('.cfg-row');
         if (row) row.remove();
         updateSlotID();
+        renderReceiverHeadings();
         renderDiscoveredDeviceList();
       }
     });
@@ -3227,6 +3361,7 @@ export function initConfigEditor(force = false) {
       }
       updateSlotID();
       updateHiddenSlots();
+      renderReceiverHeadings();
       renderDiscoveredDeviceList();
     });
   }
@@ -3238,6 +3373,7 @@ export function initConfigEditor(force = false) {
       document.getElementById('editor_holder').append(t);
       updateSlotID();
       updateHiddenSlots();
+      renderReceiverHeadings();
     });
   }
 }
