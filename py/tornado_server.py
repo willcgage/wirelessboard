@@ -145,26 +145,75 @@ def start_local_url_refresh():
     ioloop.PeriodicCallback(refresh_local_url, _LOCAL_URL_REFRESH_SECONDS * 1000).start()
 
 
-def _plan_watch_tick():
-    """Run one watcher pass on the executor, never on the IOLoop.
+# ⚠️ One automatic sync at a time. The watcher wakes every 30s and a sync is
+# several seconds of HTTP followed by a write; two overlapping ones would both
+# be writing config.json.
+_AUTO_SYNC_RUNNING = False
 
-    ⛔ The same split every other PCO path obeys: `run_plan_watch` is several
-    seconds of HTTP, and Tornado is single-threaded here, so doing it inline
-    would freeze the board for the duration -- every two minutes, forever.
 
-    ⚠️ Fire-and-forget on purpose. Nothing awaits the result; the watcher
-    stores what it found and the next payload carries it. A failed pass must
-    not propagate into the loop.
+async def _auto_sync_if_due():
+    """Sync the active plan without an operator, when asked to (#140).
+
+    ⛔ The same three phases as `PcoSyncHandler`, for the same reason: only
+    `resolve_sync` -- every HTTP call, no writes -- leaves the IOLoop. Both
+    phases that can touch config.json stay on it, serialized against every
+    request handler. Running the whole thing on the watcher's worker would put
+    a second thread in front of the file whose corruption once left a server
+    that could not start.
+
+    ⚠️ The decision itself is `pco.auto_sync_decision`; everything this does is
+    sequencing. Refusals belong in one readable place, not spread through a
+    callback chain.
     """
-    future = _PCO_EXECUTOR.submit(pco.run_plan_watch)
+    global _AUTO_SYNC_RUNNING
 
-    def swallow(fut):
-        try:
-            fut.result()
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.debug('Plan watch failed: %s', exc)
+    decision = await _run_pco(pco.auto_sync_decision, _AUTO_SYNC_RUNNING)
+    if not decision.get('go'):
+        return
 
-    future.add_done_callback(swallow)
+    _AUTO_SYNC_RUNNING = True
+    try:
+        # ⛔ Marked as tried before it runs. A sync that throws halfway would
+        # otherwise never be marked and would start again on the next tick.
+        pco.note_auto_sync_attempt(decision.get('key'))
+
+        started = pco.begin_sync()
+        if not started.get('ok'):
+            pco.record_auto_sync(started)
+            logger.warning('Automatic PCO sync aborted: %s', started.get('error'))
+            return
+
+        resolution = await _run_pco(pco.resolve_sync, started['config'], None, None)
+        result = pco.finish_sync(resolution)
+        status = pco.record_auto_sync(result)
+        logger.info('PCO: %s', (status.get('auto_sync') or {}).get('summary'))
+    finally:
+        _AUTO_SYNC_RUNNING = False
+
+
+async def _plan_watch_tick():
+    """Run one watcher pass off the IOLoop, then act on it if asked to.
+
+    ⛔ `run_plan_watch` is several seconds of HTTP and Tornado is
+    single-threaded here, so doing it inline would freeze the board for the
+    duration -- every two minutes, forever.
+
+    ⚠️ The watcher itself still never syncs. It reports, and the decision to
+    act on its report is made separately and only where the operator asked for
+    it, which is how #120's rule is being reversed one step at a time.
+    """
+    try:
+        await _run_pco(pco.run_plan_watch)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug('Plan watch failed: %s', exc)
+        return
+
+    try:
+        await _auto_sync_if_due()
+    except Exception as exc:  # pragma: no cover - defensive
+        # A failed automatic sync must not stop the watcher; the board keeps
+        # being told the plan changed, which is the behaviour without this.
+        logger.warning('Automatic PCO sync failed: %s', exc)
 
 
 def start_plan_watch():

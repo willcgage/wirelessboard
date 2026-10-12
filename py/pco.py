@@ -10,6 +10,7 @@ import requests
 import config
 import pco_live
 import pco_mapping
+import pco_auto_sync
 import pco_profiles
 import sync_diff
 from pco_credentials import CredentialError, ensure_credentials
@@ -1493,6 +1494,13 @@ def _watching_active_plan(pco_cfg: Dict[str, Any]) -> bool:
 # from `_LAST_SYNC`, which is what was applied; this is what has happened since.
 _PLAN_WATCH: Dict[str, Any] = {}
 
+# Which (plan, version) pairs an automatic sync has already had a go at, so a
+# plan that cannot be synced is not retried every two minutes for the rest of
+# the day (#140). In memory on purpose: it describes this run of the server,
+# and `config.json` is the one file whose corruption once left a server that
+# could not start.
+_AUTO_SYNC_TRIED: set = set()
+
 
 # When a plan's service is over, keyed by plan id. Cached for the life of the
 # plan being watched: times are set when the plan is built and almost never
@@ -1741,6 +1749,68 @@ def plan_watch_status() -> Dict[str, Any]:
 
 def forget_plan_watch() -> None:
     _PLAN_WATCH.clear()
+    _AUTO_SYNC_TRIED.clear()
+
+
+def auto_sync_mapping() -> Dict[str, Any]:
+    """The rules governing the plan currently on the board.
+
+    ⚠️ The profile used by the **last sync**, not the one today's date would
+    resolve to. The question automatic sync answers is "should what is on the
+    board right now update itself", and what is on the board was put there by
+    that profile.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError:
+        return {}
+    profile_id = last_sync().get('profile_id')
+    profile = pco_profiles.profile_by_id(pco_cfg, profile_id) if profile_id else None
+    return pco_profiles.effective_mapping(pco_cfg, profile)
+
+
+def auto_sync_decision(running: bool = False) -> Dict[str, Any]:
+    """Whether the watcher's latest finding should be acted on.
+
+    ⛔ Decides only. The caller does the three-phase sync, because this runs on
+    a worker and a sync writes `config.json`.
+    """
+    status = plan_watch_status()
+    go, reason = pco_auto_sync.should_auto_sync(
+        status,
+        auto_sync_mapping(),
+        attempted=_AUTO_SYNC_TRIED,
+        running=running,
+    )
+    return {"go": go, "reason": reason, "key": pco_auto_sync.attempt_key(status)}
+
+
+def note_auto_sync_attempt(key) -> None:
+    """Remember that this version of this plan has been tried.
+
+    ⛔ Recorded **before** the sync runs, not after. A sync that throws halfway
+    would otherwise never be marked, and the watcher would start it again two
+    minutes later -- forever.
+    """
+    if key:
+        _AUTO_SYNC_TRIED.add(key)
+
+
+def record_auto_sync(result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Put the outcome where the board's own notice can read it."""
+    _PLAN_WATCH['auto_sync'] = {
+        'at': time.time(),
+        'ok': bool(result and result.get('ok')),
+        'summary': pco_auto_sync.describe_outcome(result),
+        'needs_attention': pco_auto_sync.needs_attention(result),
+    }
+    if result and result.get('ok'):
+        # ⭐ The sync moved the comparison point, so the warning this started
+        # from is no longer true. Leaving it up would tell an operator the
+        # board was stale about the very change it just applied.
+        _PLAN_WATCH['changed'] = False
+        _PLAN_WATCH.pop('error', None)
+    return plan_watch_status()
 
 
 def run_plan_watch() -> Dict[str, Any]:

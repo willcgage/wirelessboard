@@ -22,6 +22,9 @@ export const OVERRIDABLE = [
   { key: 'position_number_fallback', label: 'Number fallback' },
   { key: 'seed_extended_id', label: 'Fill empty slot IDs' },
   { key: 'clear_unmatched', label: 'Clear unfilled slots' },
+  // ⛔ The reason this list is per profile at all (#140): Youth may re-sync
+  // itself while the main service waits for a person.
+  { key: 'auto_sync', label: 'Re-sync by itself' },
 ];
 
 /** A stable id from a name: lowercase, hyphenated, no surprises in a URL. */

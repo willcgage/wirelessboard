@@ -8,7 +8,7 @@
  */
 
 import {
-  shouldNotify, noticeText, watchProblem, checkedAgo, noticeKey,
+  shouldNotify, noticeText, watchProblem, checkedAgo, noticeKey, noticeTone,
 } from './plan-change.mjs';
 
 const BAR_ID = 'plan-change-bar';
@@ -64,6 +64,12 @@ export function renderPlanChangeNotice(planChange) {
   // top bar on a touch display (#110), so covering it would strand somebody.
   document.body.classList.add('plan-change-shown');
 
+  // ⚠️ Three tones, not two. A board that synced itself cleanly is reassuring
+  // and must not wear the amber that means "what you are looking at is stale",
+  // or the colour stops carrying any meaning at all (#140).
+  const tone = noticeTone(planChange);
+  bar.className = `plan-change-bar plan-change-${tone}`;
+
   bar.innerHTML = '';
 
   const message = document.createElement('span');
@@ -82,7 +88,9 @@ export function renderPlanChangeNotice(planChange) {
   const action = document.createElement('a');
   action.className = 'plan-change-action';
   action.href = '#pco=true';
-  action.textContent = 'Review and re-sync';
+  // ⭐ The board has already synced itself here, so "re-sync" would be wrong:
+  // what is left is a person looking at what it did.
+  action.textContent = tone === 'stale' ? 'Review and re-sync' : 'Open Planning Center';
   bar.appendChild(action);
 
   renderedKey = key;

@@ -2680,3 +2680,26 @@ body.viewer-locked {
   color: var(--color-white);
   font-size: 1rem;
 }
+
+/* The plan-change bar's three tones (#140).
+
+   ⚠️ The amber above is "what you are looking at may be stale". A board that
+   re-synced itself cleanly is the opposite of that and must not wear the same
+   colour, or amber stops meaning anything. Red stays out of it entirely --
+   on this board red means a receiver is in trouble. */
+.plan-change-bar.plan-change-done {
+  background: #0f2b1b;
+  color: #8fe0a8;
+  border-top-color: #1f5c38;
+}
+
+.plan-change-bar.plan-change-done .plan-change-action {
+  color: #fff;
+}
+
+/* Still not red: it is "somebody has to look", not "a receiver has dropped". */
+.plan-change-bar.plan-change-problem {
+  background: #3a2102;
+  color: #ffc07a;
+  border-top-color: #7a4a0c;
+}

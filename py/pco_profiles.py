@@ -42,6 +42,11 @@ MAPPING_KEYS = (
     'position_number_fallback',
     'seed_extended_id',
     'clear_unmatched',
+    # ⭐ #140: whether this kind of plan re-syncs itself when it changes in
+    # Planning Center. A mapping key rather than a board setting because the
+    # maintainer asked for it per profile -- Youth automatic, the main service
+    # manual -- and inheritance then gives a board-wide default for free.
+    'auto_sync',
 )
 
 

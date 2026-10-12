@@ -452,7 +452,25 @@
               <div class="form-text">
                 A plan edited an hour before a service is normal, and the board otherwise goes on
                 showing the names it synced. With this on, a bar appears across the bottom of every
-                board when the plan changes. It does <strong>not</strong> re-sync on its own.
+                board when the plan changes.
+              </div>
+            </div>
+            <!-- ⛔ Off by default, and the wording has to carry the cost: this
+                 is the one setting that lets the board rewrite itself with
+                 nobody present (#140). -->
+            <div class="form-check mt-3">
+              <input type="checkbox" class="form-check-input" id="pco-auto-sync">
+              <label class="form-check-label" for="pco-auto-sync">
+                Re-sync by itself when the plan changes
+              </label>
+              <div class="form-text">
+                Without this, the bar appears and waits for somebody to press Sync. With it on, the
+                board syncs the change itself &mdash; including, if &ldquo;Clear slots this plan
+                does not fill&rdquo; is also on, <strong>taking people off slots while nobody is
+                watching</strong>. A slot two people both claim is never guessed at: it is left
+                exactly as it is and flagged for a person. Needs the checkbox above.
+                <br>⭐ A rule set can turn this on or off for its own kind of plan &mdash; Youth
+                automatic, the main service by hand.
               </div>
             </div>
             <div class="form-row mt-2">
