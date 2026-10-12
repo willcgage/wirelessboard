@@ -11,6 +11,7 @@ import config
 import pco_live
 import pco_mapping
 import pco_profiles
+import sync_diff
 from pco_credentials import CredentialError, ensure_credentials
 
 logger = logging.getLogger('micboard.pco')
@@ -2238,9 +2239,21 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
         for slot in stale
     ]
 
+    # ⛔ Built here, in the same breath as `clearable` and for the same reason:
+    # it reads `extended_name` off the live slot dicts, so after
+    # `_apply_assignments` every "from" would be the value just written and the
+    # diff would agree with itself (#120).
+    skipped_slots = conflicted_slots(conflicts)
+    changes = sync_diff.build_changes(
+        resolved,
+        stale=stale,
+        conflicts=conflicts,
+        skip_slots=skipped_slots,
+    )
+
     cleared = 0
     if not dry_run:
-        updates = _apply_assignments(resolved, options, conflicted_slots(conflicts))
+        updates = _apply_assignments(resolved, options, skipped_slots)
         if stale:
             cleared = _clear_unmatched(stale)
         if updates or cleared:
@@ -2291,6 +2304,12 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
         "dry_run": dry_run,
         "cleared": cleared,
         "clearable": clearable,
+        # ⭐ The board's side of the same resolution: one row per slot, who is
+        # on it, who would be. ⛔ Identical for a preview and for the sync that
+        # follows, which is the only way "Apply does what Preview showed" can
+        # be more than a hope (#120).
+        "changes": changes,
+        "changes_counts": sync_diff.counts(changes),
         # ⚠️ Named, not just counted. "1 conflict" tells an operator something
         # is wrong; "slot 4: Dave and Fatai both claim it, left alone" tells
         # them what to do about it before the service starts.
