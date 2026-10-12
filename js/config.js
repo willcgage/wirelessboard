@@ -3654,7 +3654,12 @@ function renderSyncConflicts(conflicts) {
 
   const heading = document.createElement('div');
   heading.className = 'text-danger';
-  heading.textContent = `${conflicts.length} slot${conflicts.length === 1 ? '' : 's'} claimed by more than one person:`;
+  // ⛔ Says what happened, not just that something did. A contested slot is
+  // left exactly as it was -- neither name written, and not cleared either --
+  // so the operator has to know the board is still showing whatever was there
+  // before, and that only they can settle it.
+  heading.textContent = `${conflicts.length} slot${conflicts.length === 1 ? '' : 's'} claimed by more than one person `
+    + '— left alone, nobody written:';
   target.appendChild(heading);
 
   const list = document.createElement('ul');
@@ -3662,10 +3667,15 @@ function renderSyncConflicts(conflicts) {
   conflicts.forEach((c) => {
     const names = (c.claimants || []).map((x) => x.name).filter(Boolean);
     const li = document.createElement('li');
-    li.textContent = `slot ${c.slot}: ${names.join(', ')} — “${c.winner}” wins`;
+    li.textContent = `slot ${c.slot}: ${names.join(' and ')} both claim it`;
     list.appendChild(li);
   });
   target.appendChild(list);
+
+  const note = document.createElement('div');
+  note.className = 'small text-muted mt-1';
+  note.textContent = 'Fix it in Planning Center and sync again, or set the name by hand below.';
+  target.appendChild(note);
 }
 
 function renderSyncUnmatched(unmatched) {
@@ -3778,7 +3788,12 @@ function handlePcoSync(dryRun = false) {
           + `${resp.dry_run ? 'would be cleared' : 'cleared'}</span>`,
         );
       }
-      if (conflicts.length) summaryParts.push(`<span class="text-danger">${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}</span>`);
+      if (conflicts.length) {
+        summaryParts.push(
+          `<span class="text-danger">${conflicts.length} slot${conflicts.length === 1 ? '' : 's'} skipped`
+          + ' (claimed by two people)</span>',
+        );
+      }
       if (summaryEl) summaryEl.innerHTML = summaryParts.join(' — ');
 
       if (clearable.length) {
