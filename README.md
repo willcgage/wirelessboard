@@ -45,14 +45,34 @@ SLX-D and SLX-D+ do not appear in network discovery yet — add them by IP addre
 
 
 ## Key Features
-* **Cross-browser motion artwork** – Per-channel artwork is rendered with HTML5 `<img>` / `<video>` elements, so JPEG stills or muted, looping MP4s play automatically in Chrome, Edge, Safari, and Firefox. Filenames are matched to the visible channel name; see the [configuration guide](docs/configuration.md#background-images) for details.
-* **TV mode layout controls** – Slots keep a consistent width across channel counts, preventing stretched backgrounds on large displays. The width can be customised via CSS before building.
-* **HUD help overlay with version info** – The in-app help modal now shows the running Wirelessboard version, shortcuts, and quick links without auto-opening on launch.
+
+* **A wall of faces.** Each channel is a card built around the photograph of whoever is holding that
+  microphone, with their name, position and time remaining in a band along the bottom. The photo is
+  never printed over or dimmed. Stills (`.jpg`, `.png`, `.webp`) and muted looping video (`.mp4`,
+  `.mov`) both work, matched to the channel's name or chosen per person — see the
+  [configuration guide](docs/configuration.md#background-images).
+* **Everything is reachable by tapping.** The board is worked from two menus: a gear in the corner
+  for everything about the screen in front of you, and the Menu for everything that changes every
+  board. It runs on wall tablets and phones, which is why there are no keyboard shortcuts.
+* **Status you can read without seeing colour.** A channel needing attention carries a badge reading
+  "Replace", "Low" or "RX error" beside its symbol, not just a colour — red and amber are the two
+  states that matter most and the two hardest to tell apart, especially over a photograph.
+* **Time remaining on every channel.** Where a receiver reports only a battery level, Wirelessboard
+  works the remaining time out from how fast that level is falling, and marks it as an estimate. It
+  says nothing rather than guessing when there is not enough to go on.
+* **Planning Center Services.** Sync who is on which microphone straight from the week's plan, with
+  a preview that shows what will change on *your board* — who is on each slot now, who would be
+  after — before anything is written. Rule sets handle different kinds of service, and the board can
+  tell you when the plan changes mid-morning.
+* **Built for a wall.** Cap how many columns the board uses, page through groups on a timer when
+  there are more channels than fit, and lock a tablet to display only so a stray tap cannot reach
+  the configuration.
 
 
 ## Documentation
 * [Installation](docs/installation.md)
 * [Configuration](docs/configuration.md)
+* [Planning Center Services](docs/pco.md)
 * [Wirelessboard MultiVenue](docs/multivenue.md)
 
 #### Developer Info
