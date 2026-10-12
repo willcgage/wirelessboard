@@ -93,7 +93,7 @@ export function updateBackground(slotEl) {
   // Smith.JPG` matches and is then requested under that exact spelling -- /bg/
   // is served off disk, where case matters.
   if (micboard.backgroundMode === 'MP4') {
-    const filename = findBackgroundFile(rawName, 'MP4', micboard.mp4_list);
+    const filename = findBackgroundFile(rawName, 'MP4', micboard.mp4_list, mediaAssignments());
     if (filename) {
       const container = ensureMediaContainer(slotEl);
       mountVideo(container, filename);
@@ -104,7 +104,7 @@ export function updateBackground(slotEl) {
   }
 
   if (micboard.backgroundMode === 'IMG') {
-    const filename = findBackgroundFile(rawName, 'IMG', micboard.img_list);
+    const filename = findBackgroundFile(rawName, 'IMG', micboard.img_list, mediaAssignments());
     if (filename) {
       const container = ensureMediaContainer(slotEl);
       mountImage(container, filename);
@@ -115,6 +115,18 @@ export function updateBackground(slotEl) {
   }
 
   removeMedia(slotEl);
+}
+
+/**
+ * The photos chosen by hand, from the served config (#145).
+ *
+ * ⚠️ Read fresh each render rather than cached. A choice made on a laptop
+ * reaches this board through the ordinary payload, and a cached copy would
+ * leave a wall showing the old photo until somebody reloaded it.
+ */
+function mediaAssignments() {
+  const media = micboard.config && micboard.config.media;
+  return (media && typeof media.assignments === 'object') ? media.assignments : null;
 }
 
 export function updateGIFBackgrounds() {

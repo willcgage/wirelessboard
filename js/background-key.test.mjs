@@ -15,6 +15,7 @@ import assert from 'node:assert';
 
 import {
   backgroundNameForSlot,
+  explicitBackgroundFile,
   backgroundKey,
   backgroundFilenames,
   backgroundFilenameForMode,
@@ -208,4 +209,85 @@ test('the guide and the renderer agree, which is the whole point', () => {
 
   assert.equal(guideSays, rendererAsksFor);
   assert.equal(guideSays, 'jane smith.jpg');
+});
+
+// ── Explicit photo choices (#145) ────────────────────────────────────────────
+//
+// ⛔ This is the whole flow for a board with Planning Center switched off:
+// name the person on a slot, give them a photo, done. Filename matching stays
+// as the fallback, so a folder of correctly named photos keeps working with
+// nothing to migrate.
+
+test('⭐ a choice someone made beats a guess from a filename', () => {
+  const available = ['jane smith.jpg', 'Jane-2026.jpg'];
+  const assignments = { 'jane smith': 'Jane-2026.jpg' };
+
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', available, assignments), 'Jane-2026.jpg');
+});
+
+test('without a choice, filename matching behaves exactly as before', () => {
+  const available = ['jane smith.jpg'];
+
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', available), 'jane smith.jpg');
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', available, {}), 'jane smith.jpg');
+});
+
+test('⛔ the choice is keyed on the person, so it follows them to another channel', () => {
+  // The behaviour filename matching already had, and the thing most worth not
+  // losing: a sync moves people between slots every week.
+  const assignments = { 'jane smith': 'Jane-2026.jpg' };
+
+  assert.equal(explicitBackgroundFile('Jane Smith', 'IMG', assignments), 'Jane-2026.jpg');
+  // Same normalisation as the filename key: trimmed and lower-cased. ⚠️ It does
+  // not collapse internal spaces, and this must not start doing so on its own —
+  // that would change which file every existing board finds.
+  assert.equal(explicitBackgroundFile('  Jane Smith  ', 'IMG', assignments), 'Jane-2026.jpg');
+  assert.equal(explicitBackgroundFile('jane   smith', 'IMG', assignments), '');
+});
+
+test('⚠️ a chosen file that has gone falls back rather than showing nothing', () => {
+  // Deleted or renamed in the folder. Degrading to the old behaviour beats
+  // degrading to a blank card.
+  const available = ['jane smith.jpg'];
+  const assignments = { 'jane smith': 'Jane-2026.jpg' };
+
+  assert.equal(findBackgroundFile('Jane Smith', 'IMG', available, assignments), 'jane smith.jpg');
+});
+
+test('⚠️ a photo is not offered to a board showing video', () => {
+  // It has nothing to show for that person, which is a different and honest
+  // answer from reaching for the wrong kind of file.
+  const assignments = { 'jane smith': 'Jane-2026.jpg' };
+
+  assert.equal(explicitBackgroundFile('Jane Smith', 'MP4', assignments), '');
+});
+
+test('a chosen video is used in video mode', () => {
+  const available = ['Jane-clip.mov'];
+  const assignments = { 'jane smith': 'Jane-clip.mov' };
+
+  assert.equal(findBackgroundFile('Jane Smith', 'MP4', available, assignments), 'Jane-clip.mov');
+});
+
+test('⚠️ two people can be given the same file', () => {
+  // The case a filename key cannot express at all: two people called Dave.
+  const assignments = { 'dave jones': 'dave.jpg', 'dave smith': 'dave.jpg' };
+
+  assert.equal(explicitBackgroundFile('Dave Jones', 'IMG', assignments), 'dave.jpg');
+  assert.equal(explicitBackgroundFile('Dave Smith', 'IMG', assignments), 'dave.jpg');
+});
+
+test('a slot with nobody on it has no photo and does not throw', () => {
+  // #135's clear and #141's skipped conflicts both leave a slot with no name.
+  const assignments = { 'jane smith': 'Jane-2026.jpg' };
+
+  assert.equal(explicitBackgroundFile('', 'IMG', assignments), '');
+  assert.equal(findBackgroundFile('', 'IMG', ['jane smith.jpg'], assignments), '');
+});
+
+test('rubbish assignments do not throw or match', () => {
+  assert.equal(explicitBackgroundFile('Jane Smith', 'IMG', null), '');
+  assert.equal(explicitBackgroundFile('Jane Smith', 'IMG', { 'jane smith': '' }), '');
+  assert.equal(explicitBackgroundFile('Jane Smith', 'IMG', { 'jane smith': 42 }), '');
+  assert.equal(explicitBackgroundFile('Jane Smith', 'NOPE', { 'jane smith': 'x.jpg' }), '');
 });
