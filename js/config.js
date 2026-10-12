@@ -8,6 +8,9 @@ import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 import { assignNumbers } from './slot-numbering.mjs';
 import {
+  channelsToAdd, allChannelsToAdd, addLabel,
+} from './receiver-expand.mjs';
+import {
   editorState, configuredCount, emptyingSaveWarning, waitingMessage,
 } from './config-readiness.mjs';
 import {
@@ -593,11 +596,21 @@ function renderDiscoveredDeviceList() {
   const template = document.getElementById('config-slot-template');
   if (!template || !template.content) return;
 
+  // What the editor is showing, so a receiver already added reads as added
+  // even before the save.
+  const configured = Array.from(document.querySelectorAll('#editor_holder .cfg-row')).map((row) => ({
+    ip: (row.querySelector('.cfg-ip')?.value || '').trim(),
+    channel: Number.parseInt(row.querySelector('.cfg-channel')?.value, 10),
+  }));
   discovered.forEach((slot) => {
     const t = template.content.cloneNode(true);
     const row = t.querySelector('.cfg-row');
     if (row) {
-      row.id = `slot-${slot.slot}`;
+      // ⛔ No `slot-N` id here. The editor's rows and the board's channel cards
+      // both use that namespace and this list sits before both in the
+      // document, so a lookup by slot id was finding a *discovered* row
+      // instead. The address identifies a receiver; a slot number never did.
+      row.dataset.receiverIp = slot.ip || '';
       row.querySelector('.cfg-type').value = slot.type || '';
       row.querySelector('.cfg-ip').value = slot.ip || '';
       row.querySelector('.cfg-channel').value = slot.channel || '';
@@ -613,6 +626,21 @@ function renderDiscoveredDeviceList() {
       const extInput = row.querySelector('.cfg-name');
       if (extInput && slot.extended_name) {
         extInput.value = slot.extended_name;
+      }
+
+      // ⭐ One receiver at a time, as well as all at once. A rack shared with
+      // another system, or a board being set up one unit at a time, had no way
+      // to take just one.
+      const actions = row.querySelector('.del-btn');
+      if (actions) {
+        const button = actions.querySelector('button');
+        if (button) {
+          button.className = 'btn btn-outline-primary btn-sm add-discovered-one';
+          button.textContent = addLabel(slot, configured);
+          button.disabled = !channelsToAdd(slot, configured).length;
+          button.dataset.receiverIp = slot.ip || '';
+          button.removeAttribute('aria-hidden');
+        }
       }
     }
     discoveredList.appendChild(t);
@@ -1576,39 +1604,69 @@ function generateJSONConfig() {
   return { slots, discovery, incomplete };
 }
 
-function addAllDiscoveredDevices() {
-  const devices = document.querySelectorAll('#discovered_list .cfg-row');
+/**
+ * Put the given channel rows into the editor.
+ *
+ * ⚠️ Works from the discovered *data*, not from the rendered rows. Copying the
+ * markup is what limited this to one row per receiver: the list shows a
+ * receiver once, and a receiver is not a channel.
+ */
+function appendChannelRows(rows) {
   const cfgList = document.getElementById('editor_holder');
-  if (!cfgList || devices.length === 0) return;
-
   const template = document.getElementById('config-slot-template');
-  if (!template || !template.content) return;
+  if (!cfgList || !template || !template.content || !rows.length) return 0;
 
-  devices.forEach((sourceRow) => {
+  rows.forEach((row) => {
     const fragment = template.content.cloneNode(true);
-    const targetRow = fragment.querySelector('.cfg-row');
-    if (!targetRow) return;
-
-    const copyValue = (selector) => {
-      const src = sourceRow.querySelector(selector);
-      const dest = targetRow.querySelector(selector);
-      if (src && dest) {
-        dest.value = src.value;
-      }
+    const target = fragment.querySelector('.cfg-row');
+    if (!target) return;
+    const set = (selector, value) => {
+      const el = target.querySelector(selector);
+      if (el) el.value = value;
     };
-
-    copyValue('.cfg-type');
-    copyValue('.cfg-ip');
-    copyValue('.cfg-channel');
-    copyValue('.cfg-device-name');
-    copyValue('.cfg-id');
-    copyValue('.cfg-name');
-
+    set('.cfg-type', row.type || '');
+    set('.cfg-ip', row.ip || '');
+    set('.cfg-channel', String(row.channel));
+    set('.cfg-device-name', row.device_name || '');
     cfgList.appendChild(fragment);
   });
 
   updateSlotID();
   updateHiddenSlots();
+  renderDiscoveredDeviceList();
+  return rows.length;
+}
+
+/**
+ * The channels the editor is currently showing, saved or not.
+ *
+ * ⛔ Read from the rows, not from `micboard.config.slots`. The saved config is
+ * what the board last wrote; the rows are what the operator is looking at. A
+ * second press of Add before saving duplicated every channel when this checked
+ * the saved list -- one press gave four rows, two gave eight.
+ */
+function channelsInEditor() {
+  return Array.from(document.querySelectorAll('#editor_holder .cfg-row')).map((row) => ({
+    ip: (row.querySelector('.cfg-ip')?.value || '').trim(),
+    channel: Number.parseInt(row.querySelector('.cfg-channel')?.value, 10),
+  }));
+}
+
+/** Every discovered receiver, expanded to the channels it actually has. */
+function addAllDiscoveredDevices() {
+  const discovered = micboard.discovered || [];
+  const added = appendChannelRows(allChannelsToAdd(discovered, channelsInEditor()));
+  if (!added) {
+    setConfigSaveStatus('Every discovered channel is already in the list.', 'info');
+  }
+}
+
+/** One receiver, expanded the same way. */
+function addDiscoveredReceiver(ip) {
+  const discovered = micboard.discovered || [];
+  const device = discovered.find((d) => String(d.ip || '').trim() === String(ip || '').trim());
+  if (!device) return;
+  appendChannelRows(channelsToAdd(device, channelsInEditor()));
 }
 
 function updateHiddenSlots() {
@@ -3031,10 +3089,26 @@ export function initConfigEditor(force = false) {
   applyPcoProfilesToForm(pco);
   applyPcoWatchToForm(pco);
 
+  // ⛔ Guarded, like #save below. This function runs again on every settings
+  // open and on closePCOView(), and an unguarded binding stacked one more
+  // listener per visit -- so one click eventually added every discovered
+  // channel several times over. Same shape as the bug that destroyed a config.
   const addDisc = document.getElementById('add-discovered');
-  if (addDisc) {
+  if (addDisc && addDisc.dataset.bound !== 'true') {
+    addDisc.dataset.bound = 'true';
     addDisc.addEventListener('click', () => {
       addAllDiscoveredDevices();
+    });
+  }
+
+  const discoveredList = document.getElementById('discovered_list');
+  if (discoveredList && discoveredList.dataset.bound !== 'true') {
+    discoveredList.dataset.bound = 'true';
+    discoveredList.addEventListener('click', (e) => {
+      const button = e.target.closest('.add-discovered-one');
+      if (!button) return;
+      e.preventDefault();
+      addDiscoveredReceiver(button.dataset.receiverIp);
     });
   }
 
