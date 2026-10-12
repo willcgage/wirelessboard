@@ -48,14 +48,21 @@
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-menu-button">
               <li><h6 class="dropdown-header">Views</h6></li>
               <li><a class="dropdown-item" href="#" id="go-hud" aria-controls="hud" aria-expanded="false">Help &amp; Shortcuts</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item" href="#" id="go-extended">Edit Slot Names</a></li>
-              <li><a class="dropdown-item" href="#" id="go-groupedit">Edit This Group</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><h6 class="dropdown-header">Configuration</h6></li>
-              <li><a class="dropdown-item" href="#" id="go-config">Config</a></li>
-              <li><a class="dropdown-item" href="#" id="go-background" aria-controls="background-settings" aria-expanded="false">Background Library</a></li>
-              <li><a class="dropdown-item" href="#" id="go-pco" aria-controls="pco-settings" aria-expanded="false">Planning Center (PCO)</a></li>
+              <!-- data-wb-global marks everything a locked device hides (#116).
+                   The attribute is on the <li>, not the link, so the headers and
+                   dividers go with the items they introduce -- otherwise a locked
+                   menu keeps a "Configuration" heading over nothing. -->
+              <li data-wb-global><hr class="dropdown-divider"></li>
+              <li data-wb-global><a class="dropdown-item" href="#" id="go-extended">Edit Slot Names</a></li>
+              <li data-wb-global><a class="dropdown-item" href="#" id="go-groupedit">Edit This Group</a></li>
+              <li data-wb-global><hr class="dropdown-divider"></li>
+              <li data-wb-global><h6 class="dropdown-header">Configuration</h6></li>
+              <li data-wb-global><a class="dropdown-item" href="#" id="go-config">Config</a></li>
+              <li data-wb-global><a class="dropdown-item" href="#" id="go-background" aria-controls="background-settings" aria-expanded="false">Background Library</a></li>
+              <li data-wb-global><a class="dropdown-item" href="#" id="go-pco" aria-controls="pco-settings" aria-expanded="false">Planning Center (PCO)</a></li>
+              <!-- Shown in their place, so a short menu does not read as a fault. -->
+              <li data-wb-locked-note><hr class="dropdown-divider"></li>
+              <li data-wb-locked-note><span class="dropdown-item-text wb-locked-note">Locked to display only &mdash; unlock in view settings.</span></li>
             </ul>
           </div>
         </div>

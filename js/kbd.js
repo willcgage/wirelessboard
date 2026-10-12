@@ -8,12 +8,34 @@ import {
   cycleColumns, cycleWash,
   cycleLivePlacement,
   cycleRotation,
+  cycleViewerLock,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
 import { slotEditToggle } from './extended.js';
 import { initConfigEditor } from './config.js';
 import { hudRows, findBinding } from './keybindings.mjs';
+import { isLocked, allows } from './viewer-lock.mjs';
+import { showLockRefusal } from './viewer-lock-view.js';
+
+/**
+ * Whether this device is locked to display only (#116).
+ *
+ * ⛔ Checked at the point of use rather than by filtering the table, so the
+ * help overlay still lists the editors — a locked board that pretended the
+ * editors did not exist would teach whoever unlocks it nothing.
+ */
+function locked() {
+  return isLocked(micboard.viewerLock);
+}
+
+function refuse(action) {
+  if (allows(micboard.viewerLock, action)) {
+    return false;
+  }
+  showLockRefusal(action);
+  return true;
+}
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API
 function toggleFullScreen() {
@@ -133,6 +155,13 @@ function bindingTable() {
       run: () => cycleTopBar(),
     },
     {
+      // ⚠️ An accident guard, not a security control -- the same key turns it
+      // back off, and the server has no authentication at all (#116).
+      keys: ['k'],
+      hud: 'Lock this device to display only: no editors, no configuration.',
+      run: () => cycleViewerLock(),
+    },
+    {
       keys: ['f'],
       hud: 'Enter or exit fullscreen.',
       run: () => toggleFullScreen(),
@@ -155,13 +184,17 @@ function bindingTable() {
     {
       keys: ['n'],
       hud: 'Toggle slot editing.',
-      run: () => slotEditToggle(),
+      run: () => {
+        if (locked() && refuse('slot-edit')) return;
+        slotEditToggle();
+      },
     },
     {
       keys: ['N'],
       label: ['Shift+N'],
       hud: 'Toggle slot editing and show the paste box.',
       run: () => {
+        if (locked() && refuse('slot-edit')) return;
         slotEditToggle();
         document.getElementById('paste-box').style.display = 'block';
       },
@@ -170,6 +203,7 @@ function bindingTable() {
       keys: ['e'],
       hud: 'Edit the current group (when viewing groups 1-9).',
       run: () => {
+        if (locked() && refuse('group-edit')) return;
         if (micboard.group !== 0) {
           groupEditToggle();
         }
@@ -178,7 +212,10 @@ function bindingTable() {
     {
       keys: ['s'],
       hud: 'Open the Config view.',
-      run: () => initConfigEditor(),
+      run: () => {
+        if (locked() && refuse('config')) return;
+        initConfigEditor();
+      },
     },
     {
       keys: ['q'],
@@ -192,6 +229,7 @@ function bindingTable() {
       keys: ['d'],
       hud: 'Toggle demo mode.',
       run: () => {
+        if (locked() && refuse('demo')) return;
         micboard.url.demo = !micboard.url.demo;
         updateHash();
         window.location.reload();
