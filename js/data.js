@@ -1,5 +1,6 @@
 import 'whatwg-fetch';
 import { viewerCount } from './viewer-scope.mjs';
+import { renderPlanChangeNotice } from './plan-change-notice.js';
 import {
   dataURL, ActivateMessageBoard, micboard, updateNavLinks,
 } from './app.js';
@@ -58,6 +59,11 @@ function JsonUpdate() {
           // A board that cannot announce the count still knows it.
         }
       }
+      // Whether the plan on the board has changed in Planning Center since it
+      // was synced (#140). A fact about the plan, not about this browser, so
+      // it arrives with the payload every board reads.
+      micboard.planChange = (data && data.plan_change) || null;
+      renderPlanChangeNotice(micboard.planChange);
       micboard.discovery_status = data.discovery_status || micboard.discovery_status || null;
       micboard.discovery_scan = data.discovery_scan || micboard.discovery_scan || null;
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {

@@ -86,6 +86,11 @@ _LOCAL_URL = None
 _LOCAL_URL_FALLBACK = 'https://github.com/willcgage/wirelessboard'
 _LOCAL_URL_REFRESH_SECONDS = 300
 
+# How often the watcher *wakes*, not how often it asks Planning Center.
+# `pco.run_plan_watch` decides whether enough time has passed, so changing the
+# interval in the configuration takes effect without a restart.
+_PLAN_WATCH_TICK_SECONDS = 30
+
 # One worker: two overlapping refreshes would be pointless, not harmful.
 _LOCAL_URL_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
     max_workers=1, thread_name_prefix='local-url')
@@ -138,6 +143,38 @@ def start_local_url_refresh():
     """Resolve now, then keep it current, both off the request path."""
     refresh_local_url()
     ioloop.PeriodicCallback(refresh_local_url, _LOCAL_URL_REFRESH_SECONDS * 1000).start()
+
+
+def _plan_watch_tick():
+    """Run one watcher pass on the executor, never on the IOLoop.
+
+    ⛔ The same split every other PCO path obeys: `run_plan_watch` is several
+    seconds of HTTP, and Tornado is single-threaded here, so doing it inline
+    would freeze the board for the duration -- every two minutes, forever.
+
+    ⚠️ Fire-and-forget on purpose. Nothing awaits the result; the watcher
+    stores what it found and the next payload carries it. A failed pass must
+    not propagate into the loop.
+    """
+    future = _PCO_EXECUTOR.submit(pco.run_plan_watch)
+
+    def swallow(fut):
+        try:
+            fut.result()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug('Plan watch failed: %s', exc)
+
+    future.add_done_callback(swallow)
+
+
+def start_plan_watch():
+    """Keep an eye on the active plan, if the operator asked for one.
+
+    ⚠️ The callback always runs; `run_plan_watch` decides each time whether
+    there is anything to do. Reading the setting once at startup would mean
+    turning watching on required a restart.
+    """
+    ioloop.PeriodicCallback(_plan_watch_tick, _PLAN_WATCH_TICK_SECONDS * 1000).start()
 
 
 def localURL():
@@ -202,6 +239,11 @@ def wirelessboard_json(network_devices):
         # save from a phone reloads every one of these and drops the receivers
         # for a couple of seconds, which is worth knowing before pressing it.
         'viewers': SocketHandler.viewer_count(),
+        # Whether the plan on the board has changed in Planning Center since it
+        # was synced (#140). A global fact -- it is true of the plan, not of
+        # one browser -- so it rides the payload every board already reads,
+        # beside `viewers`. Empty when nothing is being watched.
+        'plan_change': pco.plan_watch_status(),
     }, sort_keys=True, indent=4)
 
 
@@ -1295,4 +1337,5 @@ def twisted():
     # delay the server coming up, and the address is only needed for the QR
     # code. The first refresh is already in flight by the time anything asks.
     start_local_url_refresh()
+    start_plan_watch()
     ioloop.IOLoop.instance().start()
