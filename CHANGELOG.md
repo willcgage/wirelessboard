@@ -10,6 +10,41 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.2] - 2026-10-12
+Background photos actually load. Install this one rather than beta.1.
+
+⛔ **beta.1 could not display a single background photo.** If you installed it and the cards came
+up blank, that was this — not your folder, not your filenames, and not something you did. Nothing
+else in beta.1 was affected.
+
+### Fixed
+- **Background photos load from the folder you configured.** They never did. The board resolved each
+  file against the backgrounds folder correctly, and then checked it against the *working directory*
+  instead before deciding whether it was allowed to serve it — so every photo outside that directory
+  was refused. The default backgrounds folder is never inside it, which means the photo wall could
+  not show a picture out of the box on any platform, and had not been able to since 1.12.0. It went
+  unnoticed because nothing had ever put a photo onto a card through this code.
+
+  ⚠️ The check itself is kept, pointed at the right folder. It is what stops a crafted address
+  reaching files outside the backgrounds directory, and removing it would have fixed the photos and
+  opened that door in the same change.
+
+### Changed
+- **The README and the configuration guide describe the board as it is now.** Both still explained a
+  board driven by about twenty keyboard shortcuts, which 2.0 removed — so the instructions did
+  nothing. The worst of it told anyone who had hidden the top bar that the keyboard was the way back
+  in, which is both wrong and precisely the moment somebody needs a right answer. Every one of those
+  now names the menu item or the control that does the job.
+- **There is a screenshot of the actual 2.0 board**, with real photographs, showing the card as it
+  looks: the picture uncovered, the status colour on the band, and the battery and time remaining
+  beside the name.
+
+### Known
+- ⏳ **Photographs want a portrait crop.** A card fills its space with the middle of the picture, so
+  a wide stage photograph on a short card crops to whatever is in the centre — often the dark part
+  of a stage rather than a face. Set **Card shape → 3:4** in the view panel, or crop the photos
+  themselves. This is not new in this release.
+
 ## [2.0.0-beta.1] - 2026-10-12
 The 2.0 redesign, for testing before it goes anywhere near a service.
 
