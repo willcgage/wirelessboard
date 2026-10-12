@@ -2481,3 +2481,23 @@ body.live-strip-bottom .wirelessboard-board {
 body.live-strip-bottom .rotation-bar {
   bottom: calc(2.5rem + env(safe-area-inset-bottom, 0px));
 }
+
+/* The rotation fields on a group row (#114). Quiet: most groups never need
+   their own timing, and the blank dwell saying "the board's default" is the
+   ordinary case rather than an unfinished one. */
+.group-rotation {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.group-rotation .group-dwell {
+  width: 5.5rem;
+}
+
+.group-move {
+  padding: 0 0.4rem;
+  line-height: 1.4;
+}

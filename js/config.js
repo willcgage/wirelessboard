@@ -7,6 +7,7 @@ import {
   backgroundNameForSlot, backgroundFilenames, findBackgroundFile, backgroundKey,
 } from './background-key.mjs';
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
+import { DEFAULT_DWELL_SECONDS } from './rotation.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 import { assignNumbers } from './slot-numbering.mjs';
 import {
@@ -3004,7 +3005,99 @@ function renderGroupSummary() {
     count.textContent = `${row.count} ch`;
     head.appendChild(count);
 
+    // ⭐ List order is rotation order (#113), so these move the show, not just
+    // the list. Up and down rather than a drag handle: the same outcome,
+    // reachable from a keyboard and a touch display, and nothing to mis-drop.
+    const move = (direction) => {
+      const order = rows.map((r) => r.group);
+      const from = order.indexOf(row.group);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= order.length) return;
+      order.splice(to, 0, order.splice(from, 1)[0]);
+      postJSON('api/group', { order }, () => {
+        micboard.groupOrder = order;
+        renderGroupSummary();
+      });
+    };
+
+    const up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'btn btn-outline-secondary btn-sm group-move';
+    up.textContent = '↑';
+    up.setAttribute('aria-label', `Move group ${row.group} earlier in the rotation`);
+    up.addEventListener('click', () => move(-1));
+    head.appendChild(up);
+
+    const down = document.createElement('button');
+    down.type = 'button';
+    down.className = 'btn btn-outline-secondary btn-sm group-move';
+    down.textContent = '↓';
+    down.setAttribute('aria-label', `Move group ${row.group} later in the rotation`);
+    down.addEventListener('click', () => move(1));
+    head.appendChild(down);
+
     card.appendChild(head);
+
+    // The two fields the wall's rotation reads. ⚠️ Each sends only itself --
+    // `update_group` edits what a payload carries, so a dwell change must not
+    // have to send back a membership it never showed anyone.
+    const stored = (micboard.config && Array.isArray(micboard.config.groups))
+      ? micboard.config.groups.find((g) => Number(g.group) === Number(row.group)) || {}
+      : {};
+
+    const rotation = document.createElement('div');
+    rotation.className = 'group-rotation';
+
+    const rotateId = `group-rotate-${row.group}`;
+    const rotateWrap = document.createElement('div');
+    rotateWrap.className = 'form-check form-check-inline mb-0';
+    const rotateInput = document.createElement('input');
+    rotateInput.type = 'checkbox';
+    rotateInput.className = 'form-check-input';
+    rotateInput.id = rotateId;
+    // Absent means yes, matching `rotates()` — a board that turned rotation on
+    // and saw nothing because no group had opted in would look broken.
+    rotateInput.checked = stored.rotate !== false;
+    rotateInput.addEventListener('change', () => {
+      postJSON('api/group', { group: row.group, rotate: rotateInput.checked });
+      stored.rotate = rotateInput.checked;
+    });
+    const rotateLabel = document.createElement('label');
+    rotateLabel.className = 'form-check-label small';
+    rotateLabel.htmlFor = rotateId;
+    rotateLabel.textContent = 'In the rotation';
+    rotateWrap.appendChild(rotateInput);
+    rotateWrap.appendChild(rotateLabel);
+    rotation.appendChild(rotateWrap);
+
+    const dwellLabel = document.createElement('label');
+    dwellLabel.className = 'small text-muted ms-2';
+    dwellLabel.htmlFor = `group-dwell-${row.group}`;
+    dwellLabel.textContent = 'Hold for';
+    rotation.appendChild(dwellLabel);
+
+    const dwell = document.createElement('input');
+    dwell.type = 'number';
+    dwell.id = `group-dwell-${row.group}`;
+    dwell.className = 'form-control form-control-sm group-dwell';
+    dwell.min = '5';
+    dwell.max = '600';
+    dwell.step = '5';
+    dwell.value = Number.isFinite(Number(stored.dwell)) && stored.dwell ? stored.dwell : '';
+    // Blank is "use the board's default", which is a real answer and the one
+    // most groups want -- not every group needs its own timing.
+    dwell.placeholder = String(DEFAULT_DWELL_SECONDS);
+    dwell.addEventListener('change', () => {
+      postJSON('api/group', { group: row.group, dwell: dwell.value });
+    });
+    rotation.appendChild(dwell);
+
+    const seconds = document.createElement('span');
+    seconds.className = 'small text-muted';
+    seconds.textContent = 'seconds';
+    rotation.appendChild(seconds);
+
+    card.appendChild(rotation);
 
     const members = document.createElement('p');
     members.className = 'group-members';
