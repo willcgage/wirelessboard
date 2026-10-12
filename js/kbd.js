@@ -4,7 +4,7 @@ import {
 } from './app.js';
 import {
   toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
-  cycleArrangement, cycleCardShape, cycleTextPosition, cycleTypeSize, cycleTopBar,
+  cycleArrangement, cycleCardShape, cycleTypeSize, cycleTopBar,
   cycleColumns, cycleWash,
   cycleLivePlacement,
   cycleRotation,
@@ -119,14 +119,6 @@ function bindingTable() {
       keys: ['c'],
       hud: 'Columns on screen: auto, then at most 4, 6, 8, 10, 12 (TV mode).',
       run: () => cycleColumns(),
-    },
-    {
-      // "Placement", not "position": the card's third line *is* a position --
-      // the person's in the service (#69) -- and the overlay would read as one
-      // control if both used the word.
-      keys: ['p'],
-      hud: 'Text band: bottom or top of the card (TV mode).',
-      run: () => cycleTextPosition(),
     },
     {
       keys: ['z'],

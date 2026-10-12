@@ -18,7 +18,7 @@ import {
   isSwitch, isValidValue,
 } from './view-controls.mjs';
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES,
+  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES, TOP_BAR_STATES,
   COLUMN_CHOICES, WASH_STYLES,
 } from './board-layout.mjs';
 import { PLACEMENTS } from './live-strip.mjs';
@@ -31,7 +31,6 @@ test('every control names a vocabulary the board actually has', () => {
   const vocabularies = {
     arrangement: ARRANGEMENTS,
     cardShape: CARD_SHAPES,
-    textPosition: TEXT_POSITIONS,
     typeSize: TYPE_SIZES,
     topBar: TOP_BAR_STATES,
     columns: COLUMN_CHOICES,

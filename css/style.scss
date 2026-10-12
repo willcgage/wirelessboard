@@ -613,14 +613,6 @@ canvas.slotgraph {
     color: var(--status, var(--color-white));
   }
 
-  // ⛔ The chip takes the edge the band does not. With both at the top the chip
-  // landed on the band and covered the name -- found by looking at it, which no
-  // assertion about either element on its own would have caught.
-  &.text-top .mic_name .status-chip {
-    top: auto;
-    bottom: calc(0.3rem * var(--tvmode-scale-clamped));
-  }
-
   // Nothing to say about a channel with no receiver trouble and nobody on it.
   .mic_name .status-chip:empty,
   .mic_name .status-chip.is-quiet {
@@ -710,31 +702,17 @@ canvas.slotgraph {
   // ⚠️ And note what this is NOT: the band overlays the picture, it does not
   // shrink it. 1.14.0 scaled the photo down to sit beside the text and lost a
   // third of every face; the rule above still stands.
-  &.text-top .mic_name {
-    align-content: start;
-  }
-
   &.text-bottom .mic_name {
     align-content: end;
   }
 
-  // The scrim follows the text. `middle` keeps the even full-card wash, which
-  // is right when the text is across the centre; the edge placements clear the
-  // far half of the picture entirely, which is what keeps the photo bright.
+  // The scrim sits under the band and clears the top half of the picture
+  // entirely, which is what keeps the photo bright. ⛔ The band is at the
+  // bottom and no longer moves (#130), so there is one of these rather than
+  // one per placement.
   &.text-bottom .mic_name .slot-media.is-active::after {
     background: linear-gradient(
       to top,
-      rgba(0, 0, 0, 0.92) 0%,
-      rgba(0, 0, 0, 0.78) 22%,
-      rgba(0, 0, 0, 0.25) 38%,
-      rgba(0, 0, 0, 0) 52%
-    );
-    opacity: 1;
-  }
-
-  &.text-top .mic_name .slot-media.is-active::after {
-    background: linear-gradient(
-      to bottom,
       rgba(0, 0, 0, 0.92) 0%,
       rgba(0, 0, 0, 0.78) 22%,
       rgba(0, 0, 0, 0.25) 38%,

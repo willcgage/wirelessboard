@@ -4,13 +4,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES,
+  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES,
   columnsFor, rowHeightFor, computeLayout, nextOption,
   TOP_BAR_STATES,
-  isArrangement, isCardShape, isTextPosition, isTypeSize, isEdgePlacement, isTopBarState,
+  isArrangement, isCardShape, isTypeSize, isTopBarState,
   migrateArrangement, migrateCardShape,
   COLUMN_CHOICES, COLUMNS_AUTO, isColumnChoice, columnCeiling,
-  WASH_STYLES, isWashStyle, migrateTextPosition,
+  WASH_STYLES, isWashStyle,
 } from './board-layout.mjs';
 
 const WIDE = { slotCount: 12, maxColumns: 12 };
@@ -134,32 +134,6 @@ test('nextOption cycles and wraps', () => {
   assert.equal(nextOption(CARD_SHAPES, 'tall'), 'auto');
 });
 
-test('the text band toggles between the two edges', () => {
-  // ⛔ Was three states until #130. The band carries the status colour and is
-  // opaque, so a band across the middle cuts the photograph in half -- the one
-  // placement that stopped making sense once the text got a solid background.
-  assert.equal(nextOption(TEXT_POSITIONS, 'bottom'), 'top');
-  assert.equal(nextOption(TEXT_POSITIONS, 'top'), 'bottom');
-});
-
-test('the band sits at the bottom by default', () => {
-  // First in the list is the default and the value the cycle starts from, which
-  // is the convention the other controls follow. Bottom, because shading at the
-  // foot of a card is where it least often lands on a face.
-  assert.equal(TEXT_POSITIONS[0], 'bottom');
-  assert.equal(TEXT_POSITIONS.length, 2);
-});
-
-test('a board that remembers `middle` is moved, not reset', () => {
-  // 1.15.0 wrote this value and wall displays have it stored; links carry it
-  // too. Resetting such a board to a default would be a worse greeting than the
-  // near-equivalent placement.
-  assert.equal(migrateTextPosition('middle'), 'bottom');
-  assert.equal(migrateTextPosition('top'), 'top');
-  assert.equal(migrateTextPosition('sideways'), null);
-  assert.equal(migrateTextPosition(undefined), null);
-});
-
 test('the wash has two styles and starts on the band', () => {
   assert.deepEqual(WASH_STYLES, ['band', 'full']);
   assert.equal(nextOption(WASH_STYLES, 'band'), 'full');
@@ -184,15 +158,6 @@ test('the size validator refuses anything it does not know', () => {
   ['tiny', 'MEDIUM', '', null, undefined, '1.25'].forEach((v) => {
     assert.equal(isTypeSize(v), false, String(v));
   });
-});
-
-test('top and bottom put the text against an edge; middle does not', () => {
-  // Which placements want the scrim gathered at one edge rather than washed
-  // evenly over the whole picture.
-  assert.equal(isEdgePlacement('top'), true);
-  assert.equal(isEdgePlacement('bottom'), true);
-  assert.equal(isEdgePlacement('middle'), false);
-  assert.equal(isEdgePlacement('nonsense'), false);
 });
 
 test('the type ranking keeps the name above the channel id', () => {
@@ -307,67 +272,24 @@ test('the slot and the position share one row, at opposite ends', () => {
   );
 });
 
-test('each edge placement gathers the scrim at its own edge', () => {
-  // The text is readable over the photo only because of these, and a scrim
-  // pointing the wrong way is worse than none: it dims the half of the picture
-  // the text is not on and leaves the text on the bright half.
-  const scss = readFileSync(
-    fileURLToPath(new URL('../css/style.scss', import.meta.url)),
-    'utf8',
-  );
-  // `bottom` gathers at the bottom, so the gradient runs `to top`, and vice
-  // versa -- the direction is the far edge, which is easy to write backwards.
-  const direction = { bottom: 'to top', top: 'to bottom' };
-
-  TEXT_POSITIONS.filter(isEdgePlacement).forEach((position) => {
-    const rule = scss.split(`&.text-${position} .mic_name .slot-media.is-active::after`)[1];
-    assert.ok(rule, `css/style.scss has no scrim rule for text-${position}`);
-    assert.ok(
-      rule.split('}')[0].includes(direction[position]),
-      `the text-${position} scrim should run ${direction[position]}`,
-    );
-  });
-});
-
-test('every text placement has a stylesheet rule to act on', () => {
-  // Unlike arrangement and card shape -- whose classes exist only to make the
-  // state legible, the geometry arriving as custom properties -- text placement
-  // is done entirely in CSS. So a value added here with no matching rule would
-  // cycle, store itself and change the URL while the text never moved, which is
-  // the kind of nothing that is hard to spot.
+test('⛔ the text band is fixed at the bottom and is no longer a setting', () => {
+  // Removed in #130. The maintainer's reason: "I'd rather not move things
+  // around in this case... leave it at the bottom." Nothing should reintroduce
+  // the vocabulary without reintroducing the CSS and the chip-collision fix
+  // that came with it.
   const scss = readFileSync(
     fileURLToPath(new URL('../css/style.scss', import.meta.url)),
     'utf8',
   );
 
-  TEXT_POSITIONS.forEach((position) => {
-    assert.ok(
-      scss.includes(`&.text-${position} .mic_name`),
-      `css/style.scss has no rule for text-${position}`,
-    );
-  });
-});
+  assert.ok(scss.includes('&.text-bottom .mic_name'), 'the band still needs its rule');
+  assert.ok(!scss.includes('text-top'), 'the top variant and its special cases should be gone');
 
-test('the validators accept exactly the supported values', () => {
-  ['fit', 'row', 'column', 'grid'].forEach((v) => assert.ok(isArrangement(v), v));
-  ['auto', 'wide', 'tall'].forEach((v) => assert.ok(isCardShape(v), v));
-  ['top', 'bottom'].forEach((v) => assert.ok(isTextPosition(v), v));
-
-  // This one reaches a CSS class name straight off a link, so it has to refuse
-  // anything it does not recognise rather than pass it through. `middle` is in
-  // this list as of #130: it is no longer valid on its own and has to come
-  // through migrateTextPosition.
-  ['centre', 'center', 'middle', 'middle ', '', null, undefined, 'top; }'].forEach((v) => {
-    assert.equal(isTextPosition(v), false, String(v));
-  });
-
-  // The old vocabulary is no longer valid on its own; it has to be migrated.
-  ['landscape', 'portrait', 'auto', '', null, undefined, 'sideways'].forEach((v) => {
-    assert.equal(isArrangement(v), false, String(v));
-  });
-  ['landscape', 'portrait', 'wide-ish', null].forEach((v) => {
-    assert.equal(isCardShape(v), false, String(v));
-  });
+  // ⚠️ The scrim gathers at the band's edge, so it runs the other way: the
+  // direction names the far edge, which is easy to write backwards.
+  const rule = scss.split('&.text-bottom .mic_name .slot-media.is-active::after')[1];
+  assert.ok(rule, 'css/style.scss has no scrim rule for the band');
+  assert.ok(rule.split('}')[0].includes('to top'), 'the scrim should run to top');
 });
 
 test('preferences written by 1.11.0 are translated, not discarded', () => {
