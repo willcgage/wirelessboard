@@ -51,11 +51,12 @@ def watchdog_monitor():
 
 def WirelessQueryQueue():
     while True:
-        for rx in (rx for rx in NetworkDevices if rx.rx_com_status == 'CONNECTED'):
-            strings = rx.get_query_strings()
-            for string in strings:
-                rx.writeQueue.put(string)
-        time.sleep(10)
+        now = time.monotonic()
+        for rx in NetworkDevices:
+            rx.enqueue_query_if_due(now)
+        # Keep this responsive enough for adapters with a sub-five-second
+        # cadence without turning an idle board into a busy loop.
+        time.sleep(.2)
 
 def ProcessRXMessageQueue():
     while True:

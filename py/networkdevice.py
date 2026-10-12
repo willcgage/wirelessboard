@@ -30,6 +30,7 @@ class ShureNetworkDevice:
         self.f = None
         self.frame_remainder = ''
         self.socket_watchdog = int(time.perf_counter())
+        self.next_query_at = 0.0
         self.raw = defaultdict(dict)
         self.adapter = vendor.adapter_for(type)
 
@@ -103,6 +104,29 @@ class ShureNetworkDevice:
 
     def get_query_strings(self):
         return self.adapter.query(self.type, self.get_channels())
+
+    def poll_interval(self):
+        """Seconds between periodic queries for this receiver's adapter."""
+        interval = getattr(self.adapter, 'POLL_INTERVAL', 10)
+        try:
+            interval = float(interval)
+        except (TypeError, ValueError):
+            return 10.0
+        return interval if interval > 0 else 10.0
+
+    def enqueue_query_if_due(self, now):
+        """Queue one periodic query batch when this receiver is due.
+
+        Polling belongs to the adapter rather than the global service loop:
+        Audio-Technica TCP receivers must see traffic before their five-second
+        watchdog, whereas the established Shure cadence is ten seconds.
+        """
+        if self.rx_com_status != 'CONNECTED' or now < self.next_query_at:
+            return False
+        for string in self.get_query_strings():
+            self.writeQueue.put(string)
+        self.next_query_at = now + self.poll_interval()
+        return True
 
     def enable_metering(self, interval):
         for command in self.adapter.meter_start(self.type, self.get_channels(), interval):

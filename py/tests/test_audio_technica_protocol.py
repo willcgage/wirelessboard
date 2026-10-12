@@ -59,6 +59,17 @@ def test_commands_follow_the_documented_envelope_and_cr_termination():
     ]
 
 
+def test_audio_technica_polling_stays_inside_the_socket_watchdog_window():
+    receiver = device()
+    receiver.set_rx_com_status('CONNECTED')
+
+    assert receiver.poll_interval() == 4
+    assert receiver.enqueue_query_if_due(100.0) is True
+    assert list(receiver.writeQueue.queue) == ['garlv O 0000 00 NC 1\r']
+    assert receiver.enqueue_query_if_due(103.9) is False
+    assert receiver.enqueue_query_if_due(104.0) is True
+
+
 def test_send_and_framing_use_utf8_and_carriage_return():
     class Socket:
         def __init__(self):

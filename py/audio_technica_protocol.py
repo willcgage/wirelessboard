@@ -21,6 +21,11 @@ TYPES = (
 )
 PORT = 17300
 
+# The board's connection watchdog drops an otherwise silent TCP socket after
+# five seconds. Keep the receiver warm via its documented garlv query instead
+# of adding a second UDP socket before hardware has validated that path.
+POLL_INTERVAL = 4
+
 
 def handles(type_):
     return type_ in TYPES

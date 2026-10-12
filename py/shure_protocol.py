@@ -36,6 +36,10 @@ TYPES = ('uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus', 'p10t')
 # Shure's control port, the same across every model above.
 PORT = 2202
 
+# Existing Shure receivers either stream meter data or tolerate the historical
+# ten-second query cadence. Other adapters may override this safely.
+POLL_INTERVAL = 10
+
 # UHF-R is the odd one: an older grammar punctuated with `*` rather than `<  >`,
 # carried over UDP, and a metering rate expressed in a different unit. It is not
 # that UDP implies the grammar -- they simply arrived together on that product --
