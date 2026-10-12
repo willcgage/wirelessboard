@@ -41,6 +41,7 @@ const INTENTIONAL = new Map([
   ['micboard-version', 'legacy name, second in a || chain behind wirelessboard-version'],
   ['pco-back', 'legacy name, second in a || chain behind pco-close'],
   ['pco-credential-status', 'created on demand by ensurePcoCredentialStatusElement'],
+  ['editor-waiting', 'created by initConfigEditor while the board loads (#150)'],
 ]);
 
 function markupIds() {
