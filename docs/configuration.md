@@ -1,5 +1,5 @@
 # Configuration
-On first run, Wirelessboard will open up a configuration page.  This page can also be accessed from the Wirelessboard menu (or the legacy Micboard menu) and by pressing <kbd>s</kbd> from within Wirelessboard.
+On first run, Wirelessboard will open up a configuration page.  This page can also be reached at any time from **Menu → Config**.
 
 <p align="center">
   <img src="img/discover_config.png">
@@ -67,39 +67,71 @@ Beneath the table, the **Logging Settings** form mirrors the `logging` block sto
 Changes are written to disk immediately, reconfigure the Python logging tree in-place, and are reflected in subsequent API responses. The raw log file lives under the configuration directory in `logs/application.log`; UI actions and API calls operate on the same file, so you can mix browser-based troubleshooting with automated collection.
 
 
-## Keyboard Shortcuts
-Wirelessboard is primarily controlled with keyboard shortcuts
+## Controls
 
-* <kbd>?</kbd> - Show keyboard shortcuts
-* <kbd>0</kbd> - Show all slots
-* <kbd>1</kbd>...<kbd>9</kbd> - Load group
-* <kbd>d</kbd> - Start demo mode
-* <kbd>e</kbd> - Open group editor
-* <kbd>t</kbd> - Toggle TV view
-* <kbd>i</kbd> - Change tv display mode
-* <kbd>f</kbd> - Toggle fullscreen
-* <kbd>g</kbd> - Toggle image backgrounds
-* <kbd>v</kbd> - Toggle video backgrounds
-* <kbd>p</kbd> - Move the card text: middle, top, bottom
-* <kbd>z</kbd> - Card text size: medium, small, large
-* <kbd>h</kbd> - Show or hide the top bar
-* <kbd>n</kbd> - Extended Name editor
-* <kbd>s</kbd> - Device configuration editor
-* <kbd>q</kbd> - Show QR code
-* <kbd>esc</kbd> - reload Wirelessboard
+Wirelessboard is worked with two menus, and everything in it can be reached by tapping. There are
+no keyboard shortcuts — they were retired in 2.0, because the screens this runs on most often are
+tablets and phones, which had no way to reach any of them.
+
+**The gear, in the bottom corner of the board**, opens the View panel. Everything in it changes
+**this screen only** and is remembered on this device:
+
+| Setting | Options |
+| --- | --- |
+| Mode | Desk, TV |
+| Showing | All channels, or one of your groups |
+| Page through groups | Off, on — cycles the groups when they do not all fit |
+| Service position | Hidden, top, bottom, spare card |
+| Arrangement | Fit, Side by side, Stacked, Grid |
+| Columns on screen | Auto, or at most 4, 6, 8, 10, 12 |
+| Card shape | Auto, 16:9, 3:4 |
+| Status colour | Band only, whole card |
+| Backgrounds | Off, photos, video |
+| Battery & chart | On, off |
+| Status stripe | On, off |
+| Text size | S, M, L |
+| Wirelessboard bar | Shown, hidden |
+| Fullscreen | On, off |
+| Lock to display only | On, off |
+
+**The Menu, in the top bar**, holds everything that changes **every connected board**: slot names,
+group editing, the configuration page, the background library, Planning Center, the scannable URL
+and demo mode.
+
+<kbd>Esc</kbd> still returns to the board from a full-screen pane. It is the only key the board
+listens for.
+
+> **The gear is always there**, including when the top bar is hidden and when the screen is locked
+> to display only. It is deliberately the one control that can never be taken away, so a board can
+> always be got back.
+
+### Locking a screen to display only
+
+A tablet on a wall, or a phone handed to somebody so they can watch battery levels, can be locked:
+the View panel's **Lock to display only** hides the editors, the configuration page, the background
+library and Planning Center on that device. View settings keep working, because none of them leave
+that browser.
+
+It is a guard against accidents, **not a security control** — the same switch turns it off, and the
+server has no password of any kind. Anyone who can reach the board on the network can change it.
 
 ## Groups
-Devices can be grouped into custom views. These groups are accessible from the menu and keyboard shortcuts.  
+Devices can be grouped into custom views.
 
 #### View a Group
-Groups can be selected from the main menu or with numeric keys.  View all devices by pressing <kbd>0</kbd>.
+Open the gear in the bottom corner and pick the group under **Showing**. The same list carries
+**All channels**, which is the combined view of everything configured.
+
+A board can also page through its groups on a timer — see **Page through groups** in the same
+panel. That is for a wall with more channels than fit on screen at once; a board whose channels all
+fit never pages.
 
 #### Edit a Group
 
 <p align="center">
   <img src="img/editor.png">
 </p>
-Once in a group, open the group editor by pressing "edit group" in the nav menu.  The group editor can also be opened by pressing <kbd>e</kbd>.
+Once in a group, open the group editor with **Menu → Edit This Group**.
 
 Once the editor is open -
 1. Add title
@@ -131,24 +163,34 @@ That width is a **maximum**, not a guarantee, in the two arrangements that delib
 
 ### Arranging the board
 
-Four controls in TV mode, all listed in the help overlay (`?`):
+All of these live in the View panel behind the gear, and apply to the screen you are looking at.
 
-| Key | Setting | Options |
-| --- | --- | --- |
-| `O` | Arrangement | Fit to page, one row, one column, balanced grid |
-| `A` | Card shape | Auto, 16:9, 3:4 |
-| `P` | Text placement | Middle, top, bottom of the card |
-| `Z` | Text size | Medium, small, large |
+**Arrangement** decides the shape of the grid. *Fit* and *Grid* never ask for more columns than
+fit. *Side by side* puts every channel on one line and *Stacked* puts them in one column, so those
+two narrow the cards to whatever that takes — twelve channels on a 1920px screen come out around
+155px wide.
 
-And one that applies in both modes:
+> The stored names behind these are `fit`, `row`, `column` and `grid`, which is why a shared link
+> says `layout=row` for *Side by side*. The names in the interface describe the result; the stored
+> words describe the grid's axis, and read backwards out loud.
 
-| Key | Setting | Options |
-| --- | --- | --- |
-| `H` | Top bar | Shown, hidden |
+**Columns on screen** is a ceiling rather than an exact count. Capping at six makes each card twice
+as wide as twelve across would and puts the rest on a second row. Nothing is ever hidden — channels
+that do not fit the width wrap onto another row.
 
-**The top bar** is the strip across the top of the page carrying the Wirelessboard name and the Menu button. It sits outside the board rather than inside it, so it takes the same slice of height in desk mode and TV mode alike; hiding it gives that height to the channels. Note that the Menu is the only way to reach the settings panes with a mouse, so with the bar hidden the keyboard is the way in — `S` for the config view, `?` for the shortcut list, `H` again to bring the bar back.
+**Card shape** fixes the aspect to 16:9 or 3:4, or lets the board choose.
 
-**Text placement** moves the channel's text to the middle, top or bottom of the card. The background photo always fills the whole card; what moves is the text, and with it the shading that keeps the text readable. Put the text at whichever edge your photos are emptiest — with the text at the bottom, the top two-thirds of every picture is left clear and undimmed.
+**Text size** scales the card's type independently of the card's own size.
+
+**The top bar** is the strip across the top of the page carrying the Wirelessboard name and the Menu
+button. It sits outside the board rather than inside it, so it takes the same slice of height in
+desk mode and TV mode alike; hiding it gives that height to the channels. The gear in the bottom
+corner stays visible while the bar is hidden, and opens the View panel — which carries the switch
+to bring the bar back.
+
+**Status colour** puts the channel's status on the text band or washes the whole card with it. The
+band is the default. On a card with a photo the whole-card wash is almost entirely hidden behind
+the picture, so it earns its keep mainly on boards whose channels have no photos.
 
 **Text size** scales all three lines together, on top of the size the layout already derives from the card. Smaller text covers less of the photo.
 
@@ -177,9 +219,9 @@ Use the closest row that matches your layout, bearing in mind that the slot widt
 
 
 
-There are a few keyboard shortcuts to control background modes.
-* <kbd>g</kbd> - Toggle image backgrounds
-* <kbd>v</kbd> - Toggle video backgrounds
+Backgrounds are switched from the View panel behind the gear: **Backgrounds — off, photos,
+video**. The choice is per screen, so a wall can show photographs while a laptop at the desk shows
+none.
 
 
 The Wirelessboard `backgrounds` folder can be shared via a fileserver.  This provides an easy way for teams to update pictures.
@@ -197,7 +239,7 @@ Wirelessboard has an optional feature called **Extended Names**.  When set, user
 
 When the receiver name is changed via WWB, Wirelessboard follows suit and displays the new name.
 
-Press <kbd>n</kbd> to bring up the extended names editor.  Press save once complete.
+Open the extended names editor with **Menu → Edit Slot Names**. Press save once complete.
 
 #### Bulk Name Loader
 Names can be imported from spreadsheets and text files with the **Bulk Loader**.
@@ -205,7 +247,7 @@ Names can be imported from spreadsheets and text files with the **Bulk Loader**.
   <img width="70%" src="img/bulkbox.png">
 </p>
 
-1. Open the Extended Names editor with <kbd>⇧ Shift</kbd> + <kbd>n</kbd>.
+1. Open **Menu → Edit Slot Names**, then press **Paste a list of names**.
 2. Paste a list of names into the bulk box.
 3. Click **Load Bulk Names** to load names from the imported list.  Make any necessary edits in the extended editor and **Save**.
 
