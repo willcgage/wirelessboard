@@ -69,38 +69,20 @@ export function columnCeiling(value) {
 export const CARD_SHAPES = ['auto', 'wide', 'tall'];
 
 /**
- * Where the text block sits inside a card.
+ * ⛔ The text band's placement was a setting (`P`) and is not any more, as of
+ * #130. It sits at the **bottom**, full stop.
  *
- * A third vocabulary again, for the same reason as the second: this moves the
- * text *within* a card, which is a different question from the card's shape or
- * the grid's. ⛔ Deliberately not called "position" — the card's third line is
- * the person's position in the service (#69), and reusing the word in the help
- * overlay would make two unrelated things read as one.
+ * The maintainer's reason, after seeing both rendered: "I'd rather not move
+ * things around in this case. I almost think a simplification would be best
+ * and leave it at the bottom." Shading at the foot of the card is where it
+ * least often lands on a face, and a board whose operators stand five feet
+ * away does not gain from a second place to look for the same line.
  *
- * ⛔ `middle` is gone as of #130. The text now sits in a band that carries the
- * status colour, and a band across the middle cuts the photo in half — which is
- * the one placement that cannot work once the text has a solid background
- * rather than a gradient over the picture. `migrateTextPosition` turns a stored
- * `middle` into `bottom` rather than resetting the board to a default.
- *
- * `bottom` is first because it is the default: shading at the foot of the card
- * is where it least often lands on a face.
- *
- * Only TV mode can honour these — a desk-mode card hugs its content, so there
- * is no slack to move the text within.
+ * ⚠️ Removing it also removed the thing it cost: with the band at the top the
+ * status chip landed on it and covered the name, so `.text-top` carried a
+ * special case purely to undo a collision that only existed because the option
+ * existed. `middle` had already gone the same way earlier in #130.
  */
-export const TEXT_POSITIONS = ['bottom', 'top'];
-
-/**
- * 1.15.0 shipped `middle` and boards have it stored; a link may carry it too.
- * Translate rather than discard, the same bargain as the arrangement rename.
- */
-export function migrateTextPosition(value) {
-  if (TEXT_POSITIONS.includes(value)) {
-    return value;
-  }
-  return value === 'middle' ? 'bottom' : null;
-}
 
 /**
  * How the status colour meets the card (#130).
@@ -202,24 +184,12 @@ export function isCardShape(value) {
   return CARD_SHAPES.includes(value);
 }
 
-export function isTextPosition(value) {
-  return TEXT_POSITIONS.includes(value);
-}
-
 export function isTypeSize(value) {
   return TYPE_SIZES.includes(value);
 }
 
 export function isTopBarState(value) {
   return TOP_BAR_STATES.includes(value);
-}
-
-/**
- * Whether a placement puts the text against an edge, and so wants a scrim
- * gathered at that edge rather than spread over the whole picture.
- */
-export function isEdgePlacement(value) {
-  return value === 'top' || value === 'bottom';
 }
 
 /**

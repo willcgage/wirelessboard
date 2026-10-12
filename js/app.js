@@ -19,12 +19,12 @@ import {
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
-  isArrangement, isCardShape, isTextPosition, isTypeSize, isTopBarState, isColumnChoice,
-  isWashStyle, migrateArrangement, migrateCardShape, migrateTextPosition,
+  isArrangement, isCardShape, isTypeSize, isTopBarState, isColumnChoice,
+  isWashStyle, migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 import {
   resolvePref, safeStorage,
-  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
@@ -51,7 +51,6 @@ micboard.displayMode = 'deskmode';
 // Resolved properly in readURLParameters once the hash and storage are known.
 micboard.arrangement = 'fit';
 micboard.cardShape = 'auto';
-micboard.textPosition = 'bottom';
 micboard.typeSize = 'medium';
 micboard.topBar = 'shown';
 micboard.columns = 'auto';
@@ -465,14 +464,6 @@ function readURLParameters() {
   });
   // ⛔ `middle` retired in #130 and boards have it stored, so this one migrates
   // now: a remembered `middle` becomes `bottom` rather than silently resetting.
-  micboard.textPosition = resolvePref({
-    hashValue: micboard.url.text,
-    storage,
-    key: TEXT_POSITION_KEY,
-    isValid: isTextPosition,
-    migrate: migrateTextPosition,
-    fallback: 'bottom',
-  });
   micboard.typeSize = resolvePref({
     hashValue: micboard.url.type,
     storage,
@@ -545,9 +536,6 @@ export function updateHash() {
   }
   if (micboard.cardShape && micboard.cardShape !== 'auto') {
     hash += `&aspect=${micboard.cardShape}`;
-  }
-  if (micboard.textPosition && micboard.textPosition !== 'bottom') {
-    hash += `&text=${micboard.textPosition}`;
   }
   if (micboard.typeSize && micboard.typeSize !== 'medium') {
     hash += `&type=${micboard.typeSize}`;

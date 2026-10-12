@@ -18,11 +18,11 @@
  */
 
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES,
+  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES, TOP_BAR_STATES,
   COLUMN_CHOICES, WASH_STYLES,
 } from './board-layout.mjs';
 import {
-  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY,
   TOP_BAR_KEY, COLUMNS_KEY, WASH_KEY, LIVE_PLACEMENT_KEY, ROTATION_KEY,
 } from './view-prefs.mjs';
 import { PLACEMENTS, PLACEMENT_LABELS } from './live-strip.mjs';
@@ -91,15 +91,6 @@ export const VIEW_CONTROLS = [
     storageKey: CARD_SHAPE_KEY,
     options: CARD_SHAPES,
     optionLabels: { auto: 'Auto', wide: '16:9', tall: '3:4' },
-  },
-  {
-    id: 'textPosition',
-    key: 'p',
-    label: 'Text band',
-    group: 'Card',
-    storageKey: TEXT_POSITION_KEY,
-    options: TEXT_POSITIONS,
-    optionLabels: { bottom: 'Bottom', top: 'Top' },
   },
   {
     id: 'wash',

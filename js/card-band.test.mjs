@@ -140,12 +140,17 @@ test('⛔ status is never colour alone', () => {
   }
 });
 
-test('⛔ the chip keeps its corner, whichever edge the band takes', () => {
-  // Found by looking at the board, not by reasoning about it: with the band at
-  // the top the chip sat on top of it and covered the name.
-  const moved = block('&.text-top .mic_name .status-chip {');
-  assert.match(moved, /top:\s*auto/, 'the chip must give up the top when the band is there');
-  assert.match(moved, /bottom:/, 'and take the other edge');
+test('⛔ the chip and the band do not share an edge', () => {
+  // This was a special case: with the band at the top the chip sat on it and
+  // covered the name, so `.text-top` carried a rule purely to undo a collision
+  // the option created. The option is gone (#130) and so is the rule -- the
+  // band is at the bottom, the chip is at the top, and nothing has to move.
+  assert.ok(!css.includes('text-top'), 'the top variant and its special cases should be gone');
+  assert.match(
+    block('&.text-bottom .mic_name {'),
+    /align-content:\s*end/,
+    'the band gathers at the bottom',
+  );
 });
 
 test('⛔ nothing quietly un-positions the chip', () => {

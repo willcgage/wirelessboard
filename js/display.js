@@ -4,7 +4,7 @@ import { updateGIFBackgrounds } from './gif.js';
 import { renderGroup } from './channelview.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
-  ARRANGEMENTS, CARD_SHAPES, TEXT_POSITIONS, TYPE_SIZES, TOP_BAR_STATES,
+  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES, TOP_BAR_STATES,
   COLUMN_CHOICES, WASH_STYLES, nextOption,
 } from './board-layout.mjs';
 import { controlFor, isValidValue } from './view-controls.mjs';
@@ -14,7 +14,7 @@ import { ROTATION_STATES } from './rotation-states.mjs';
 import { startRotation, stopRotation } from './rotation-view.js';
 import {
   writePref, safeStorage,
-  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
@@ -75,12 +75,12 @@ function applyViewClasses() {
   }
   ARRANGEMENTS.forEach((a) => container.classList.remove(`arrangement-${a}`));
   CARD_SHAPES.forEach((s) => container.classList.remove(`card-${s}`));
-  TEXT_POSITIONS.forEach((p) => container.classList.remove(`text-${p}`));
   TYPE_SIZES.forEach((s) => container.classList.remove(`type-${s}`));
   WASH_STYLES.forEach((w) => container.classList.remove(`wash-${w}`));
   container.classList.add(`arrangement-${micboard.arrangement}`);
   container.classList.add(`card-${micboard.cardShape}`);
-  container.classList.add(`text-${micboard.textPosition}`);
+  // ⛔ Fixed at the bottom since #130; it was a setting and is not any more.
+  container.classList.add('text-bottom');
   // `type-`, not `textsize-`: near-identical class prefixes on the same element
   // are a reading trap, and the variable these drive is already --tvmode-type-*.
   container.classList.add(`type-${micboard.typeSize}`);
@@ -166,14 +166,6 @@ export function cycleCardShape() {
   applyBoardLayout();
   updateHash();
   return micboard.cardShape;
-}
-
-export function cycleTextPosition() {
-  micboard.textPosition = nextOption(TEXT_POSITIONS, micboard.textPosition);
-  writePref({ storage: safeStorage(), key: TEXT_POSITION_KEY, value: micboard.textPosition });
-  applyBoardLayout();
-  updateHash();
-  return micboard.textPosition;
 }
 
 export function cycleTypeSize() {
