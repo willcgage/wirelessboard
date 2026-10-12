@@ -2,7 +2,7 @@ import 'whatwg-fetch';
 import { viewerCount } from './viewer-scope.mjs';
 import { renderPlanChangeNotice } from './plan-change-notice.js';
 import {
-  dataURL, ActivateMessageBoard, micboard, updateNavLinks,
+  dataURL, ActivateMessageBoard, micboard, updateNavLinks, announceConfigLoaded,
 } from './app.js';
 import { renderGroup, updateSlot } from './channelview.js';
 import { updateChart } from './chart-smoothie.js';
@@ -41,6 +41,7 @@ function JsonUpdate() {
       });
       micboard.connectionStatus = 'CONNECTED';
       micboard.config = data.config;
+      announceConfigLoaded();
       // How many boards are watching this server (#116). Kept on micboard so
       // the config panes can say what a save is about to reach, and announced
       // when it changes -- the config view renders before the first payload

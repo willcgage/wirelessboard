@@ -645,6 +645,7 @@ function initialMap(callback) {
         micboard.localURL = data.url;
         try { micboard.groups = groupTableBuilder(data); } catch (e) { micboard.groups = {}; }
         micboard.config = data.config;
+        announceConfigLoaded();
         const defaultBackground = data.background_defaults && typeof data.background_defaults.mode === 'string'
           ? String(data.background_defaults.mode).trim().toUpperCase()
           : 'NONE';
@@ -698,6 +699,25 @@ function initialMap(callback) {
         } catch (_) {}
       });
     });
+}
+
+/**
+ * Say that the board's configuration has arrived (#150).
+ *
+ * ⛔ A DOM event rather than a direct call, because the configuration editor
+ * lives in `config.js`, which already imports from here -- calling into it
+ * would close the loop, and an import cycle in this codebase has produced a
+ * TDZ error that only showed up on a click (#111).
+ */
+export function announceConfigLoaded() {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return;
+  }
+  try {
+    window.dispatchEvent(new Event('wirelessboard:config-loaded'));
+  } catch (_) {
+    // A board that cannot announce it still has the config.
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

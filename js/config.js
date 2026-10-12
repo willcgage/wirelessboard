@@ -8,6 +8,9 @@ import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 import { assignNumbers } from './slot-numbering.mjs';
 import {
+  editorState, configuredCount, emptyingSaveWarning, waitingMessage,
+} from './config-readiness.mjs';
+import {
   OVERRIDABLE,
   uniqueId,
   bindingKind,
@@ -614,6 +617,28 @@ function renderDiscoveredDeviceList() {
     }
     discoveredList.appendChild(t);
   });
+}
+
+/**
+ * Re-open the editor once the board's configuration arrives (#150).
+ *
+ * ⚠️ Listens once. The payload fires several times a second and
+ * `initConfigEditor` rebuilds every row, so re-rendering on each one would
+ * wipe whatever the operator had started typing.
+ */
+let waitingForConfig = false;
+function waitForConfigThenRender() {
+  if (waitingForConfig) return;
+  waitingForConfig = true;
+  const onLoaded = () => {
+    window.removeEventListener('wirelessboard:config-loaded', onLoaded);
+    waitingForConfig = false;
+    // Only if the editor is still on screen and still waiting.
+    if (document.getElementById('editor-waiting')) {
+      initConfigEditor(true);
+    }
+  };
+  window.addEventListener('wirelessboard:config-loaded', onLoaded);
 }
 
 /**
@@ -2827,6 +2852,23 @@ export function initConfigEditor(force = false) {
   const holder = document.getElementById('editor_holder');
   if (holder) {
     holder.innerHTML = '';
+    // ⛔ Before the first payload there is no way to tell an empty board from
+    // an unloaded one, and the blank-row fallback below looks identical in
+    // both cases. Saving those blanks writes `slots: []` and wipes a
+    // configured board -- verified against a running server (#150). So say
+    // what is happening and draw nothing until the board has actually loaded.
+    if (editorState(micboard) === 'waiting') {
+      const waiting = document.createElement('div');
+      waiting.className = 'small text-muted p-2';
+      waiting.id = 'editor-waiting';
+      waiting.textContent = waitingMessage();
+      holder.appendChild(waiting);
+      renderDiscoveredDeviceList();
+      // ⚠️ And come back when it lands. Without this the editor waits for ever
+      // -- which trades one broken state for another, quieter one.
+      waitForConfigThenRender();
+      return;
+    }
     const slots = (micboard.config && micboard.config.slots) || [];
     if (Array.isArray(slots) && slots.length > 0) {
       slots.forEach((slot) => {
@@ -3027,6 +3069,17 @@ export function initConfigEditor(force = false) {
           `Nothing was saved. Choose a device type for ${described}, or clear the row to discard it.`,
           'error',
         );
+        return;
+      }
+
+      // ⛔ Defence in depth for #150. With the editor no longer offering blank
+      // rows before the board has loaded this should never fire by accident,
+      // but it catches *any* route to the same outcome -- and that outcome is
+      // not undoable by typing the rows back in, because the groups have
+      // already been left pointing at channels that no longer exist.
+      const emptying = emptyingSaveWarning(configuredCount(micboard), data.slots.length);
+      if (emptying && !window.confirm(emptying)) {
+        setConfigSaveStatus('Save cancelled.', 'info');
         return;
       }
 

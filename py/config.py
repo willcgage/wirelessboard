@@ -887,6 +887,16 @@ def _reconfig_locked(payload):
         logger.warning('Invalid slot payload during reconfig; expected list, got %s', type(slots))
         slots = []
 
+    # ⚠️ Loud on the way past, never refused. A board legitimately gets cleared
+    # -- but a save that empties a configured board is also what a bug looks
+    # like (#150), and the only way to tell afterwards is the log.
+    previous = config_tree.get('slots') or []
+    if previous and not slots:
+        logger.warning(
+            'Config save removed all %s channel(s); groups may now reference channels that do not exist',
+            len(previous),
+        )
+
     config_tree['slots'] = config_mix(slots)
 
     # The operator asked for this one, so it writes even after a degraded load,
