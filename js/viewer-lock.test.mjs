@@ -104,6 +104,34 @@ test('⛔ it has no hash parameter, so a link cannot switch it off', () => {
   assert.ok(app.includes('VIEWER_LOCK_KEY'), 'but it is still remembered per device');
 });
 
+test('⛔ the unlock is a 44px touch target, because that is who it is for', () => {
+  // The panel exists because the view settings were keyboard-only and a wall
+  // tablet has no keyboard (#111). Every control in it was 22px tall, and on a
+  // locked device a near miss on the switch is a near miss on the way out.
+  const css = read('css/style.scss');
+  const switchHeight = /\.vp-switch \{[^}]*height: (\d+)px/.exec(css);
+  const segHeight = /\.vp-seg \{[^}]*min-height: (\d+)px/.exec(css);
+  assert.ok(switchHeight, 'expected .vp-switch to set a height');
+  assert.ok(segHeight, 'expected .vp-seg to set a min-height');
+  assert.ok(
+    Number(switchHeight[1]) >= 44,
+    `the switch is ${switchHeight[1]}px; a touch target is 44`,
+  );
+  assert.ok(
+    Number(segHeight[1]) >= 44,
+    `the segmented options are ${segHeight[1]}px; a touch target is 44`,
+  );
+});
+
+test('⛔ a locked panel opens on the way out of being locked', () => {
+  // Nobody is ever stuck -- the panel scrolls -- but the lock is its last row
+  // and on a phone that row starts below the fold. The control that hides all
+  // the others has to be the one in view when it is on.
+  const panel = read('js/view-panel.js');
+  assert.match(panel, /viewerLock/, 'the panel has to know the board is locked');
+  assert.match(panel, /scrollIntoView/, 'and scroll that row into view');
+});
+
 test('⛔⛔ no binding reaches an editor without passing the guard', () => {
   // This is the drift guard. `allows()` refuses a named list, so an editor
   // wired up later is reachable on a locked board unless the author remembers.

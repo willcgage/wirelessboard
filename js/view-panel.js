@@ -223,6 +223,37 @@ export function closeViewPanel() {
   }
 }
 
+/**
+ * ⛔ A locked board opens this panel on the way out of being locked (#116).
+ *
+ * The lock is the last row of a panel that is roughly twice as tall as the
+ * space it has on a phone, so on a locked wall tablet the one control that
+ * matters was below the fold and reached by scrolling. It is still only a
+ * scroll away -- nobody was ever stuck -- but "the way back is down there
+ * somewhere" is not good enough for the control that hides all the others.
+ *
+ * ⚠️ Only when locked. Opening halfway down a panel nobody needed scrolled
+ * would be worse than the problem.
+ */
+function revealTheWayOut(el) {
+  if (board.viewOptionValue('viewerLock') !== 'on') {
+    return null;
+  }
+  const row = [...el.querySelectorAll('.vp-row')]
+    .find((candidate) => candidate.querySelector('.vp-switch')
+      && /lock/i.test(candidate.textContent));
+  if (!row) {
+    return null;
+  }
+  try {
+    row.scrollIntoView({ block: 'center' });
+  } catch (_) {
+    // An older engine without the options object still has the plain call.
+    try { row.scrollIntoView(); } catch (__) { /* and if not, the scroll remains */ }
+  }
+  return row.querySelector('.vp-switch');
+}
+
 export function openViewPanel() {
   const el = panel();
   if (!el) {
@@ -231,9 +262,11 @@ export function openViewPanel() {
   lastFocused = document.activeElement;
   renderViewPanel();
   el.hidden = false;
-  const first = el.querySelector('button, [href], input, select, textarea');
-  if (first && typeof first.focus === 'function') {
-    first.focus();
+  // The unlock when there is one, otherwise the first thing in the panel.
+  const target = revealTheWayOut(el)
+    || el.querySelector('button, [href], input, select, textarea');
+  if (target && typeof target.focus === 'function') {
+    target.focus();
   }
 }
 
