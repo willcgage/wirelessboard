@@ -1396,10 +1396,36 @@ def static_file_handler():
 
 
 class BackgroundAssetHandler(NoCacheHandler):
+    """Serve background media from wherever the configuration points.
+
+    ⛔ Both halves have to use the dynamic root, and only one of them did.
+    `get_absolute_path` resolved against `config.get_gif_dir()` while Tornado
+    went on *validating* against the route's own `path` -- which is `''`, so it
+    checked every file against the server's current working directory and
+    refused everything outside it with "is not in root static directory".
+
+    The effect was that background photos loaded only if the folder happened to
+    sit inside the working directory. The default folder never does: it lives
+    under LOCALAPPDATA on Windows and
+    `~/Library/Application Support/wirelessboard/backgrounds` on macOS. So the
+    photo wall could not load a single picture out of the box, which is why
+    this went unnoticed for so long -- nothing had ever put a photo on a card
+    through this code.
+
+    ⚠️ `super()` rather than returning the path: Tornado's own check is what
+    stops `../../` escaping the backgrounds folder, and that protection has to
+    be kept. It is given the right root, not taken away.
+    """
+
     @classmethod
     def get_absolute_path(cls, root, path):
         dynamic_root = config.get_gif_dir()
         return super(BackgroundAssetHandler, cls).get_absolute_path(dynamic_root, path)
+
+    def validate_absolute_path(self, root, absolute_path):
+        dynamic_root = config.get_gif_dir()
+        return super(BackgroundAssetHandler, self).validate_absolute_path(
+            dynamic_root, absolute_path)
 
 
 def twisted():
