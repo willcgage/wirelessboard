@@ -30,6 +30,10 @@ export const TYPE_SIZE_KEY = 'wirelessboard.typeSize';
 export const TOP_BAR_KEY = 'wirelessboard.topBar';
 export const COLUMNS_KEY = 'wirelessboard.columns';
 export const WASH_KEY = 'wirelessboard.wash';
+// ⚠️ Where the Live strip sits is per device; *whether* to follow Live at all
+// is server-side, because it spends one Planning Center account's API calls
+// for everybody (#116's line, #121's strip).
+export const LIVE_PLACEMENT_KEY = 'wirelessboard.livePlacement';
 
 export function safeStorage() {
   try {

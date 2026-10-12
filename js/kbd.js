@@ -6,6 +6,7 @@ import {
   toggleInfoDrawer, toggleImageBackground, toggleVideoBackground, toggleDisplayMode,
   cycleArrangement, cycleCardShape, cycleTextPosition, cycleTypeSize, cycleTopBar,
   cycleColumns, cycleWash,
+  cycleLivePlacement,
 } from './display.js';
 import { renderGroup } from './channelview.js';
 import { groupEditToggle } from './dnd.js';
@@ -99,6 +100,11 @@ function bindingTable() {
       keys: ['w'],
       hud: 'Status colour: the text band only, or the whole card (TV mode).',
       run: () => cycleWash(),
+    },
+    {
+      keys: ['l'],
+      hud: 'Service position: hidden, top, bottom, or a spare card.',
+      run: () => cycleLivePlacement(),
     },
     {
       // A ceiling rather than an exact count, so it works alongside O instead

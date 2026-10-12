@@ -2338,3 +2338,117 @@ body.plan-change-shown .topbar-restore {
 .plan-change-bar {
   padding-right: calc(1rem + 56px);
 }
+
+/* The service-position strip (#121).
+
+   ⛔ Live is not running for most services here, so the strip's resting state
+   is "Live not running" — it must look deliberate rather than broken. Quiet
+   by default; only an overrunning item is allowed to shout, and it borrows
+   Live's own red so an operator who knows Live reads it without being taught. */
+.live-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  background: rgba(38, 38, 38, 0.92);
+  color: var(--color-white, #fff);
+  border: 1px solid rgba(215, 215, 215, 0.25);
+  font-size: 0.95rem;
+}
+
+.live-strip .live-title {
+  flex: 1 1 auto;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tabular figures: the seconds change every tick and a proportional font makes
+   the whole line shuffle sideways once a second. */
+.live-strip .live-clock {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.live-strip .live-next {
+  opacity: 0.7;
+  font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nothing to report is stated, not styled as a problem. */
+.live-strip.live-not_running .live-title,
+.live-strip.live-no_plan .live-title {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.live-strip.live-error .live-title,
+.live-strip.live-stale .live-title {
+  color: #ffd866;
+  font-weight: 400;
+}
+
+/* Live turns red and counts up when an item runs over. Copied on purpose. */
+.live-strip.live-over .live-clock {
+  color: #ff6b6b;
+}
+
+.live-strip.live-at-top,
+.live-strip.live-at-bottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 1020;
+  padding: 0.4rem 1rem;
+  border-left: 0;
+  border-right: 0;
+}
+
+.live-strip.live-at-top {
+  top: env(safe-area-inset-top, 0px);
+}
+
+.live-strip.live-at-bottom {
+  bottom: 0;
+  padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* ⛔ As a card it is a grid child like any channel, so the layout places it
+   without special cases — and it holds that cell on every page of the
+   rotation rather than appearing and vanishing as the wall pages (#113). */
+.live-strip.live-at-card {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.6rem;
+  border-radius: 4px;
+
+  /* ⛔ Follows the card type scale so it grows with the channels around it
+     (#81) -- but the fallback has to be a *readable* size, not a neutral one.
+     `--tvmode-type-basis` is unset outside TV mode, and multiplying the
+     obvious 1rem fallback by the scale factor rendered this at 1.6px: present
+     in the DOM, correctly classed, and invisible. Measuring that the class
+     applied would have called it working. */
+  font-size: max(0.85rem, calc(var(--tvmode-type-basis, 9rem) * 0.1));
+
+  /* Without this the card collapses to its text and sits as a sliver among
+     full-height channels. */
+  min-height: 4rem;
+}
+
+.live-strip.live-at-card .live-title {
+  white-space: normal;
+}
+
+/* Keeps the board clear of a fixed strip. */
+body.live-strip-top .wirelessboard-board {
+  padding-top: 2.25rem;
+}
+
+body.live-strip-bottom .wirelessboard-board {
+  padding-bottom: 2.25rem;
+}

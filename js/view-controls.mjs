@@ -23,10 +23,24 @@ import {
 } from './board-layout.mjs';
 import {
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TEXT_POSITION_KEY, TYPE_SIZE_KEY,
-  TOP_BAR_KEY, COLUMNS_KEY, WASH_KEY,
+  TOP_BAR_KEY, COLUMNS_KEY, WASH_KEY, LIVE_PLACEMENT_KEY,
 } from './view-prefs.mjs';
+import { PLACEMENTS, PLACEMENT_LABELS } from './live-strip.mjs';
 
 export const VIEW_CONTROLS = [
+  {
+    id: 'livePlacement',
+    key: 'l',
+    label: 'Service position',
+    group: 'Layout',
+    storageKey: LIVE_PLACEMENT_KEY,
+    options: PLACEMENTS,
+    optionLabels: PLACEMENT_LABELS,
+    optionGlyphs: {
+      bottom: '▁', top: '▔', card: '▣', off: '–',
+    },
+    order: ['off', 'top', 'bottom', 'card'],
+  },
   {
     id: 'arrangement',
     key: 'o',
