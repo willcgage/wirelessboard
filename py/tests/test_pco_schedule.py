@@ -325,3 +325,138 @@ class TestOnlyRealSyncsAreRemembered:
         pco.finish_sync(resolution, dry_run=True)
 
         assert pco.last_sync() == {}
+
+
+class TestTheWatcher:
+    """⛔ Runs on a worker, reports only, and never syncs (#140)."""
+
+    @pytest.fixture(autouse=True)
+    def clean_watch(self):
+        pco.forget_plan_watch()
+        yield
+        pco.forget_plan_watch()
+
+    @pytest.fixture
+    def watching(self, monkeypatch):
+        monkeypatch.setattr(pco, 'get_pco_config', lambda: {
+            'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
+            'watch_active_plan': True,
+        })
+
+    def test_nothing_to_watch_when_the_option_is_off(self, monkeypatch):
+        monkeypatch.setattr(pco, 'get_pco_config', lambda: {
+            'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {}})
+
+        def explode():
+            raise AssertionError('should not have checked the plan')
+
+        monkeypatch.setattr(pco, 'check_active_plan', explode)
+
+        assert pco.run_plan_watch() == {}
+
+    def test_a_disabled_integration_is_quiet_rather_than_an_error(self, monkeypatch):
+        # A board with PCO off has nothing to watch, and saying so every two
+        # minutes for the life of the server is noise, not information.
+        def refuse():
+            raise pco.PcoConfigError('PCO integration is disabled (pco.enabled=false)')
+
+        monkeypatch.setattr(pco, 'get_pco_config', refuse)
+
+        assert pco.run_plan_watch() == {}
+
+    def test_an_unchanged_plan_is_recorded_as_unchanged(self, watching, monkeypatch):
+        monkeypatch.setattr(pco, 'check_active_plan', lambda: {
+            'ok': True, 'known': True, 'changed': False, 'plan_id': '77'})
+
+        status = pco.run_plan_watch()
+
+        assert status['changed'] is False
+        assert status['plan_id'] == '77'
+
+    def test_a_changed_plan_is_recorded(self, watching, monkeypatch):
+        monkeypatch.setattr(pco, 'check_active_plan', lambda: {
+            'ok': True, 'known': True, 'changed': True, 'plan_id': '77'})
+
+        assert pco.run_plan_watch()['changed'] is True
+
+    def test_nothing_synced_yet_leaves_the_status_empty(self, watching, monkeypatch):
+        monkeypatch.setattr(pco, 'check_active_plan', lambda: {
+            'ok': True, 'known': False, 'changed': False})
+
+        assert pco.run_plan_watch() == {}
+
+    def test_a_flaky_network_does_not_retract_a_warning(self, watching, monkeypatch):
+        # ⛔ The operator has already been shown "this plan changed". A failed
+        # poll replacing that with silence would make the warning flicker, and
+        # a warning that comes and goes is one people stop believing.
+        monkeypatch.setattr(pco, 'check_active_plan', lambda: {
+            'ok': True, 'known': True, 'changed': True, 'plan_id': '77'})
+        pco.run_plan_watch()
+
+        monkeypatch.setattr(pco, 'check_active_plan', lambda: {
+            'ok': False, 'error': 'Unable to reach Planning Center'})
+        # Past the interval, so the next pass really runs rather than being
+        # answered from the one just before it.
+        pco._PLAN_WATCH['checked_at'] = 0
+        status = pco.run_plan_watch()
+
+        assert status['changed'] is True
+        assert status['error']
+
+    def test_it_never_syncs(self, watching, monkeypatch):
+        monkeypatch.setattr(pco, 'check_active_plan', lambda: {
+            'ok': True, 'known': True, 'changed': True, 'plan_id': '77'})
+
+        def explode(*_a, **_k):
+            raise AssertionError('the watcher must not sync')
+
+        monkeypatch.setattr(pco, 'sync_from_pco', explode)
+        monkeypatch.setattr(pco, '_apply_assignments', explode)
+
+        pco.run_plan_watch()
+
+    def test_the_status_handed_out_is_a_copy(self, watching, monkeypatch):
+        monkeypatch.setattr(pco, 'check_active_plan', lambda: {
+            'ok': True, 'known': True, 'changed': True, 'plan_id': '77'})
+        pco.run_plan_watch()
+
+        pco.plan_watch_status()['changed'] = False
+
+        assert pco.plan_watch_status()['changed'] is True
+
+
+class TestWatchInterval:
+    def test_two_minutes_by_default(self):
+        # ⚠️ Every poll costs an account's rate limit all day, not only during
+        # a service, and a plan edited in the sixty seconds an operator would
+        # notice is not the normal case.
+        assert pco.watch_interval_seconds({}) == 120
+
+    def test_a_configured_interval_is_used(self):
+        assert pco.watch_interval_seconds({'watch_interval_seconds': 300}) == 300
+
+    def test_an_absurd_interval_is_floored_rather_than_refused(self):
+        # A config asking for 5 seconds is a mistake, not a reason to stop
+        # watching altogether.
+        assert pco.watch_interval_seconds({'watch_interval_seconds': 5}) == 30
+        assert pco.watch_interval_seconds({'watch_interval_seconds': 99999}) == 3600
+
+    def test_nonsense_falls_back_to_the_default(self):
+        assert pco.watch_interval_seconds({'watch_interval_seconds': 'often'}) == 120
+        assert pco.watch_interval_seconds(None) == 120
+
+    def test_the_watcher_waits_out_the_interval(self, monkeypatch):
+        pco.forget_plan_watch()
+        monkeypatch.setattr(pco, 'get_pco_config', lambda: {
+            'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
+            'watch_active_plan': True, 'watch_interval_seconds': 600})
+        calls = []
+        monkeypatch.setattr(pco, 'check_active_plan', lambda: calls.append(1) or {
+            'ok': True, 'known': True, 'changed': False, 'plan_id': '77'})
+
+        pco.run_plan_watch()
+        pco.run_plan_watch()
+        pco.run_plan_watch()
+
+        assert len(calls) == 1
+        pco.forget_plan_watch()

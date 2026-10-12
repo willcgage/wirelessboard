@@ -2273,3 +2273,68 @@ a:link, a:visited, a:hover, a:active {
   font-size: 0.8rem;
   opacity: 0.75;
 }
+
+/* The plan-changed bar (#140).
+
+   ⛔ Fixed to the bottom, not the top. The top of this board carries the
+   channel cards and, in TV mode, nothing else -- a bar there would push the
+   wall of photos down and reflow every card, which is the one thing the
+   layout work in #81 and #112 was for. The bottom is empty.
+
+   ⚠️ Deliberately not red. It is "what you are looking at may be stale", not
+   "a receiver has dropped" -- and this board already uses red for the status
+   that matters most. */
+.plan-change-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1030;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  background: #3a2d00;
+  color: #ffd866;
+  border-top: 1px solid #705800;
+  font-size: 0.95rem;
+}
+
+.plan-change-message {
+  flex: 1 1 18rem;
+}
+
+/* Recessive: it answers "as of when", which matters but is not the point. */
+.plan-change-age {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.plan-change-action {
+  color: #fff;
+  text-decoration: underline;
+  white-space: nowrap;
+
+  &:hover,
+  &:focus {
+    color: #fff;
+  }
+}
+
+/* ⚠️ The corner gear is also pinned bottom-right and sits on top of the bar.
+   It is the only way back to the top bar on a touch display (#110), so it
+   moves rather than the bar.
+
+   ⛔ Lifted by the bar's measured height, not a guess: the message wraps to
+   two or three lines at phone width and at the narrow column counts this
+   board is actually used at, and a fixed offset leaves the gear sitting on
+   the text exactly when there is most of it. */
+body.plan-change-shown .topbar-restore {
+  bottom: calc(12px + var(--plan-change-height, 3.5rem) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Keeps the last line clear of the gear's own column at narrow widths. */
+.plan-change-bar {
+  padding-right: calc(1rem + 56px);
+}

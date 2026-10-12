@@ -1479,6 +1479,85 @@ def _watching_active_plan(pco_cfg: Dict[str, Any]) -> bool:
     return (pco_cfg or {}).get('watch_active_plan', False) is True
 
 
+# What the most recent watch found, for the board payload to carry. Separate
+# from `_LAST_SYNC`, which is what was applied; this is what has happened since.
+_PLAN_WATCH: Dict[str, Any] = {}
+
+
+def watch_interval_seconds(pco_cfg: Optional[Dict[str, Any]] = None) -> int:
+    """How often to ask Planning Center whether the active plan changed.
+
+    ⚠️ Deliberately slow. A plan edited an hour before a service is normal; a
+    plan edited in the sixty seconds an operator would notice is not, and every
+    poll is a request against an account's rate limit for the whole day, not
+    just during a service. Two minutes is frequent enough that a change found
+    at the end of rehearsal is still actionable.
+    """
+    raw = (pco_cfg or {}).get('watch_interval_seconds')
+    try:
+        seconds = int(raw)
+    except (TypeError, ValueError):
+        return 120
+    # Floored rather than rejected: a config asking for 5 seconds is a mistake,
+    # not a reason to refuse to watch at all.
+    return max(30, min(seconds, 3600))
+
+
+def plan_watch_status() -> Dict[str, Any]:
+    """What the watcher last found. Empty when it has never run."""
+    return dict(_PLAN_WATCH)
+
+
+def forget_plan_watch() -> None:
+    _PLAN_WATCH.clear()
+
+
+def run_plan_watch() -> Dict[str, Any]:
+    """One pass of the watcher. Returns what it found, and remembers it.
+
+    ⛔ Every HTTP call and no writes, so it belongs on a worker -- see
+    `start_plan_watch`. It reports; it never syncs.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError:
+        # Not an error worth repeating in the log every two minutes. A board
+        # with PCO off simply has nothing to watch.
+        _PLAN_WATCH.clear()
+        return {}
+
+    if not _watching_active_plan(pco_cfg):
+        _PLAN_WATCH.clear()
+        return {}
+
+    # ⚠️ The caller wakes often and this decides whether to act, so changing
+    # the interval takes effect without restarting the server.
+    last = _PLAN_WATCH.get('checked_at')
+    if last and (time.time() - last) < watch_interval_seconds(pco_cfg):
+        return plan_watch_status()
+
+    result = check_active_plan()
+    if result.get('ok') and result.get('known'):
+        _PLAN_WATCH.clear()
+        _PLAN_WATCH.update({
+            'changed': bool(result.get('changed')),
+            'plan_id': result.get('plan_id'),
+            'checked_at': time.time(),
+        })
+        if result.get('changed'):
+            logger.info(
+                'PCO: plan %s has changed in Planning Center since it was synced',
+                result.get('plan_id'),
+            )
+    elif not result.get('ok'):
+        # ⚠️ Keeps any previous "changed" rather than replacing it with a
+        # failure. A flaky network must not quietly retract a warning the
+        # operator has already been shown.
+        _PLAN_WATCH['error'] = result.get('error') or 'Unable to check the plan'
+        _PLAN_WATCH['checked_at'] = time.time()
+    return plan_watch_status()
+
+
 def check_active_plan() -> Dict[str, Any]:
     """Has the plan on the board changed in Planning Center since it was synced?
 
