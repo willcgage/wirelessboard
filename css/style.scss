@@ -2501,3 +2501,15 @@ body.live-strip-bottom .rotation-bar {
   padding: 0 0.4rem;
   line-height: 1.4;
 }
+
+/* An estimated runtime (#109).
+
+   ⛔ Marked, always. The board works the figure out from the battery level
+   falling where the receiver will not say it, and a calculated number shown
+   exactly like a measured one is worse than no number -- somebody plans a
+   service around it. A `~` carries at a glance and the dotted underline says
+   "there is something to know here" without shouting. */
+.runtime-text.is-estimated {
+  border-bottom: 1px dotted currentColor;
+  opacity: 0.85;
+}

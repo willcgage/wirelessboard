@@ -4,6 +4,7 @@ from math import ceil
 from datetime import timedelta
 
 from device_config import BASE_CONST
+import runtime_estimate
 from channel import ChannelDevice, data_update_list, chart_update_list
 
 
@@ -38,6 +39,11 @@ class WirelessMic(ChannelDevice):
         self.peakstamp = time.time() - 60
         self.quality = 255
         self.runtime = ''
+        # ⛔ Driven by whether a runtime actually arrives, not by a table of
+        # which receiver should have one (#109). Shure sends 65533/4/5 for
+        # warning/calculating/unknown, so even a receiver that has the field
+        # spends part of its life not answering it.
+        self.runtime_estimator = runtime_estimate.RuntimeEstimator()
         self.power_lock = ''
 
     def set_antenna(self, antenna):
@@ -100,6 +106,7 @@ class WirelessMic(ChannelDevice):
             level = 255
         level = int(level)
         self.battery = level
+        self.runtime_estimator.record(level)
 
         if 1 <= level <= 5:
             self.prev_battery = level
@@ -168,7 +175,12 @@ class WirelessMic(ChannelDevice):
             'status': self.tx_state(), 'slot': self.slot, 'raw': self.raw,
             'type': self.rx.type, 'name_raw' : self.chan_name_raw,
             'device_id': self.device_id(),
-            'power_lock': self.power_lock, 'runtime' : self.runtime
+            'power_lock': self.power_lock,
+            # ⚠️ `runtime_source` says where the number came from. An estimate
+            # presented as a measurement is worse than no estimate, so the card
+            # shows the two differently.
+            **runtime_estimate.describe(
+                self.runtime, self.runtime_estimator.minutes_remaining()),
         }
 
     def ch_json_mini(self):

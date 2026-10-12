@@ -362,10 +362,16 @@ def test_channel_json_keys():
         'id', 'name', 'channel', 'antenna', 'audio_level', 'rf_level',
         'frequency', 'battery', 'tx_offset', 'quality', 'status', 'slot',
         'raw', 'type', 'name_raw', 'device_id', 'power_lock', 'runtime',
+        'runtime_source',
         # `device_id` joined the contract with #130: the equipment's own
         # identifier, with any person's name stripped off. `name_raw` keeps the
         # receiver's label whole, because the backgrounds and the re-patch
         # check both read it -- this is an addition, not a replacement.
+        #
+        # ⚠️ `runtime_source` joined with #109 and says where the number came
+        # from: 'reported', 'estimated' or 'none'. It is not decoration -- an
+        # estimate shown as a measurement is worse than no estimate, so a
+        # vendor adapter that fills `runtime` must fill this too.
     }
 
 
