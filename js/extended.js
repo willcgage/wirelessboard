@@ -120,6 +120,19 @@ function initSlotEdit() {
     });
   });
 
+  // ⛔ The only way to reach the bulk-paste box used to be Shift+N (#160).
+  const showPaste = document.getElementById('show-paste-box');
+  if (showPaste) {
+    showPaste.addEventListener('click', () => {
+      const box = document.getElementById('paste-box');
+      if (box) {
+        box.style.display = 'block';
+        const field = document.getElementById('bulkbox');
+        if (field && typeof field.focus === 'function') field.focus();
+      }
+    });
+  }
+
   document.getElementById('slot-edit-clear-name').addEventListener('click', () => {
     const elements = document.getElementsByClassName('ext-name');
     Array.from(elements).forEach((e) => {

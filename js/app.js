@@ -1,4 +1,4 @@
-import { Collapse } from 'bootstrap';
+import { Collapse, Modal } from 'bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import QRCode from 'qrcode';
 import 'whatwg-fetch';
@@ -11,7 +11,9 @@ import { keybindings } from './kbd.js';
 import {
   setBackground, setInfoDrawer, applyBoardLayout,
   setViewOption, viewOptionValue, setDisplayMode,
+  isFullscreen, setFullscreen,
 } from './display.js';
+import { drawerBits, drawerModeWith } from './panel-controls.mjs';
 import { initViewPanel, toggleViewPanel } from './view-panel.js';
 import { setTimeMode } from './chart-smoothie.js';
 import {
@@ -215,6 +217,55 @@ export function hideHud() {
  * hidden when locked, but hiding is presentation -- a stale menu, a keyboard,
  * or a `#settings=true` link would all still reach them.
  */
+/**
+ * The live board controls behind the panel (#160).
+ *
+ * ⛔ Not preferences. Nothing here is written to storage: backgrounds and the
+ * info drawer live in the hash, and fullscreen lives in the browser. They are
+ * read back off the board every time the panel renders, which is why a window
+ * that leaves fullscreen by itself does not leave a switch claiming otherwise.
+ */
+function boardOptionValue(id) {
+  switch (id) {
+    case 'background':
+      return micboard.backgroundMode;
+    case 'drawer':
+      return drawerBits(micboard.infoDrawerMode).drawer;
+    case 'statusStripe':
+      return drawerBits(micboard.infoDrawerMode).stripe;
+    case 'fullscreen':
+      return isFullscreen() ? 'on' : 'off';
+    default:
+      return undefined;
+  }
+}
+
+function setBoardOption(id, value) {
+  switch (id) {
+    case 'background':
+      setBackground(value);
+      return value;
+    case 'drawer':
+    case 'statusStripe':
+      // ⚠️ One bit at a time, through the pure helper. Writing the four-state
+      // code by hand here is how the two halves would come to disagree.
+      setInfoDrawer(
+        drawerModeWith(
+          micboard.infoDrawerMode,
+          id === 'drawer' ? 'drawer' : 'stripe',
+          value,
+        ),
+        { switchToTv: false },
+      );
+      return value;
+    case 'fullscreen':
+      setFullscreen(value === 'on');
+      return value;
+    default:
+      return null;
+  }
+}
+
 function refuseWhenLocked(action) {
   if (allows(micboard.viewerLock, action)) {
     return false;
@@ -372,15 +423,61 @@ function mapGroups() {
   initViewPanel({
     setViewOption,
     viewOptionValue,
+    setBoardOption,
+    boardOptionValue,
     setDisplayMode,
     getDisplayMode: () => micboard.displayMode,
+    getGroups: () => micboard.groups || {},
+    getGroup: () => micboard.group || 0,
+    setGroup: (n) => renderGroup(n),
   });
+  // ⛔ Something other than the panel can leave fullscreen -- Escape, the
+  // window manager, the Electron menu -- and the switch reads the browser
+  // rather than a stored flag, so it only needs telling to look again.
+  if (typeof document !== 'undefined' && !document.body.dataset.fullscreenBound) {
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach((name) => {
+      document.addEventListener(name, () => {
+        try {
+          window.dispatchEvent(new Event('wirelessboard:view-changed'));
+        } catch (_) {
+          // A board that cannot announce the change still leaves it correct
+          // the next time the panel opens.
+        }
+      });
+    });
+    document.body.dataset.fullscreenBound = 'true';
+  }
+
   const viewPanelButton = document.getElementById('topbar-restore');
   if (viewPanelButton && !viewPanelButton.dataset.bound) {
     viewPanelButton.addEventListener('click', () => {
       toggleViewPanel();
     });
     viewPanelButton.dataset.bound = 'true';
+  }
+
+  // ⛔ The three that had no pointer route at all before #160.
+  const goQr = document.getElementById('go-qr');
+  if (goQr && !goQr.dataset.bound) {
+    goQr.addEventListener('click', (event) => {
+      event.preventDefault();
+      generateQR();
+      Modal.getOrCreateInstance('#qr-modal').toggle();
+      hideHud();
+    });
+    goQr.dataset.bound = 'true';
+  }
+
+  const goDemo = document.getElementById('go-demo');
+  if (goDemo && !goDemo.dataset.bound) {
+    goDemo.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (refuseWhenLocked('demo')) return;
+      micboard.url.demo = micboard.url.demo === 'true' ? undefined : 'true';
+      updateHash();
+      window.location.reload();
+    });
+    goDemo.dataset.bound = 'true';
   }
 
   const goGroupEdit = document.getElementById('go-groupedit');

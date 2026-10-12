@@ -141,27 +141,21 @@ test('⛔ a locked panel opens on the way out of being locked', () => {
   assert.match(panel, /scrollIntoView/, 'and scroll that row into view');
 });
 
-test('⛔⛔ no binding reaches an editor without passing the guard', () => {
-  // This is the drift guard. `allows()` refuses a named list, so an editor
-  // wired up later is reachable on a locked board unless the author remembers.
-  // Parsed from source rather than imported: kbd.js boots bootstrap and the
-  // app modules, which a unit test has no business doing.
+test('⛔⛔ the keyboard cannot reach an editor at all', () => {
+  // This guard used to walk the binding table checking each one asked the
+  // lock first. #160 took the bindings away, so the stronger statement is
+  // available: `kbd.js` does not reach the editors, full stop.
+  //
+  // ⚠️ If a binding table ever comes back, this fails the moment one of them
+  // opens an editor -- which is the case that mattered.
   const kbd = read('js/kbd.js');
-  const bindings = kbd.split(/\n {4}\{\n/).slice(1);
-  assert.ok(bindings.length > 10, 'expected to have found the binding table');
-
-  bindings.forEach((binding) => {
-    const reaches = GUARDED_CALLS.filter((fn) => binding.includes(`${fn}(`));
-    if (!reaches.length && !/url\.demo/.test(binding)) {
-      return;
-    }
-    const keys = (binding.match(/keys: \[([^\]]*)\]/) || ['', '?'])[1];
+  GUARDED_CALLS.forEach((fn) => {
     assert.ok(
-      /locked\(\)|allows\(/.test(binding),
-      `the binding on ${keys} reaches ${reaches.join(', ') || 'demo mode'} `
-      + 'without checking the lock -- a locked wall tablet can still open it',
+      !kbd.includes(`${fn}(`),
+      `kbd.js reaches ${fn} -- a locked wall tablet can be opened with a keyboard`,
     );
   });
+  assert.ok(!/url\.demo/.test(kbd), 'and nor does it reach demo mode');
 });
 
 test('and nor does a menu item', () => {

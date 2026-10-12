@@ -47,7 +47,8 @@
             </button>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-menu-button">
               <li><h6 class="dropdown-header">Views</h6></li>
-              <li><a class="dropdown-item" href="#" id="go-hud" aria-controls="hud" aria-expanded="false">Help &amp; Shortcuts</a></li>
+              <li><a class="dropdown-item" href="#" id="go-hud" aria-controls="hud" aria-expanded="false">Help</a></li>
+              <li><a class="dropdown-item" href="#" id="go-qr">Scannable URL</a></li>
               <!-- data-wb-global marks everything a locked device hides (#116).
                    The attribute is on the <li>, not the link, so the headers and
                    dividers go with the items they introduce -- otherwise a locked
@@ -60,6 +61,7 @@
               <li data-wb-global><a class="dropdown-item" href="#" id="go-config">Config</a></li>
               <li data-wb-global><a class="dropdown-item" href="#" id="go-background" aria-controls="background-settings" aria-expanded="false">Background Library</a></li>
               <li data-wb-global><a class="dropdown-item" href="#" id="go-pco" aria-controls="pco-settings" aria-expanded="false">Planning Center (PCO)</a></li>
+              <li data-wb-global><a class="dropdown-item" href="#" id="go-demo">Demo mode</a></li>
               <!-- Shown in their place, so a short menu does not read as a fault. -->
               <li data-wb-locked-note><hr class="dropdown-divider"></li>
               <li data-wb-locked-note><span class="dropdown-item-text wb-locked-note">Locked to display only &mdash; unlock in view settings.</span></li>
@@ -106,23 +108,18 @@
         </div>
         <div class="hud-pane active" data-hud-pane="help" id="hud-pane-help" role="region" aria-hidden="false" tabindex="0">
           <div class="row g-4">
-            <div class="col-md-6">
+            <!-- ⛔ The Keyboard Shortcuts card that sat beside this one is gone
+                 with the bindings themselves (#160). Everything it listed is a
+                 control now: the gear for this screen, the Menu for the board. -->
+            <div class="col-12">
               <div class="hud-card p-3 border rounded h-100">
                 <h5 class="h6 text-muted text-uppercase">Quick Start</h5>
                 <ul class="hud-list small mb-0">
+                  <li><span class="hud-key">Gear, bottom right</span> Layout, card, backgrounds, which group is showing, and the display-only lock &mdash; all for this screen only.</li>
                   <li><span class="hud-key">Menu -> Config</span> Edit slots, discovery, and logging settings.</li>
                   <li><span class="hud-key">Menu -> Planning Center</span> Authorize PCO and sync assignments.</li>
                   <li><span class="hud-key">Menu -> Help</span> Return to this guide any time.</li>
                 </ul>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="hud-card p-3 border rounded h-100">
-                <h5 class="h6 text-muted text-uppercase">Keyboard Shortcuts</h5>
-                <!-- Filled by renderShortcutHud() from the binding table in
-                     js/kbd.js. Listing them here by hand is what let T and D
-                     go undocumented while they were bound in the code. -->
-                <ul class="hud-shortcuts small mb-0"></ul>
               </div>
             </div>
             <div class="col-12">
@@ -1033,6 +1030,14 @@
         <div class="row">
           <div class="col d-grid gap-2">
             <button type="button" class="btn btn-success" id="slotSave">Save</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <!-- ⛔ Bulk paste was reachable only through Shift+N, which is gone
+               with the rest of the bindings (#160). -->
+          <div class="col d-grid gap-2">
+            <button type="button" class="btn btn-outline-secondary" id="show-paste-box">Paste a list of names</button>
           </div>
         </div>
 

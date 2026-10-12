@@ -296,6 +296,37 @@ export function toggleDisplayMode() {
   updateHash();
 }
 
+/**
+ * Fullscreen, moved out of `kbd.js` (#160).
+ *
+ * ⚠️ Prefixed and unprefixed both: this runs in Electron and in whatever
+ * browser a phone brought along, and the venue board is a Chromium that has
+ * had the prefixed names for years.
+ */
+export function isFullscreen() {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+  return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+export function setFullscreen(wanted) {
+  try {
+    if (wanted && !isFullscreen()) {
+      const el = document.documentElement;
+      const request = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (request) request.call(el);
+    } else if (!wanted && isFullscreen()) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) exit.call(document);
+    }
+  } catch (_) {
+    // A browser that refuses fullscreen (it needs a user gesture, and some
+    // app views never allow it) must not take the panel down with it.
+  }
+  return isFullscreen();
+}
+
 export function toggleImageBackground() {
   if (micboard.displayMode === 'tvmode') {
     switch (micboard.backgroundMode) {
@@ -324,11 +355,22 @@ export function toggleVideoBackground() {
   }
 }
 
-export function setInfoDrawer(mode) {
+/**
+ * Show or hide the card's status stripe and battery/chart drawer.
+ *
+ * ⚠️ `switchToTv` exists because the `I` key always forced TV mode -- the
+ * elinfo rules only apply there, so a key that did nothing in desk mode would
+ * have looked broken. From the panel that is the wrong behaviour: flipping a
+ * switch should not move the board to another display mode behind you, and the
+ * panel already says in so many words that these apply to TV mode (#160).
+ */
+export function setInfoDrawer(mode, { switchToTv = true } = {}) {
   const selector = document.getElementById('micboard');
   swapClass(selector, micboard.infoDrawerMode, mode);
   micboard.infoDrawerMode = mode;
-  setDisplayMode('tvmode');
+  if (switchToTv) {
+    setDisplayMode('tvmode');
+  }
   updateHash();
 }
 
