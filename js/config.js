@@ -2968,6 +2968,7 @@ export function initConfigEditor(force = false) {
   renderPcoCredentialStatus(pco.auth || {});
   applyPcoMappingToForm(pco.mapping);
   applyPcoProfilesToForm(pco);
+  applyPcoWatchToForm(pco);
 
   const addDisc = document.getElementById('add-discovered');
   if (addDisc) {
@@ -3115,6 +3116,7 @@ function populatePCOFormFromServer() {
         if (elStid) elStid.value = s.service_type_id || '';
         applyPcoMappingToForm(p.mapping);
         applyPcoProfilesToForm(p);
+        applyPcoWatchToForm(p);
         ensureNotePreviewUI();
         renderPcoCredentialStatus(p.auth || {});
         appendPcoLog('Loaded saved PCO configuration.');
@@ -3156,6 +3158,23 @@ const DEFAULT_PCO_STRATEGY = 'position_or_note';
  * ⚠️ Deep-copied: they are edited in place, and editing the live config object
  * would apply changes the operator has not saved -- and could not cancel.
  */
+/** Load the watch settings (#140). */
+function applyPcoWatchToForm(pcoCfg) {
+  const cfg = pcoCfg || {};
+  const watchEl = document.getElementById('pco-watch-active');
+  if (watchEl) watchEl.checked = cfg.watch_active_plan === true;
+  const interval = document.getElementById('pco-watch-interval');
+  if (interval) {
+    const seconds = Number(cfg.watch_interval_seconds);
+    interval.value = Number.isFinite(seconds) && seconds > 0 ? seconds : 120;
+  }
+  const grace = document.getElementById('pco-watch-grace');
+  if (grace) {
+    const minutes = Number(cfg.watch_grace_minutes);
+    grace.value = Number.isFinite(minutes) && minutes >= 0 ? minutes : 60;
+  }
+}
+
 function applyPcoProfilesToForm(pcoCfg) {
   const list = (pcoCfg && pcoCfg.profiles) || [];
   pcoProfiles = Array.isArray(list)
@@ -3330,6 +3349,16 @@ function buildPcoPayload() {
   // ⚠️ Always sent, including as an empty list -- `update_pco_config` merges,
   // so omitting the key would make removing the last rule set impossible.
   payload.profiles = profilesToPayload(pcoProfiles);
+
+  // Watching the active plan (#140). ⚠️ The numbers are sent as given and
+  // clamped on the server, so a value typed here cannot put the watcher into
+  // a state the server would not accept on its own.
+  const watchEl = document.getElementById('pco-watch-active');
+  payload.watch_active_plan = watchEl ? !!watchEl.checked : false;
+  const interval = Number.parseInt(document.getElementById('pco-watch-interval')?.value, 10);
+  if (Number.isFinite(interval)) payload.watch_interval_seconds = interval;
+  const grace = Number.parseInt(document.getElementById('pco-watch-grace')?.value, 10);
+  if (Number.isFinite(grace)) payload.watch_grace_minutes = grace;
   if (token || secret) {
     payload.auth = { token, secret };
   }

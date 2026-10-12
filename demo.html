@@ -410,7 +410,44 @@
                 </div>
               </div>
             </div>
-            <h5 class="pco-step-heading mt-4">6 &middot; Rule sets for different kinds of plan</h5>
+            <h5 class="pco-step-heading mt-4">6 &middot; Watch the plan on the board</h5>
+            <div class="form-check mt-2">
+              <input type="checkbox" class="form-check-input" id="pco-watch-active">
+              <label class="form-check-label" for="pco-watch-active">
+                Tell me when this plan changes in Planning Center
+              </label>
+              <div class="form-text">
+                A plan edited an hour before a service is normal, and the board otherwise goes on
+                showing the names it synced. With this on, a bar appears across the bottom of every
+                board when the plan changes. It does <strong>not</strong> re-sync on its own.
+              </div>
+            </div>
+            <div class="form-row mt-2">
+              <div class="form-group col-md-4 col-6">
+                <label for="pco-watch-interval" class="form-label">Check every</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="pco-watch-interval" min="30" max="3600" step="30">
+                  <span class="input-group-text">seconds</span>
+                </div>
+                <div class="form-text">
+                  Every check spends a little of your Planning Center allowance, all day rather
+                  than only during a service.
+                </div>
+              </div>
+              <div class="form-group col-md-4 col-6">
+                <label for="pco-watch-grace" class="form-label">Stop watching</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="pco-watch-grace" min="0" max="1440" step="15">
+                  <span class="input-group-text">min after the end</span>
+                </div>
+                <div class="form-text">
+                  Services run over, so watching carries on for a while past the scheduled end.
+                  Watching also stops as soon as Planning Center Live ends the service.
+                </div>
+              </div>
+            </div>
+
+            <h5 class="pco-step-heading mt-4">7 &middot; Rule sets for different kinds of plan</h5>
             <div class="form-text mb-2">
               Sunday morning, Wednesday youth and a special service rarely want the same rules. A
               rule set changes only what differs from the settings above &mdash; everything it does
