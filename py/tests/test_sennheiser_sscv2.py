@@ -5,6 +5,7 @@ def test_normalize_battery_preserves_percent_and_minutes():
     assert normalize_battery({'type': 'Battery', 'gauge': 73, 'lifetime': 245}) == {
         'battery_percent': 73,
         'battery_minutes': 245,
+        'runtime_source': 'reported',
         'battery_type': 'Battery',
     }
 
@@ -25,11 +26,13 @@ def test_normalize_channel_joins_battery_resource():
         'name_raw': 'HOST 1',
         'rf_level': 81,
         'audio_level': -12.5,
-        'quality': 99,
+        'quality': 5,
+        'quality_percent': 99.0,
         'antenna': 'A',
         'frequency': 606.2,
         'battery_percent': 44,
         'battery_minutes': 90,
+        'runtime_source': 'reported',
         'battery_type': 'PrimaryCell',
     }
 
@@ -40,6 +43,14 @@ def test_missing_optional_resources_are_safe():
         'rf_level': None,
         'audio_level': None,
         'quality': None,
+        'quality_percent': None,
         'antenna': None,
         'frequency': None,
     }
+
+
+def test_quality_is_clamped_to_the_board_five_dot_scale():
+    assert normalize_channel({'signalQualityIndicator': {'value': -1}})['quality'] == 0
+    assert normalize_channel({'signalQualityIndicator': {'value': 40}})['quality'] == 2
+    assert normalize_channel({'signalQualityIndicator': {'value': 100}})['quality'] == 5
+    assert normalize_channel({'signalQualityIndicator': {'value': 101}})['quality'] == 5
