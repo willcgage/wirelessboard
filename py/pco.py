@@ -1,4 +1,5 @@
 import base64
+import datetime
 import logging
 import re
 import time
@@ -1448,9 +1449,16 @@ def plan_updated_at(plan_id: str, headers: Dict[str, str]) -> Optional[str]:
 
 
 def record_sync(plan_id: Optional[str], updated_at: Optional[str], profile_id: Optional[str]) -> None:
-    """Remember what was synced, for change detection to compare against."""
+    """Remember what was synced, for change detection to compare against.
+
+    ⚠️ Clears the watch as well. Syncing is what makes a plan the active one,
+    so a board that stopped watching last Sunday's finished service starts
+    again for this one -- without it, watching would end permanently at the
+    first service after a restart.
+    """
     if not plan_id:
         return
+    _PLAN_WATCH.clear()
     _LAST_SYNC.clear()
     _LAST_SYNC.update({
         'plan_id': str(plan_id),
@@ -1482,6 +1490,116 @@ def _watching_active_plan(pco_cfg: Dict[str, Any]) -> bool:
 # What the most recent watch found, for the board payload to carry. Separate
 # from `_LAST_SYNC`, which is what was applied; this is what has happened since.
 _PLAN_WATCH: Dict[str, Any] = {}
+
+
+# When a plan's service is over, keyed by plan id. Cached for the life of the
+# plan being watched: times are set when the plan is built and almost never
+# move, while the watcher would otherwise ask every two minutes all afternoon.
+_PLAN_END: Dict[str, Tuple[float, Optional[str], bool]] = {}
+_PLAN_END_TTL_SECONDS = 900
+
+
+def _parse_iso(value: Optional[str]) -> Optional[datetime.datetime]:
+    """Planning Center timestamps, which end in Z rather than +00:00."""
+    if not value:
+        return None
+    text = str(value).strip()
+    if text.endswith('Z'):
+        text = text[:-1] + '+00:00'
+    try:
+        parsed = datetime.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed
+
+
+def plan_end(plan_id: str, headers: Dict[str, str]) -> Tuple[Optional[str], bool]:
+    """When a plan's service is scheduled to end, and whether it already has.
+
+    Returns ``(ends_at, finished)``. ``finished`` is true when Planning Center
+    Live has actually ended a service time -- ``live_ends_at`` is only set when
+    somebody ran Live, which is the minority of services here, so the scheduled
+    end is the path that has to work.
+
+    ⚠️ Takes the **latest** end across the plan's times. A plan with a 9am and
+    an 11am service is one plan, and the board is watching it until the last
+    one is over.
+    """
+    key = str(plan_id or '')
+    if not key:
+        return (None, False)
+
+    cached = _PLAN_END.get(key)
+    if cached and time.monotonic() < cached[0]:
+        return (cached[1], cached[2])
+
+    data = _http_get(f"{BASE_URL}/plans/{key}/plan_times", headers, params={"per_page": 50})
+    latest: Optional[datetime.datetime] = None
+    finished = False
+    for item in ((data or {}).get('data') or []):
+        attrs = item.get('attributes') or {}
+        if attrs.get('live_ends_at'):
+            finished = True
+        ends = _parse_iso(attrs.get('ends_at'))
+        if ends and (latest is None or ends > latest):
+            latest = ends
+
+    result = (latest.isoformat() if latest else None, finished)
+    if data is not None:
+        # ⛔ A failed lookup is not cached. Caching "we do not know when this
+        # ends" for fifteen minutes would stop the watcher reconsidering after
+        # a blip, and the consequence of getting this wrong is a board that
+        # silently stops watching during a service.
+        _PLAN_END[key] = (time.monotonic() + _PLAN_END_TTL_SECONDS, result[0], result[1])
+    return result
+
+
+def forget_plan_ends() -> None:
+    _PLAN_END.clear()
+
+
+def watch_grace_minutes(pco_cfg: Optional[Dict[str, Any]] = None) -> int:
+    """How long after a service's scheduled end to keep watching.
+
+    Services run over. Watching for a while past the scheduled end is the point
+    of this being a setting rather than a constant -- and the cost of being
+    generous is a handful of extra requests, while the cost of being mean is a
+    board that stops noticing changes during the service it was bought for.
+    """
+    raw = (pco_cfg or {}).get('watch_grace_minutes')
+    try:
+        minutes = int(raw)
+    except (TypeError, ValueError):
+        return 60
+    return max(0, min(minutes, 24 * 60))
+
+
+def watch_has_finished(pco_cfg: Dict[str, Any], plan_id: str, headers: Dict[str, str]) -> Optional[str]:
+    """Why watching should stop for this plan, or None to keep going.
+
+    ⛔ Returns None whenever it cannot tell. A plan with no times, or a lookup
+    that failed, keeps the watcher running: over-polling costs a few requests,
+    while stopping early means the board quietly stops noticing changes in the
+    middle of the service it exists for.
+    """
+    ends_at, finished = plan_end(plan_id, headers)
+    if finished:
+        return 'the service has ended in Planning Center Live'
+
+    ends = _parse_iso(ends_at)
+    if not ends:
+        return None
+
+    grace = watch_grace_minutes(pco_cfg)
+    deadline = ends + datetime.timedelta(minutes=grace)
+    if datetime.datetime.now(datetime.timezone.utc) < deadline:
+        return None
+
+    if grace:
+        return f'the service ended more than {grace} minutes ago'
+    return 'the service has ended'
 
 
 def watch_interval_seconds(pco_cfg: Optional[Dict[str, Any]] = None) -> int:
@@ -1535,6 +1653,27 @@ def run_plan_watch() -> Dict[str, Any]:
     last = _PLAN_WATCH.get('checked_at')
     if last and (time.time() - last) < watch_interval_seconds(pco_cfg):
         return plan_watch_status()
+
+    # ⭐ Stop once the service is over. A board left running all week would
+    # otherwise poll Planning Center every two minutes about a plan nobody is
+    # looking at any more, which is the account's rate limit spent on nothing.
+    #
+    # ⚠️ Any standing warning is kept. If the plan changed during the service,
+    # that is still true afterwards, and retracting it the moment the service
+    # ends would remove the notice at exactly the moment somebody might come
+    # back to find out why the board looked wrong.
+    remembered = last_sync()
+    plan_id = remembered.get('plan_id')
+    if plan_id:
+        auth = pco_cfg['auth']
+        headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
+        over = watch_has_finished(pco_cfg, plan_id, headers)
+        if over:
+            if not _PLAN_WATCH.get('finished'):
+                logger.info('PCO: no longer watching plan %s -- %s', plan_id, over)
+            _PLAN_WATCH['finished'] = over
+            _PLAN_WATCH['checked_at'] = time.time()
+            return plan_watch_status()
 
     result = check_active_plan()
     if result.get('ok') and result.get('known'):
