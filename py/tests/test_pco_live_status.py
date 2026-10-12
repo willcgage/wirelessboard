@@ -276,9 +276,10 @@ class TestTheTimerReachesTheStrip:
         assert pco.live_status()['timer']['mode'] == 'full_item_length'
 
     def test_a_mode_that_cannot_be_computed_says_so(self, monkeypatch):
-        # ⛔ End item on time needs the running order, which this board does
-        # not fetch yet. It must report "cannot tell" rather than quietly
-        # showing the item length instead.
+        # ⛔ End item on time needs the running order and the service start.
+        # When either is unavailable -- here the plan has no scheduled times --
+        # it must report "cannot tell" rather than quietly showing the item
+        # length, which is a different mode wearing this one's label.
         monkeypatch.setattr(pco, 'get_pco_config', lambda: {
             'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
             'live_strip': True, 'live_timer_mode': 'end_item_on_time'})

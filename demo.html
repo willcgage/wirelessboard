@@ -443,6 +443,43 @@
                 </div>
               </div>
             </div>
+            <h5 class="pco-step-heading mt-4">Service position on the board</h5>
+            <div class="form-check mt-2">
+              <input type="checkbox" class="form-check-input" id="pco-live-strip">
+              <label class="form-check-label" for="pco-live-strip">
+                Follow Planning Center Live
+              </label>
+              <div class="form-text">
+                Shows where the service has got to &mdash; the current item, its timer, and what is
+                next. &#9888;&#65039; A <em>server</em> setting, not a per-screen one: it spends one
+                Planning Center account&rsquo;s allowance on behalf of every board, so it is off
+                until somebody turns it on. Each screen then chooses <em>where</em> to put it, or
+                to hide it, in its own view settings.
+                <br>Live is often not running, and the strip says so plainly rather than showing a
+                stale position as though it were current.
+              </div>
+            </div>
+            <div class="form-row mt-2">
+              <div class="form-group col-md-6 col-12">
+                <label for="pco-live-timer-mode" class="form-label">Timer</label>
+                <select class="form-select form-select-sm" id="pco-live-timer-mode">
+                  <option value="full_item_length">Full item length</option>
+                  <option value="end_item_on_time">End item on time</option>
+                  <option value="end_service_on_time">End service on time</option>
+                </select>
+                <div class="form-text">
+                  Planning Center&rsquo;s own three modes, with its own names and behaviour.
+                  <strong>Full item length</strong> counts the item&rsquo;s scheduled length.
+                  <strong>End item on time</strong> counts to when this item was meant to finish,
+                  so a late service shows as late. <strong>End service on time</strong> counts to
+                  the end of the service. Past zero the timer turns over and counts up, exactly as
+                  Live does.
+                  <br>&#9888;&#65039; The middle one reads the plan&rsquo;s running order, which is
+                  one extra request per plan; the other two cost nothing beyond the position itself.
+                </div>
+              </div>
+            </div>
+
             <h5 class="pco-step-heading mt-4">Watch the plan on the board</h5>
             <div class="form-check mt-2">
               <input type="checkbox" class="form-check-input" id="pco-watch-active">
