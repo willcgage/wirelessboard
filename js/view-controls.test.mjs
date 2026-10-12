@@ -1,11 +1,11 @@
 /**
- * The panel and the keyboard describe the same controls, or they drift.
+ * The controls the panel generates itself from.
  *
- * ⛔ The drift guard is the point of this file. `kbd.js` has one table because
- * a second, hand-written list of the shortcuts had already fallen behind by the
- * time anyone noticed (T and D were bound and undocumented). A panel with its
- * own hand-written list would be that same mistake a third time, so the two are
- * checked against each other here.
+ * ⛔ This file used to guard the panel against `kbd.js` in both directions,
+ * because a hand-written list of shortcuts had already fallen behind once (T
+ * and D were bound and undocumented). #160 retired the bindings, so the guard
+ * flipped: what has to hold now is that **nothing is bound to a key** except
+ * Escape — every one of these is reachable only from the panel.
  */
 
 import test from 'node:test';
@@ -53,24 +53,28 @@ test('every control names a vocabulary the board actually has', () => {
   });
 });
 
-test('⛔ every control is also a key, and every state key is also a control', () => {
-  // Parsed from the source rather than imported: kbd.js pulls in bootstrap and
-  // the app modules, which a unit test has no business booting.
-  VIEW_CONTROLS.forEach((control) => {
-    assert.ok(
-      kbd.includes(`keys: ['${control.key}']`),
-      `${control.id} claims ${control.key}, which kbd.js does not bind`,
-    );
-  });
+test('⛔⛔ nothing is bound to a key except Escape (#160)', () => {
+  // Parsed from the source rather than imported: kbd.js pulls in the app
+  // modules, which a unit test has no business booting.
+  //
+  // ⚠️ This is the guard that holds the direction. Adding one convenient
+  // shortcut is how a board ends up with twenty again, and every one of them
+  // is something a wall tablet cannot do.
+  const compared = [...kbd.matchAll(/e\.key\s*[!=]==\s*'([^']+)'/g)].map(([, key]) => key);
+  assert.deepEqual(
+    [...new Set(compared)],
+    ['Escape'],
+    'kbd.js compares the pressed key against something other than Escape',
+  );
+  assert.ok(
+    !kbd.includes('keys: ['),
+    'the binding table is back; that is a keyboard-only board again',
+  );
+});
 
-  // The other direction: a cycling binding with no row in the panel is a
-  // control someone can only reach with a keyboard, which is the whole
-  // complaint this work exists to answer.
-  const cycles = [...kbd.matchAll(/keys: \['(\w)'\],\n\s*hud:[^\n]*\n\s*run: \(\) => cycle(\w+)\(\)/g)];
-  assert.ok(cycles.length >= VIEW_CONTROLS.length - 1, 'expected to find the cycling bindings');
-  cycles.forEach(([, key, fn]) => {
-    const control = VIEW_CONTROLS.find((c) => c.key === key);
-    assert.ok(control, `kbd.js cycles ${fn} on ${key} with no control to show it`);
+test('⛔ no control carries a key any more', () => {
+  VIEW_CONTROLS.forEach((control) => {
+    assert.ok(!control.key, `${control.id} still names a key`);
   });
 });
 

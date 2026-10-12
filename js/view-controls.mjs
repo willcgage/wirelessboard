@@ -1,15 +1,19 @@
 /**
  * The view controls, described once (#111, #115).
  *
- * Every one of these is a *state* the board persists: a key cycles it, the
- * panel sets it directly, the hash can carry it, and `view-prefs.mjs` stores it
- * per device. Describing them in one table means the panel cannot drift from
- * the keyboard — the same bargain `kbd.js` struck when the help overlay stopped
- * being hand-written markup.
+ * Every one of these is a *state* the board persists: the panel sets it, the
+ * hash can carry it, and `view-prefs.mjs` stores it per device. Describing
+ * them in one table is what lets the panel be generated rather than written
+ * out by hand, which is the mistake the help overlay made once already.
  *
- * ⛔ Actions are not here. Fullscreen, the QR code, the editors and the config
- * view *do* something once; they stay keys and menu items. The line is whether
- * there is a value to show when nothing is being pressed.
+ * ⛔ Actions are not here, and nor is anything the board does not store.
+ * Backgrounds, fullscreen and the info drawer are live board state and live in
+ * `panel-controls.mjs`; the editors and the config view are in the navbar
+ * Menu. The line here is whether there is a value to *remember*.
+ *
+ * ⚠️ These used to carry a `key` as well, and `view-controls.test.mjs` checked
+ * both directions against `kbd.js`. #160 retired the bindings, so that guard
+ * is now the opposite one: nothing may be bound to a key at all.
  *
  * ⚠️ `options` is the cycle order, which is also the storage vocabulary and so
  * cannot be rearranged for looks. `order` exists for the one case where reading
@@ -33,7 +37,6 @@ import { LOCK_STATES, LOCK_LABELS, lockDescription } from './viewer-lock.mjs';
 export const VIEW_CONTROLS = [
   {
     id: 'rotation',
-    key: 'r',
     label: 'Page through groups',
     group: 'Layout',
     storageKey: ROTATION_KEY,
@@ -43,7 +46,6 @@ export const VIEW_CONTROLS = [
   },
   {
     id: 'livePlacement',
-    key: 'l',
     label: 'Service position',
     group: 'Layout',
     storageKey: LIVE_PLACEMENT_KEY,
@@ -56,7 +58,6 @@ export const VIEW_CONTROLS = [
   },
   {
     id: 'arrangement',
-    key: 'o',
     label: 'Arrangement',
     group: 'Layout',
     storageKey: ARRANGEMENT_KEY,
@@ -74,7 +75,6 @@ export const VIEW_CONTROLS = [
   },
   {
     id: 'columns',
-    key: 'c',
     label: 'Columns on screen',
     group: 'Layout',
     storageKey: COLUMNS_KEY,
@@ -87,7 +87,6 @@ export const VIEW_CONTROLS = [
   },
   {
     id: 'cardShape',
-    key: 'a',
     label: 'Card shape',
     group: 'Layout',
     storageKey: CARD_SHAPE_KEY,
@@ -96,7 +95,6 @@ export const VIEW_CONTROLS = [
   },
   {
     id: 'wash',
-    key: 'w',
     label: 'Status colour',
     group: 'Card',
     storageKey: WASH_KEY,
@@ -105,7 +103,6 @@ export const VIEW_CONTROLS = [
   },
   {
     id: 'typeSize',
-    key: 'z',
     label: 'Text size',
     group: 'Card',
     storageKey: TYPE_SIZE_KEY,
@@ -115,7 +112,6 @@ export const VIEW_CONTROLS = [
   },
   {
     id: 'topBar',
-    key: 'h',
     label: 'Wirelessboard bar',
     group: 'On screen',
     storageKey: TOP_BAR_KEY,
@@ -130,7 +126,6 @@ export const VIEW_CONTROLS = [
     // that it is. It sits beside the bar switch because both are about what
     // the board offers rather than how a card looks.
     id: 'viewerLock',
-    key: 'k',
     label: 'Lock to display only',
     group: 'On screen',
     storageKey: VIEWER_LOCK_KEY,

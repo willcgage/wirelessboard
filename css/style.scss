@@ -2581,3 +2581,21 @@ body.viewer-locked {
   opacity: 0.7;
   line-height: 1.35;
 }
+
+/* The group picker in the view panel (#160).
+
+   A select rather than a segmented control: there can be nine groups and their
+   names are as long as whoever typed them wanted. 44px like everything else in
+   this panel -- it is a touch control. */
+.vp-select {
+  grid-area: control;
+  justify-self: start;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 1px solid rgba(215, 215, 215, 0.25);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--color-white);
+  font-size: 0.8rem;
+}

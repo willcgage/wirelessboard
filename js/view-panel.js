@@ -5,9 +5,10 @@
  * knows them and useless for everyone else — and on a phone or a wall tablet
  * there is no keyboard at all, so none of them could be reached.
  *
- * ⭐ The panel does not replace the keys. Every row shows its own key, so the
- * panel teaches the shortcuts rather than competing with them; someone who
- * opens it twice a week stops needing it.
+ * ⭐ It did not replace the keys at first -- every row showed its own key, so
+ * the panel taught the shortcuts rather than competing with them. ⛔ That is
+ * no longer the design: #160 retired the bindings, and this panel is now the
+ * only way to reach any of these. Nothing here may depend on a keyboard.
  *
  * ⛔ The rows are generated from `view-controls.mjs`, never written out here.
  * A hand-written list of the controls is the mistake `kbd.js` already made once
@@ -15,9 +16,22 @@
  */
 
 import {
-  controlGroups, optionsInOrder, optionLabel, isSwitch, controlDescription,
+  VIEW_CONTROLS, controlGroups, optionsInOrder, optionLabel, isSwitch, controlDescription,
 } from './view-controls.mjs';
+import { BOARD_CONTROLS, groupChoices } from './panel-controls.mjs';
 import { scopeNote } from './viewer-scope.mjs';
+
+/**
+ * Both tables, in one panel (#160).
+ *
+ * ⚠️ Preferences first within each section, then the live controls. The two
+ * tables stay separate because one is stored and one is not -- but a person
+ * reading the panel has no reason to care which, so the sections interleave
+ * them rather than keeping two halves.
+ */
+function allControls() {
+  return VIEW_CONTROLS.concat(BOARD_CONTROLS);
+}
 
 /**
  * ⛔ The board's own functions are injected, not imported.
@@ -32,9 +46,32 @@ import { scopeNote } from './viewer-scope.mjs';
 let board = {
   setViewOption: () => null,
   viewOptionValue: () => undefined,
+  setBoardOption: () => null,
+  boardOptionValue: () => undefined,
   setDisplayMode: () => {},
   getDisplayMode: () => 'deskmode',
+  getGroups: () => ({}),
+  getGroup: () => 0,
+  setGroup: () => {},
 };
+
+/**
+ * ⛔ A preference is read and written through `view-prefs`; a live control is
+ * not stored anywhere and is read straight back off the board. `storageKey` is
+ * what tells them apart, and it is the same thing `view-controls.test.mjs`
+ * already requires of every preference.
+ */
+function valueOf(control) {
+  return control.storageKey
+    ? board.viewOptionValue(control.id)
+    : board.boardOptionValue(control.id);
+}
+
+function applyValue(control, value) {
+  return control.storageKey
+    ? board.setViewOption(control.id, value)
+    : board.setBoardOption(control.id, value);
+}
 
 let lastFocused = null;
 
@@ -63,10 +100,11 @@ function renderSegmented(control) {
     // are the labels that stopped the grid-axis names reading backwards, and a
     // glyph settles it without anyone having to parse either (#115).
     button.textContent = glyph ? `${glyph} ${optionLabel(control, value)}` : optionLabel(control, value);
-    const current = board.viewOptionValue(control.id) === value;
+    const current = valueOf(control) === value;
     button.setAttribute('aria-pressed', String(current));
     button.addEventListener('click', () => {
-      board.setViewOption(control.id, value);
+      applyValue(control, value);
+      renderViewPanel();
     });
     wrap.appendChild(button);
   });
@@ -77,13 +115,14 @@ function renderSwitch(control) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'vp-switch';
-  const on = board.viewOptionValue(control.id) === control.switchOn;
+  const on = valueOf(control) === control.switchOn;
   button.setAttribute('aria-pressed', String(on));
   button.setAttribute('aria-label', control.label);
   button.classList.toggle('is-on', on);
   button.addEventListener('click', () => {
     const next = on ? control.options.find((v) => v !== control.switchOn) : control.switchOn;
-    board.setViewOption(control.id, next);
+    applyValue(control, next);
+    renderViewPanel();
   });
   return button;
 }
@@ -135,13 +174,53 @@ function renderDisplayRow() {
   });
   row.appendChild(seg);
 
-  const key = document.createElement('kbd');
-  key.className = 'vp-key';
-  key.textContent = 'T';
-  row.appendChild(key);
-
   section.appendChild(row);
+  section.appendChild(renderGroupRow());
   return section;
+}
+
+/**
+ * Which group this screen is showing (#160).
+ *
+ * ⛔ This replaces the number keys, which were the *only* way to change group
+ * -- `preset-link` in `app.js` has been dead markup since the micboard import,
+ * so on a board with no keyboard the groups could not be reached at all.
+ *
+ * ⚠️ Per device, like everything else in this panel. Which channels are in a
+ * group is global and lives in `config.json`; which group *this* screen is
+ * looking at is nobody else's business.
+ */
+function renderGroupRow() {
+  const row = document.createElement('div');
+  row.className = 'vp-row';
+
+  const label = document.createElement('span');
+  label.className = 'vp-label';
+  label.textContent = 'Showing';
+  row.appendChild(label);
+
+  const choices = groupChoices(board.getGroups());
+  const current = Number(board.getGroup()) || 0;
+
+  // A select rather than a segmented control: there can be nine of these and
+  // their names are as long as somebody wanted them to be.
+  const select = document.createElement('select');
+  select.className = 'vp-select';
+  select.setAttribute('aria-label', 'Group');
+  choices.forEach((choice) => {
+    const option = document.createElement('option');
+    option.value = String(choice.value);
+    option.textContent = choice.label;
+    if (choice.value === current) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+  select.addEventListener('change', () => {
+    board.setGroup(Number(select.value) || 0);
+  });
+  row.appendChild(select);
+  return row;
 }
 
 export function renderViewPanel() {
@@ -166,10 +245,10 @@ export function renderViewPanel() {
   // panel is stored in this browser; nothing here reaches another board.
   const foot = document.querySelector('.view-panel-foot');
   if (foot) {
-    foot.textContent = `${scopeNote('device')} Press ? for every key.`;
+    foot.textContent = scopeNote('device');
   }
 
-  controlGroups().forEach((group) => {
+  controlGroups(allControls()).forEach((group) => {
     const section = document.createElement('section');
     section.className = 'vp-group';
 
@@ -189,15 +268,9 @@ export function renderViewPanel() {
 
       row.appendChild(isSwitch(control) ? renderSwitch(control) : renderSegmented(control));
 
-      // The key, so the panel teaches rather than replaces.
-      const key = document.createElement('kbd');
-      key.className = 'vp-key';
-      key.textContent = control.key.toUpperCase();
-      row.appendChild(key);
-
       section.appendChild(row);
 
-      const described = controlDescription(control, board.viewOptionValue(control.id));
+      const described = controlDescription(control, valueOf(control));
       if (described) {
         const note = document.createElement('p');
         note.className = 'vp-row-note';
