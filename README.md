@@ -14,16 +14,31 @@ A visual monitoring tool for network enabled Shure devices.  Wirelessboard simpl
 ![wirelessboard diagram](docs/img/slug.png)
 
 ## Screenshots
+
+#### The board
+Twelve channels, each card built around the photograph of whoever is holding that microphone. The
+band carries the status colour, the person, their position, the battery and the time remaining —
+and the photo is never printed over. The amber card is a transmitter that needs replacing; its
+runtime reads `~0:48` because that receiver reports a battery level rather than minutes, and an
+estimate is always marked as one.
+
+![The Wirelessboard card wall](docs/img/board-cards-2-0.jpg)
+
 #### Desktop
+<sup>Pre-2.0 — due to be retaken.</sup>
+
 ![Desktop](docs/img/desktop_ui.png)
 
 
 #### Mobile
+<sup>Pre-2.0 — due to be retaken.</sup>
 <p align="center">
   <img width="33%" src="docs/img/phone_home.png"><img width="33%" src="docs/img/phone_ui.png"><img width="33%" src="docs/img/phone_ui_exp.png">
 </p>
 
 #### Mic Storage
+<sup>Pre-2.0 — due to be retaken.</sup>
+
 ![wirelessboard storage](docs/img/tv_imagebg.png)
 
 ## Compatible Devices
