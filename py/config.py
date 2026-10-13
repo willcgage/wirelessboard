@@ -1529,6 +1529,80 @@ def update_pco_config(pco_data: Any) -> Tuple[Dict[str, Any], CredentialMeta]:
     return merged, meta
 
 
+def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
+    """The screens an installation has described.
+
+    ⭐ A list, because a minimum column width is a fact about **one screen in
+    one place**. The television above the charging dock has dock positions to
+    line up with; the laptop at front of house has nothing underneath it and
+    wants no minimum at all. One global number cannot express that, and a board
+    serving several rooms would hand every one of them the first room's size.
+
+    ⚠️ No resolution. Every browser reports its own, so asking a human for it
+    only invites a mismatch between what was typed and the screen the board is
+    actually on.
+
+    ⛔ An entry with no id or no size is dropped rather than stored half-made:
+    it could be picked from a list and would then silently impose nothing.
+    """
+    entries = payload if isinstance(payload, list) else []
+    out: List[Dict[str, Any]] = []
+    seen = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        screen_id = str(entry.get('id') or '').strip()
+        if not screen_id or screen_id in seen:
+            continue
+
+        def _positive(value):
+            if isinstance(value, bool):
+                return None
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return None
+            return round(number, 2) if number > 0 else None
+
+        diagonal = _positive(entry.get('diagonal_inches'))
+        if not diagonal:
+            continue
+        seen.add(screen_id)
+        out.append({
+            'id': screen_id,
+            'name': str(entry.get('name') or '').strip() or screen_id,
+            'diagonal_inches': diagonal,
+            # Optional: a screen worth describing may still have no dock below
+            # it, and must then impose no minimum.
+            'min_column_inches': _positive(entry.get('min_column_inches')),
+        })
+    return out
+
+
+def ensure_screens() -> List[Dict[str, Any]]:
+    normalized = normalize_screens(config_tree.get('screens'))
+    config_tree['screens'] = normalized
+    return normalized
+
+
+def get_screens() -> List[Dict[str, Any]]:
+    return copy.deepcopy(ensure_screens())
+
+
+def update_screens(payload: Any) -> List[Dict[str, Any]]:
+    """Store the screen list and save.
+
+    ⛔ Deliberately **not** a `reconfig`. Describing a screen changes how a
+    board lays itself out and nothing about the receivers, so it must not tear
+    every socket down and rebuild them -- that is two seconds of blank wall for
+    a tape measure (#116).
+    """
+    normalized = normalize_screens(payload)
+    config_tree['screens'] = normalized
+    save_current_config()
+    return copy.deepcopy(normalized)
+
+
 def get_public_config_tree() -> Dict[str, Any]:
     """Return the configuration as it should be served to clients.
 

@@ -1,5 +1,6 @@
 import { micboard } from './app.js';
 import { computeLayout } from './board-layout.mjs';
+import { minColumnPixelsForScreen } from './display-geometry.mjs';
 
 let tvResizeObserver;
 let tvMutationObserver;
@@ -71,8 +72,23 @@ export function updateTvLayoutMetrics() {
   const containerRect = container.getBoundingClientRect();
   const availableHeight = Math.max(240, viewportHeight - containerRect.top);
 
+  // ⛔ The physical floor, where the screen has been described (#170). The
+  // television hangs above the charging dock, so a column has to be wide
+  // enough to point at the microphone underneath it. Undescribed screens get
+  // null, which means no floor and the board behaves exactly as before.
+  // ⚠️ Resolution from the browser, physical size from the configuration. The
+  // screen reports its own pixels, so nobody has to type them and they cannot
+  // describe a screen the board is not on.
+  const screens = (micboard.config && micboard.config.screens) || [];
+  const minColumnWidth = minColumnPixelsForScreen({
+    screens,
+    screenId: micboard.screenId,
+    widthPx: (window.screen && window.screen.width) || window.innerWidth,
+    heightPx: (window.screen && window.screen.height) || window.innerHeight,
+  });
+
   const {
-    columns, rows, rowHeight, cardWidth, boardHeight, scale, scrolls,
+    columns, rows, rowHeight, cardWidth, boardHeight, scale, scrolls, columnsLimitedByWidth,
   } = computeLayout({
     slotCount,
     containerWidth,
@@ -82,6 +98,7 @@ export function updateTvLayoutMetrics() {
     arrangement: micboard.arrangement,
     shape: micboard.cardShape,
     columns: micboard.columns,
+    minColumnWidth,
   });
 
   container.style.setProperty('--tvmode-rows', rows.toString());
@@ -97,6 +114,10 @@ export function updateTvLayoutMetrics() {
   container.classList.toggle('tvmode-scrolls', Boolean(scrolls));
 
   container.style.setProperty('--tvmode-card-width', `${cardWidth}px`);
+
+  // ⚠️ So an operator who asked for one row and got two can tell a rule from
+  // a bug. Nothing styles this yet; it is the hook for saying so.
+  container.classList.toggle('tvmode-width-limited', Boolean(columnsLimitedByWidth));
 
   // The grid template is driven by auto-fit at the slot width, which always
   // packs as many across as fit. Any named arrangement has to state the column

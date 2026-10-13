@@ -40,6 +40,11 @@ export const ROTATION_KEY = 'wirelessboard.rotation';
 // ⛔ The one view preference with no hash parameter. A lock a link can switch
 // off would not be an accident guard at all -- see `viewer-lock.mjs` (#116).
 export const VIEWER_LOCK_KEY = 'wirelessboard.viewerLock';
+// ⭐ Which of the configured screens this device is (#170). Per device because
+// it *is* a device fact -- the wall above the dock and the laptop at front of
+// house are different screens, and the laptop has no dock under it at all. The
+// screens themselves are global; only the answer to "which one am I" is local.
+export const SCREEN_KEY = 'wirelessboard.screenId';
 
 export function safeStorage() {
   try {
