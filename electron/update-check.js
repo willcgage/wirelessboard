@@ -11,6 +11,11 @@
  */
 
 const RELEASES_API = 'https://api.github.com/repos/willcgage/wirelessboard/releases/latest';
+// ⛔ The list, for the pre-release channel. `/releases/latest` is the *stable*
+// endpoint -- it excludes pre-releases by definition, so a board on a beta is
+// told the newest release is the last stable one, which is older than what it
+// is running. The list is the only way to see a beta at all.
+const RELEASES_LIST_API = 'https://api.github.com/repos/willcgage/wirelessboard/releases?per_page=30';
 const RELEASES_PAGE = 'https://github.com/willcgage/wirelessboard/releases/latest';
 
 /**
@@ -53,6 +58,39 @@ function isUpdateAvailable(currentVersion, latestVersion) {
   return compareVersions(latestVersion, currentVersion) > 0;
 }
 
+/** Whether a version string is a pre-release. Unparseable is not. */
+function isPrerelease(value) {
+  const parsed = parseVersion(value);
+  return Boolean(parsed && parsed.prerelease);
+}
+
+/**
+ * The newest release in a `/releases` listing, pre-releases included.
+ *
+ * ⛔ Drafts are refused outright. The release pipeline publishes to a draft
+ * that a human promotes later, so a build sitting in a draft is one nobody can
+ * download -- announcing it would send an operator to a 404.
+ *
+ * ⚠️ Picks the highest *version*, not the most recent entry. The list comes
+ * back in publication order, and a 2.0.0 published before a 1.16.3 patch would
+ * otherwise be beaten by the older one.
+ */
+function newestRelease(list) {
+  if (!Array.isArray(list)) {
+    return null;
+  }
+  let best = null;
+  for (const entry of list) {
+    if (!entry || entry.draft === true) continue;
+    const version = entry.tag_name || entry.name;
+    if (!parseVersion(version)) continue;
+    if (!best || compareVersions(version, best.tag_name || best.name) > 0) {
+      best = entry;
+    }
+  }
+  return best;
+}
+
 /**
  * Ask GitHub what the newest release is and say whether it beats what is
  * running.
@@ -66,12 +104,20 @@ function isUpdateAvailable(currentVersion, latestVersion) {
  * network and parse failures come back as { ok: false } and the caller stays
  * quiet.
  */
-async function checkForUpdate({ currentVersion, getJson }) {
+async function checkForUpdate({ currentVersion, getJson, includePrereleases = false }) {
   let payload;
   try {
-    payload = await getJson(RELEASES_API);
+    payload = await getJson(includePrereleases ? RELEASES_LIST_API : RELEASES_API);
   } catch (error) {
     return { ok: false, reason: 'unreachable', error: String(error && error.message ? error.message : error) };
+  }
+
+  if (includePrereleases) {
+    // The list endpoint answers with an array; the stable one with an object.
+    payload = newestRelease(payload);
+    if (!payload) {
+      return { ok: false, reason: 'unparseable', latestVersion: null };
+    }
   }
 
   const latestVersion = payload && (payload.tag_name || payload.name);
@@ -84,13 +130,19 @@ async function checkForUpdate({ currentVersion, getJson }) {
     currentVersion,
     latestVersion: String(latestVersion).replace(/^v/i, ''),
     updateAvailable: isUpdateAvailable(currentVersion, latestVersion),
+    // ⚠️ So the prompt can say which channel this came from. An operator
+    // being offered a beta should be told it is one before they install it.
+    prerelease: Boolean(payload && payload.prerelease) || isPrerelease(latestVersion),
     url: (payload && payload.html_url) || RELEASES_PAGE,
   };
 }
 
 module.exports = {
   RELEASES_API,
+  RELEASES_LIST_API,
   RELEASES_PAGE,
+  newestRelease,
+  isPrerelease,
   parseVersion,
   compareVersions,
   isUpdateAvailable,
