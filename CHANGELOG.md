@@ -10,6 +10,38 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.4] - 2026-10-13
+Columns that line up with the microphones underneath them.
+
+### Added
+- **Wirelessboard can be told how big the screen is, so a column is never narrower than the
+  microphone it points at.** The board on the wall sits above the charging dock, and a column is
+  meant to correspond to a dock position — narrower than that and it stops pointing at anything.
+
+  **Configuration → Screens** is where you describe each display: its name, the diagonal size it was
+  sold as, and the width of one dock position. Leave the dock width empty for a screen with nothing
+  underneath it, such as a laptop; it will have no minimum. Each board then picks which screen it is,
+  once, from its own view settings — one choice, no typing, which matters on a television.
+
+  ⚠️ The resolution is not asked for. Every screen reports its own, so a figure typed by hand could
+  only ever describe a screen the board might not be on.
+
+  ⛔ **Nothing changes until a screen is described and chosen.** A board that has not been measured
+  behaves exactly as it did before, which is the behaviour every existing installation keeps.
+
+  ⭐ Worth knowing why this is per screen rather than one setting: the same 4.5in dock position needs
+  180 pixels on a 55in display and 231 on a 43in one, because the smaller screen is denser. One
+  number could not have served two rooms.
+
+### Known
+- ⏳ **Two faults from the beta.2 photographs are still open.** *Fit* with a fixed card shape can
+  still ask for more height than the screen has, which puts channels out of sight; and a very narrow
+  card may still lose its name — though describing the screen should now prevent cards getting that
+  narrow in the first place.
+- ⏳ **Photographs want a portrait crop.** Unchanged: a card fills its space with the middle of the
+  picture, so a wide stage photograph on a short card crops to the dark part of a stage.
+  **Card shape → 3:4** in the view panel, or crop the photos.
+
 ## [2.0.0-beta.3] - 2026-10-12
 The card layout on a real television, and a way for a beta board to hear about the next one.
 
