@@ -325,7 +325,9 @@ let updateWindow = null;
 // 'checking' | 'current' | 'available' | 'downloading' | 'ready' | 'error' |
 // 'unsupported'
 let updatePhase = 'checking';
-let updateInfo = { latestVersion: null, url: null, notes: '', percent: 0, message: '', warning: '' };
+let updateInfo = {
+  latestVersion: null, url: null, notes: '', percent: 0, message: '', warning: '', prerelease: false,
+};
 
 function updateStatePath() {
   return resolveAppDataPath(UPDATE_STATE_FILE);
@@ -369,6 +371,30 @@ function automaticChecksEnabled() {
   return updateSettings.normalizeSettings(readUpdateStateFile()).automaticChecks;
 }
 
+/**
+ * Whether this board follows the pre-release channel.
+ *
+ * ⭐ A build that is itself a beta looks for betas unless told otherwise --
+ * otherwise it is stranded, because `/releases/latest` cannot see a
+ * pre-release and reports the last stable one, which is older than what is
+ * running. See `shouldIncludePrereleases`.
+ */
+function prereleasesEnabled() {
+  return updateSettings.shouldIncludePrereleases({
+    settings: readUpdateStateFile(),
+    currentIsPrerelease: updateCheck.isPrerelease(app.getVersion()),
+  });
+}
+
+function setIncludePrereleases(enabled) {
+  patchUpdateState({ includePrereleases: Boolean(enabled) });
+  // ⚠️ The next check should already know, and electron-updater caches its
+  // own channel, so it is re-pointed rather than left as it was.
+  if (updaterWired) {
+    autoUpdater.allowPrerelease = Boolean(enabled);
+  }
+}
+
 function setAutomaticChecks(enabled) {
   patchUpdateState({ automaticChecks: Boolean(enabled) });
   rebuildTrayMenu();
@@ -386,6 +412,7 @@ function currentUpdateState() {
     phase: updatePhase,
     currentVersion: app.getVersion(),
     latestVersion: updateInfo.latestVersion,
+    prerelease: Boolean(updateInfo.prerelease),
     notes: updateInfo.notes,
     percent: updateInfo.percent,
     message: updateInfo.message,
@@ -491,6 +518,11 @@ function wireUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.logger = null;
+  // ⛔ Both halves have to agree on the channel. `update-check.js` decides
+  // what to *announce* and electron-updater decides what it is willing to
+  // *download* -- if only the first knew about pre-releases, the board would
+  // offer a beta and then fail to find it.
+  autoUpdater.allowPrerelease = prereleasesEnabled();
 
   autoUpdater.on('download-progress', (progress) => {
     const { percent, label } = updatePrompt.formatProgress(progress);
@@ -527,6 +559,7 @@ async function runUpdateCheck({ manual = false } = {}) {
   const result = await updateCheck.checkForUpdate({
     currentVersion: app.getVersion(),
     getJson,
+    includePrereleases: prereleasesEnabled(),
   });
 
   if (!result.ok) {
@@ -551,11 +584,21 @@ async function runUpdateCheck({ manual = false } = {}) {
     url: result.url,
     percent: 0,
     message: '',
+    // ⛔ Say when what is being offered is a beta. An operator who ticked the
+    // channel months ago, or who inherited a board somebody else set up, should
+    // not have to recognise "-beta.3" in a version string to know what they are
+    // about to put on a wall before a service.
+    prerelease: Boolean(result.prerelease),
     // Windows installers are not signed yet, and SmartScreen will say so. Better
     // to warn here than to have an update the operator started look like malware.
-    warning: process.platform === 'win32'
-      ? 'Windows may show a SmartScreen warning during installation; the installers are not yet code-signed.'
-      : '',
+    warning: [
+      result.prerelease
+        ? 'This is a pre-release. It is for testing and has not been through a service.'
+        : '',
+      process.platform === 'win32'
+        ? 'Windows may show a SmartScreen warning during installation; the installers are not yet code-signed.'
+        : '',
+    ].filter(Boolean).join(' '),
   });
 
   const dismissed = readDismissedVersion();
@@ -675,6 +718,16 @@ app.on('ready', () => {
         type: 'checkbox',
         checked: automaticChecksEnabled(),
         click(menuItem) { setAutomaticChecks(menuItem.checked); },
+      },
+      // ⚠️ Off on a stable board unless it is ticked. A board running a beta
+      // arrives with it already on, because it is the only way such a board
+      // hears about anything at all -- including the stable release that ends
+      // the beta.
+      {
+        label: 'Include Beta Releases',
+        type: 'checkbox',
+        checked: prereleasesEnabled(),
+        click(menuItem) { setIncludePrereleases(menuItem.checked); },
       },
       { type: 'separator' },
       { label: 'About', click() { createWindow(`${SERVICE_URL}/about`); } },

@@ -17,6 +17,9 @@ Two controls in the tray menu:
 
 - **Check for Updates Now** — asks immediately. Available whether or not automatic checks are on.
 - **Check for Updates Automatically** — turn the periodic check off for sites that manage their own update windows, run offline, or are on a locked-down network. On by default.
+- **Include Beta Releases** — follow the pre-release channel. ⛔ **Off on a normal installation**, so a board running a service is never offered a build that has not been through one. ⭐ A board that is *itself* running a beta arrives with it already on, because it is the only way such a board hears about anything at all — the stable release list cannot see a pre-release, so an un-opted beta board is told the newest version is the last stable one, which is older than what it is running. Ticking or unticking it is an explicit choice and always wins, in both directions: a tester can leave the channel and be offered the next stable release instead.
+
+  When the update being offered is a pre-release, the update window says so and warns that it has not been through a service.
 
 Both settings live in `update-state.json`, beside `config.json` in the configuration directory, alongside the version whose prompt was last dismissed. Nothing in the Electron app writes `config.json`.
 

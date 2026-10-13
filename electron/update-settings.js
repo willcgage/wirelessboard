@@ -16,6 +16,10 @@
 // looking for updates would be worse than one that asks.
 const DEFAULTS = Object.freeze({
   automaticChecks: true,
+  // ⛔ Not a boolean. `null` means "never chosen", which is a different thing
+  // from "chosen false" -- see `shouldIncludePrereleases` below, where the two
+  // lead to opposite answers on a board that is itself running a beta.
+  includePrereleases: null,
 });
 
 function isPlainObject(value) {
@@ -36,6 +40,9 @@ function normalizeSettings(parsed) {
     automaticChecks: typeof source.automaticChecks === 'boolean'
       ? source.automaticChecks
       : DEFAULTS.automaticChecks,
+    includePrereleases: typeof source.includePrereleases === 'boolean'
+      ? source.includePrereleases
+      : DEFAULTS.includePrereleases,
   };
 }
 
@@ -67,9 +74,34 @@ function shouldCheck({ settings, manual = false } = {}) {
   return normalizeSettings(settings).automaticChecks;
 }
 
+/**
+ * Whether a check should look at pre-releases as well as stable ones.
+ *
+ * ⛔ A production board must never be offered a beta, so this is off unless
+ * somebody asks -- with one exception that is not a policy question.
+ *
+ * ⭐ **A board already running a beta looks for betas.** Otherwise it is
+ * stranded: `/releases/latest` ignores pre-releases, so a board on 2.0.0-beta.2
+ * is told the newest release is 1.16.2, which is *older*, and it hears about no
+ * further betas and no 2.0.0 either. Somebody who installed a beta by hand has
+ * already made this decision; the build they are running is the evidence.
+ *
+ * ⚠️ An explicit choice always wins, in both directions. A tester who wants
+ * off the beta channel can untick it and be offered the next stable release,
+ * and a stable board can opt in without reinstalling.
+ */
+function shouldIncludePrereleases({ settings, currentIsPrerelease = false } = {}) {
+  const chosen = normalizeSettings(settings).includePrereleases;
+  if (typeof chosen === 'boolean') {
+    return chosen;
+  }
+  return Boolean(currentIsPrerelease);
+}
+
 module.exports = {
   DEFAULTS,
   normalizeSettings,
   mergeSettings,
   shouldCheck,
+  shouldIncludePrereleases,
 };
