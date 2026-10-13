@@ -10,6 +10,49 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.3] - 2026-10-12
+The card layout on a real television, and a way for a beta board to hear about the next one.
+
+The first build shaped by a board actually on a wall rather than a development machine. Photographs
+of beta.2 running on a 1080p television turned up four faults; this fixes the one underneath most of
+them, and adds the update channel that lets a board like that be told about builds like this.
+
+### Fixed
+- **Text no longer lands on top of other text on the card.** On a television the frequency readout
+  was painted across the person's name — `Christian Nuckels150 Hz` instead of the name and
+  `528.850 Hz` side by side. The spacing inside a card was being worked out from the card's
+  *height* alone, so a tall narrow card reserved as much room for the meters and chart as a card
+  filling the whole screen, and that space came out of the name. It now follows the width as well,
+  which is what the text sizing already did. ⚠️ Nothing changes at the densities that were already
+  correct — only the ones that were not.
+
+### Added
+- **Wirelessboard can follow the beta channel.** A new **Include Beta Releases** item in the tray
+  menu, beside the automatic-check setting.
+
+  ⛔ **Off on a normal installation**, so a board running a service is never offered a build that
+  has not been through one.
+
+  ⭐ **On for a board that is itself running a beta** — because until now such a board could not
+  be told about anything at all. The ordinary release check cannot see a pre-release, so a board on
+  2.0.0-beta.2 was told the newest version was 1.16.2, which is older than what it was running: no
+  next beta, and no 2.0.0 either. Ticking or unticking it is always respected, so a tester can leave
+  the channel and be offered the next ordinary release instead.
+
+  When the update on offer is a pre-release, the update window says so, and says it has not been
+  through a service.
+
+### Known
+- ⏳ **Three faults from the same photographs are still open.** A fixed card shape at a high column
+  count still shrinks the board to a strip; *Fit* with a fixed shape still asks for more height than
+  the screen has, which puts channels out of sight; and a very narrow card may still lose its name.
+  The first is a question of warning you rather than a miscalculation, and the other two are
+  expected to look different now the spacing is right — worth another photograph before either is
+  changed.
+- ⏳ **Photographs want a portrait crop.** Unchanged from beta.2: a card fills its space with the
+  middle of the picture, so a wide stage photograph on a short card crops to the dark part of a
+  stage. **Card shape → 3:4** in the view panel, or crop the photos.
+
 ## [2.0.0-beta.2] - 2026-10-12
 Background photos actually load. Install this one rather than beta.1.
 
