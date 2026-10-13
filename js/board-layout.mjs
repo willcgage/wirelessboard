@@ -156,6 +156,11 @@ export const BASE_HEIGHT = 1080;
 // Card shapes, as width:height. 16:9 matches the displays these boards are
 // usually shown on; 3:4 is upright enough for a headshot without going so
 // narrow that the name has nowhere to sit.
+// ⚠️ Mirrors `--tvmode-type-basis` in style.scss, which is
+// `min(row-height, card-width * 1.6)`. The two have to stay in step: if this
+// changes, that changes. `tv-layout-properties.test.mjs` fails if they drift.
+export const TYPE_WIDTH_RATIO = 1.6;
+
 const LANDSCAPE_RATIO = 16 / 9;
 const PORTRAIT_RATIO = 3 / 4;
 
@@ -310,7 +315,23 @@ export function computeLayout({
     rowHeight,
     cardWidth,
     boardHeight,
-    scale: rowHeight / BASE_HEIGHT,
+    // ⛔ Both dimensions, not just the row height (#169, #173).
+    //
+    // This drives `--tvmode-scale`, which the stylesheet spends on the padding,
+    // the gaps and -- the one that matters -- the height reserved for the info
+    // drawer: `height: calc(100% - (var(--tvmode-scale) * 375px))`.
+    //
+    // Derived from `rowHeight` alone it ignored how *wide* a card is, so one
+    // row of twelve on a 1080p screen gave a 155px-wide card a scale of 1.0 and
+    // reserved 375px for a drawer sized for a full-screen card. The drawer then
+    // painted over the name band, which is what was photographed on the wall.
+    //
+    // ⭐ `min(rowHeight, cardWidth * 1.6)` is not a new idea here -- it is
+    // exactly what `--tvmode-type-basis` already uses, and #81 settled that the
+    // scale must follow every dimension the layout can vary. The type honoured
+    // that rule and the spacing did not; now they agree, and they agree by
+    // construction rather than by both being maintained.
+    scale: Math.min(rowHeight, cardWidth * TYPE_WIDTH_RATIO) / BASE_HEIGHT,
     // Only a named shape can overflow; auto is fit-to-page by construction.
     scrolls: boardHeight > Number(availableHeight) + 0.5,
   };
