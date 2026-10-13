@@ -660,6 +660,41 @@ class ConfigHandler(web.RequestHandler):
         self.write(json.dumps(response))
 
 
+class ScreensHandler(web.RequestHandler):
+    """The screens an installation has described (#170).
+
+    ⛔ A save here does **not** reconfigure the board. The numbers change how a
+    board lays itself out and nothing about the receivers, so recording a tape
+    measure must not drop every socket for two seconds (#116).
+    """
+
+    def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.write(json.dumps({'ok': True, 'screens': config.get_screens()}))
+
+    def post(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        try:
+            payload = json.loads(self.request.body or '{}')
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid JSON payload'}))
+            return
+
+        incoming = payload.get('screens') if isinstance(payload, dict) else payload
+        try:
+            saved = config.update_screens(incoming)
+        except Exception:
+            logger.exception('Failed to save the screen list')
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': 'Unable to save the screens'}))
+            return
+
+        self.write(json.dumps({'ok': True, 'screens': saved}))
+
+
 class ConfigRecoveryHandler(web.RequestHandler):
     """Put a usable config.json back, from the backup or from the defaults.
 
@@ -1442,6 +1477,7 @@ def twisted():
     (r'/api/logs/purge', LogsPurgeHandler),
     (r'/api/logs', LogsHandler),
         (r'/api/config/recover', ConfigRecoveryHandler),
+        (r'/api/screens', ScreensHandler),
         (r'/api/config', ConfigHandler),
         (r'/api/pco/sync', PcoSyncHandler),
         (r'/api/pco/preview', PcoPreviewHandler),

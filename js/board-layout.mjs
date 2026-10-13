@@ -216,13 +216,25 @@ export function isTopBarState(value) {
  */
 export function columnsFor({
   slotCount, maxColumns, arrangement = 'fit', columns = COLUMNS_AUTO,
+  maxColumnsAtMinimum = null,
 }) {
   const n = toCount(slotCount);
   const fits = toCount(maxColumns);
   const ceiling = columnCeiling(columns);
-  // Applied to whatever the arrangement decides, so the two never contradict
-  // each other: the arrangement picks a shape, this caps how wide it may get.
-  const capped = (c) => (ceiling === null ? c : Math.max(1, Math.min(c, ceiling)));
+  // ⛔ A physical floor, where the screen has been described (#170). The
+  // television hangs above the charging dock, so a column points at the
+  // microphone underneath it -- narrower than a dock position and it points at
+  // nothing. Unlike the operator's ceiling this is not a preference, so it
+  // binds every arrangement including the ones that are otherwise allowed to
+  // make cards as narrow as they like.
+  const floorLimit = Number.isFinite(maxColumnsAtMinimum) && maxColumnsAtMinimum > 0
+    ? Math.floor(maxColumnsAtMinimum)
+    : null;
+  const capped = (c) => {
+    let out = ceiling === null ? c : Math.min(c, ceiling);
+    if (floorLimit !== null) out = Math.min(out, floorLimit);
+    return Math.max(1, out);
+  };
 
   if (arrangement === 'row') {
     return capped(n);
@@ -285,13 +297,27 @@ export function rowHeightFor({
 export function computeLayout({
   slotCount, containerWidth, availableHeight, slotWidth = 420, gap = 0,
   arrangement = 'fit', shape = 'auto', columns: columnChoice = COLUMNS_AUTO,
+  minColumnWidth = null,
 }) {
   const n = toCount(slotCount);
   const width = Number(slotWidth) > 0 ? Number(slotWidth) : 420;
   const maxColumns = Math.max(1, Math.floor((Number(containerWidth) + gap) / (width + gap)) || 1);
 
+  // How many columns the screen can carry without any going under the physical
+  // minimum. Null when the screen has not been described, which means no floor
+  // and the board behaves exactly as it did before.
+  // ⛔ Pitch, not card width -- the gap lives inside a column's share of the
+  // screen. See `maxColumnsAtMinimum`, which this has to agree with.
+  const floor = Number(minColumnWidth) > 0
+    ? Math.max(1, Math.floor(Number(containerWidth) / Number(minColumnWidth)))
+    : null;
+
   const columns = columnsFor({
-    slotCount: n, maxColumns, arrangement, columns: columnChoice,
+    slotCount: n,
+    maxColumns,
+    arrangement,
+    columns: columnChoice,
+    maxColumnsAtMinimum: floor,
   });
   const rows = Math.max(1, Math.ceil(n / columns));
 
@@ -334,5 +360,8 @@ export function computeLayout({
     scale: Math.min(rowHeight, cardWidth * TYPE_WIDTH_RATIO) / BASE_HEIGHT,
     // Only a named shape can overflow; auto is fit-to-page by construction.
     scrolls: boardHeight > Number(availableHeight) + 0.5,
+    // ⚠️ So a caller can say *why* a board wrapped. Without it, an operator
+    // who asked for one row and got two has no way to tell a bug from a rule.
+    columnsLimitedByWidth: floor !== null && columns >= floor && n > floor,
   };
 }

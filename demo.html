@@ -800,6 +800,38 @@
               </div>
             </div>
 
+            <!-- The screens in the building, so a board can be told how big
+                 the one it is on actually is. ⛔ The sizes are global because
+                 they describe the building; which screen a device *is* stays
+                 on that device, in its view settings (#170). -->
+            <div class="col-12 col-xl-6" id="cfg-screens-col">
+              <div class="config-header">
+                <h3 class="text-center">Screens</h3>
+              </div>
+              <div class="config-panel p-3 border rounded mb-3">
+                <p class="form-text mt-0">
+                  Describe each display Wirelessboard runs on. A board can then keep its columns
+                  wide enough to line up with the microphones in the dock below it &mdash; a column
+                  narrower than a dock position stops pointing at anything.
+                  <br>&#9888;&#65039; The resolution is not asked for: every screen reports its own.
+                  Measure the <strong>diagonal</strong> (the size it was sold as) and the width of
+                  one <strong>dock position</strong>. Leave the dock width empty for a screen with
+                  nothing underneath it, such as a laptop &mdash; it will have no minimum.
+                  <br>Each board then picks which screen it is, once, from its own view settings.
+                </p>
+                <div id="screen-list" class="mb-2"></div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="button" id="screen-add" class="btn btn-outline-primary btn-sm">
+                    Add a screen
+                  </button>
+                  <button type="button" id="screen-save" class="btn btn-primary btn-sm">
+                    Save screens
+                  </button>
+                  <span id="screen-status" class="small align-self-center"></span>
+                </div>
+              </div>
+            </div>
+
             <!-- Groups, and the question the board's own editor cannot answer:
                  is anything in no group at all? A channel in none of them is
                  invisible to anyone viewing groups rather than the combined

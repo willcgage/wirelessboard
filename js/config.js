@@ -14,6 +14,9 @@ import {
   nameCell as diffNameCell, describeRow, rowClass, shouldFoldUnchanged, foldedLabel,
 } from './sync-diff.mjs';
 import { isLocked } from './viewer-lock.mjs';
+import {
+  screenProblem, toPayload as screensToPayload, saveSummary as screensSaveSummary,
+} from './screens-editor.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
 import { assignNumbers } from './slot-numbering.mjs';
 import {
@@ -3374,6 +3377,8 @@ export function initConfigEditor(force = false) {
   applyPcoMappingToForm(pco.mapping);
   applyPcoProfilesToForm(pco);
   applyPcoWatchToForm(pco);
+  // The screens the building has (#170), beside the rest of the configuration.
+  applyScreensToForm(micboard.config || {});
 
   // ⛔ Guarded, like #save below. This function runs again on every settings
   // open and on closePCOView(), and an unguarded binding stacked one more
@@ -5253,4 +5258,139 @@ function autoFillAssignmentsFromNotes() {
       if (assignSummary) assignSummary.innerHTML = `<span class="text-danger">Auto-fill failed: ${err}</span>`;
       appendPcoLog(`Auto-fill failed: ${formatError(err)}`, 'error');
     });
+}
+
+// -- Screens ----------------------------------------------------------------
+// ⭐ The sizes are global because they describe the building; which screen a
+// device *is* lives on that device, in its view settings (#170).
+
+let screenRows = [];
+
+function renderScreenRows() {
+  const host = document.getElementById('screen-list');
+  if (!host) return;
+  host.innerHTML = '';
+
+  if (!screenRows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'small text-muted';
+    empty.textContent = 'No screens described. Boards will have no minimum column width.';
+    host.appendChild(empty);
+    return;
+  }
+
+  screenRows.forEach((row, index) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'row g-2 align-items-end mb-2';
+
+    const field = (label, key, attrs, width) => {
+      const col = document.createElement('div');
+      col.className = width;
+      const lab = document.createElement('label');
+      lab.className = 'form-label small mb-0';
+      lab.textContent = label;
+      const input = document.createElement('input');
+      input.className = 'form-control form-control-sm';
+      Object.entries(attrs).forEach(([k, v]) => input.setAttribute(k, v));
+      input.value = row[key] === null || row[key] === undefined ? '' : row[key];
+      input.addEventListener('input', () => {
+        screenRows[index][key] = input.value;
+        // ⛔ Update this row's note in place, never re-render the list. The
+        // inputs would be rebuilt under the cursor and the field being typed
+        // into would lose focus on every keystroke.
+        refreshScreenProblem(index);
+        updateScreenStatus();
+      });
+      col.appendChild(lab);
+      col.appendChild(input);
+      return col;
+    };
+
+    wrap.appendChild(field('Name', 'name', { type: 'text', placeholder: 'Auditorium wall' }, 'col-12 col-md-5'));
+    wrap.appendChild(field('Diagonal (in)', 'diagonal_inches', {
+      type: 'number', min: '1', step: '0.5', placeholder: '55',
+    }, 'col-6 col-md-3'));
+    wrap.appendChild(field('Dock position (in)', 'min_column_inches', {
+      type: 'number', min: '0', step: '0.25', placeholder: 'optional',
+    }, 'col-6 col-md-3'));
+
+    const removeCol = document.createElement('div');
+    removeCol.className = 'col-12 col-md-1 d-grid';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn btn-outline-secondary btn-sm';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => {
+      screenRows.splice(index, 1);
+      renderScreenRows();
+      updateScreenStatus();
+    });
+    removeCol.appendChild(remove);
+    wrap.appendChild(removeCol);
+
+    // ⚠️ On the row it belongs to. "Something is wrong with your screens" is
+    // not actionable on a Sunday morning. Always present so it can be filled
+    // in as somebody types, rather than appearing and reflowing the row.
+    const note = document.createElement('div');
+    note.className = 'col-12 small text-warning screen-problem';
+    note.textContent = screenProblem(row) || '';
+    wrap.appendChild(note);
+
+    host.appendChild(wrap);
+  });
+}
+
+/** Re-state one row's problem without rebuilding the inputs. */
+function refreshScreenProblem(index) {
+  const host = document.getElementById('screen-list');
+  const wrap = host && host.querySelectorAll('.row')[index];
+  const note = wrap && wrap.querySelector('.screen-problem');
+  if (note) note.textContent = screenProblem(screenRows[index]) || '';
+}
+
+function updateScreenStatus(message) {
+  const status = document.getElementById('screen-status');
+  if (status) status.textContent = message || '';
+}
+
+function applyScreensToForm(cfg) {
+  const list = (cfg && cfg.screens) || [];
+  screenRows = Array.isArray(list) ? list.map((s) => ({ ...s })) : [];
+  renderScreenRows();
+}
+
+function saveScreens() {
+  const payload = screensToPayload(screenRows);
+  // ⛔ Worked out from what was *submitted*, before the server's answer
+  // replaces the rows. Computed afterwards it compares the saved list with
+  // itself, so "1 incomplete row not saved" could never appear -- which is
+  // exactly the sentence somebody needs.
+  const summary = screensSaveSummary(screenRows);
+  // ⛔ Its own endpoint, not the configuration save: describing a screen
+  // changes how a board lays itself out and nothing about the receivers, so it
+  // must not drop every socket for two seconds (#116).
+  postJSON('api/screens', { screens: payload }, (resp) => {
+    if (resp && resp.ok) {
+      screenRows = (resp.screens || []).map((s) => ({ ...s }));
+      renderScreenRows();
+      updateScreenStatus(summary);
+    } else {
+      updateScreenStatus((resp && resp.error) || 'Could not save the screens.');
+    }
+  });
+}
+
+export function bindScreenHandlers() {
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t) return;
+    if (t.id === 'screen-add') {
+      e.preventDefault();
+      screenRows.push({ name: '', diagonal_inches: '', min_column_inches: '' });
+      renderScreenRows();
+    } else if (t.id === 'screen-save') {
+      e.preventDefault();
+      saveScreens();
+    }
+  });
 }

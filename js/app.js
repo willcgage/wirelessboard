@@ -17,7 +17,8 @@ import { drawerBits, drawerModeWith } from './panel-controls.mjs';
 import { initViewPanel, toggleViewPanel } from './view-panel.js';
 import { setTimeMode } from './chart-smoothie.js';
 import {
-  initConfigEditor, bindPcoNav, bindPcoHandlers, configureConfigModule, scheduleBackgroundFilenameGuide,
+  initConfigEditor, bindPcoNav, bindPcoHandlers, bindScreenHandlers,
+  configureConfigModule, scheduleBackgroundFilenameGuide,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
@@ -25,12 +26,13 @@ import {
   isWashStyle, migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 import {
-  resolvePref, readPref, safeStorage,
+  resolvePref, readPref, writePref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
   VIEWER_LOCK_KEY,
+  SCREEN_KEY,
 } from './view-prefs.mjs';
 import { PLACEMENTS, DEFAULT_PLACEMENT } from './live-strip.mjs';
 import { ROTATION_STATES } from './rotation-states.mjs';
@@ -63,6 +65,7 @@ micboard.wash = 'band';
 micboard.livePlacement = 'bottom';
 micboard.rotation = 'off';
 micboard.viewerLock = 'off';
+micboard.screenId = '';
 micboard.infoDrawerMode = 'elinfo11';
 micboard.backgroundMode = 'NONE';
 micboard.backgroundDefaultMode = 'NONE';
@@ -430,6 +433,13 @@ function mapGroups() {
     getGroups: () => micboard.groups || {},
     getGroup: () => micboard.group || 0,
     setGroup: (n) => renderGroup(n),
+    getScreens: () => (micboard.config && micboard.config.screens) || [],
+    getScreenId: () => micboard.screenId || '',
+    setScreenId: (id) => {
+      micboard.screenId = String(id || '');
+      writePref({ storage: safeStorage(), key: SCREEN_KEY, value: micboard.screenId });
+      applyBoardLayout();
+    },
   });
   // ⛔ Something other than the panel can leave fullscreen -- Escape, the
   // window manager, the Electron menu -- and the switch reads the browser
@@ -627,6 +637,16 @@ function readURLParameters() {
     key: VIEWER_LOCK_KEY,
     isValid: (v) => LOCK_STATES.includes(v),
     fallback: 'off',
+  });
+  // ⛔ No hash parameter and no validation against the list: the screens are
+  // configured globally and may not have loaded yet, and a device being told
+  // "that screen does not exist" on the first payload would silently forget
+  // which screen it is. An id that matches nothing simply yields no minimum.
+  micboard.screenId = readPref({
+    storage,
+    key: SCREEN_KEY,
+    isValid: (v) => typeof v === 'string',
+    fallback: '',
   });
   micboard.livePlacement = resolvePref({
     hashValue: micboard.url.live,
@@ -870,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { ensureHudVersion(); } catch (_) {}
   keybindings();
   // Bind PCO navbar and handlers
-  try { bindPcoNav(); bindPcoHandlers(); } catch (e) {}
+  try { bindPcoNav(); bindPcoHandlers(); bindScreenHandlers(); } catch (e) {}
   // Put the resolved view choices on the container before the first layout
   // pass, so a remembered portrait board does not paint as fit-to-page first.
   try { applyBoardLayout(); } catch (_) {}

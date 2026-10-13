@@ -19,6 +19,7 @@ import {
   VIEW_CONTROLS, controlGroups, optionsInOrder, optionLabel, isSwitch, controlDescription,
 } from './view-controls.mjs';
 import { BOARD_CONTROLS, groupChoices } from './panel-controls.mjs';
+import { screenChoices, describeScreenChoice } from './display-geometry.mjs';
 import { scopeNote } from './viewer-scope.mjs';
 
 /**
@@ -44,6 +45,9 @@ function allControls() {
  * testable without booting the board.
  */
 let board = {
+  getScreens: () => [],
+  getScreenId: () => '',
+  setScreenId: () => {},
   setViewOption: () => null,
   viewOptionValue: () => undefined,
   setBoardOption: () => null,
@@ -176,7 +180,64 @@ function renderDisplayRow() {
 
   section.appendChild(row);
   section.appendChild(renderGroupRow());
+  section.appendChild(renderScreenRow());
+  const note = describeScreenChoice({
+    screens: board.getScreens(),
+    screenId: board.getScreenId(),
+    widthPx: (window.screen && window.screen.width) || window.innerWidth,
+    heightPx: (window.screen && window.screen.height) || window.innerHeight,
+  });
+  if (note) {
+    const p = document.createElement('p');
+    p.className = 'vp-row-note';
+    p.textContent = note;
+    section.appendChild(p);
+  }
   return section;
+}
+
+/**
+ * Which of the configured screens this device is (#170).
+ *
+ * ⭐ One tap, no typing. The screens are described once on a machine with a
+ * keyboard; a television on a wall only has to say which one it is. That split
+ * is the whole point -- the sizes are global because they describe the
+ * building, and the answer is local because it describes this device.
+ *
+ * ⚠️ Shows only when screens have been configured. A board that has never
+ * described one should not be asked a question with a single empty answer.
+ */
+function renderScreenRow() {
+  const choices = screenChoices(board.getScreens());
+  if (choices.length <= 1) {
+    return document.createDocumentFragment();
+  }
+
+  const row = document.createElement('div');
+  row.className = 'vp-row';
+
+  const label = document.createElement('span');
+  label.className = 'vp-label';
+  label.textContent = 'This screen';
+  row.appendChild(label);
+
+  const select = document.createElement('select');
+  select.className = 'vp-select';
+  select.setAttribute('aria-label', 'Which screen this is');
+  const current = String(board.getScreenId() || '');
+  choices.forEach((choice) => {
+    const option = document.createElement('option');
+    option.value = choice.value;
+    option.textContent = choice.label;
+    if (choice.value === current) option.selected = true;
+    select.appendChild(option);
+  });
+  select.addEventListener('change', () => {
+    board.setScreenId(select.value);
+    renderViewPanel();
+  });
+  row.appendChild(select);
+  return row;
 }
 
 /**

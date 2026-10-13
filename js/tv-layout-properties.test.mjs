@@ -183,6 +183,62 @@ test('⚠️ a fixed card shape may waste the screen, and the board says so', ()
   assert.equal(scrolls, false, 'it wastes the screen rather than overflowing it');
 });
 
+test('⛔ a described screen never puts a column under the physical minimum', () => {
+  // #170. The television hangs above the charging dock, so a column has to be
+  // wide enough to point at the microphone underneath it. This is the property
+  // that rule becomes: whatever the arrangement asks for, no column is ever
+  // narrower than the dock position it stands above.
+  //
+  // ⚠️ Measured as *pitch* -- a column's share of the screen, centre to
+  // centre -- because the gap between cards lives inside that share. A dock of
+  // twelve 4in positions under a 48in picture is exactly twelve columns.
+  const MIN = 180; // a 4.5in position on a 55in 1080p panel
+  for (const { label, input } of everyBoard()) {
+    const { columns } = computeLayout({ ...input, minColumnWidth: MIN });
+    const pitch = input.containerWidth / columns;
+    assert.ok(
+      pitch >= MIN || columns === 1,
+      `${label}: ${columns} columns gives a ${Math.round(pitch)}px pitch, under the ${MIN}px minimum`,
+    );
+  }
+});
+
+test('⛔ and an undescribed screen is left exactly as it was', () => {
+  // A board that has never been measured must behave identically to one from
+  // before any of this existed -- null is "no rule", not "a rule of zero".
+  for (const { label, input } of everyBoard()) {
+    const without = computeLayout(input);
+    for (const nothing of [null, undefined, 0]) {
+      const withNothing = computeLayout({ ...input, minColumnWidth: nothing });
+      assert.deepEqual(withNothing, without, `${label}: minColumnWidth=${nothing} changed the layout`);
+    }
+  }
+});
+
+test('⭐ the minimum wraps the venue board instead of making slivers', () => {
+  // The fault in the photographs: Side by side with no ceiling gave twelve
+  // 155px columns. A 4.5in dock position is 180px on that screen, so the board
+  // has to wrap rather than go narrower.
+  const venue = {
+    slotCount: 12,
+    containerWidth: 1920,
+    availableHeight: 1080,
+    slotWidth: 420,
+    gap: 6,
+    arrangement: 'row',
+    shape: 'auto',
+    columns: 'auto',
+  };
+
+  const before = computeLayout(venue);
+  const after = computeLayout({ ...venue, minColumnWidth: 180 });
+
+  assert.deepEqual([before.columns, before.rows], [12, 1], 'the fault as photographed');
+  assert.deepEqual([after.columns, after.rows], [10, 2], 'wrapped rather than narrowed');
+  assert.ok(after.cardWidth > before.cardWidth);
+  assert.equal(after.columnsLimitedByWidth, true, 'and says why, so a rule is not mistaken for a bug');
+});
+
 test('⭐ the 1080p television in the venue, every arrangement, twelve channels', () => {
   // The configurations in the photographs, so a change that moves any of them
   // has to be looked at deliberately.
