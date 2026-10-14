@@ -969,6 +969,13 @@ canvas.slotgraph {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    // ⛔ #181. A card in desk mode is this box with the info drawer beneath it,
+    // and the drawer is full width. Measured on a board at 1600 and 1920 this
+    // box came out 55-64px short of the card in every arrangement, so the two
+    // shared a left edge and disagreed on the right -- which is what reads as
+    // overlapping rectangles in a photograph of the wall. Stated rather than
+    // left to `auto`, because `auto` demonstrably did not fill it here.
+    width: 100%;
   }
 
   .mic_id {

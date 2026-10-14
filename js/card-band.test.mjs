@@ -191,3 +191,35 @@ test('a healthy channel wears no badge', () => {
     'an empty chip should take no space',
   );
 });
+
+/**
+ * Desk mode's card is the name box with the info drawer beneath it (#181).
+ *
+ * ⛔ The drawer is full width, so the box above it has to be too. Measured on a
+ * board at 1600 and 1920, in all four arrangements, it came out 55-64px short
+ * of the card while the drawer matched — the two shared a left edge and
+ * disagreed on the right, which is what reads as overlapping rectangles in a
+ * photograph of the wall.
+ *
+ * ⚠️ The drawer's own contents are absolutely positioned against `.col-sm`
+ * with `bottom:` offsets, inherited from micboard. That part measured sound and
+ * is deliberately not touched here.
+ */
+test('⛔ the desk-mode card is one box, not two of different widths', () => {
+  // ⚠️ `block()` stops at the first `}`, which inside a nested SCSS block is an
+  // inner rule rather than the end of `.deskmode`. Slice from `.deskmode {` and
+  // take the `.mic_name` rule that follows it.
+  const deskStart = css.indexOf('.deskmode {');
+  assert.ok(deskStart > -1, 'desk mode should still have a block of its own');
+
+  const afterDesk = css.slice(deskStart);
+  const micStart = afterDesk.indexOf('.mic_name {');
+  assert.ok(micStart > -1, 'desk mode should still style .mic_name');
+
+  const micName = afterDesk.slice(micStart).split('}')[0];
+  assert.match(
+    micName,
+    /width:\s*100%/,
+    'the name box must fill the card, or it disagrees with the drawer below it',
+  );
+});
