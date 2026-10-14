@@ -47,7 +47,15 @@ const name_sample = [
   'Mollie', 'Albert', 'Gillen', 'Steph', '',
 ];
 
-const type_sample = ['uhfr', 'qlxd', 'ulxd', 'axtd'];
+// ⛔ Every receiver type the board supports, not the four it shipped with.
+// `slxd` and `slxdplus` arrived in 1.16.0 and `p10t` is the IEM transmitter;
+// leaving them out meant the demo could not show the newest hardware, and
+// `device_class()` never returned 'IEM' on a demo board at all.
+const type_sample = ['uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus', 'p10t'];
+
+// Which types go in a pack on somebody's belt rather than in their hand. Only
+// used to pick a plausible label -- the board does not ask this question.
+const bodypack_types = ['ulxd', 'axtd', 'slxdplus'];
 
 // https://gist.github.com/kerimdzhanov/7529623
 function getRandomInt(min, max) {
@@ -56,6 +64,32 @@ function getRandomInt(min, max) {
 
 function randomTypeGenerator() {
   return type_sample[getRandomInt(0, type_sample.length - 1)];
+}
+
+/**
+ * The label a receiver carries, which is how a board tells a handheld from a
+ * bodypack from an IEM.
+ *
+ * ⛔ Every demo slot used to be `HH##`, so a demo board was twelve handhelds
+ * however many types were in the sample. The kind is the first thing somebody
+ * reads off the rack, and it was the one thing the demo could not show.
+ *
+ * ⚠️ The hyphen is deliberate. `device_id()` documents the convention as
+ * "HH-1 Dave" or "BP-9", and `get_chan_name` matches `([A-Za-z]+)?([-]?)([0-9])+`
+ * on the first token -- so the hyphenated form goes down the ordinary path.
+ * The space form `IEM 1` has its own branch that only fires while the number is
+ * a single character, so `IEM 10` would fall through and put the whole label
+ * where the person's name belongs. Not a case worth demonstrating.
+ */
+function deviceLabel(type, slot) {
+  const n = slot.toString().padStart(2, '0');
+  if (type === 'p10t') {
+    return `IEM-${n}`;
+  }
+  if (bodypack_types.includes(type)) {
+    return `BP-${n}`;
+  }
+  return `HH-${n}`;
 }
 
 function randomNameGenerator() {
@@ -200,13 +234,19 @@ export function seedTransmitters(dl) {
       // const n = 'HH' + slot.toString().padStart(2, '0') + ' ' + names[i];
       const n = names[i];
       r.name = n;
-      r.id = `HH${slot.toString().padStart(2, '0')}`;
+      r.id = deviceLabel(r.type, slot);
       // The device line, which the demo would otherwise leave permanently
       // blank. Deliberately a different name from the person: a transmitter
       // keeps whatever label the last person to hold it left on it, and that
       // gap between the hardware's label and who is actually on the channel is
       // the reason the board shows both.
       r.name_raw = `${r.id} ${names[(i + 1) % len] || 'SPARE'}`;
+      // ⛔ The receiver column heading reads this, not `id`. The demo never set
+      // it, so `deviceHeading` fell back to "Slot N" on every card -- which is
+      // the exact symptom of #186, reproduced by the demo for a completely
+      // different reason. A demo that fakes a known fault is worse than one
+      // that shows nothing.
+      r.device_id = r.id;
       micboard.transmitters[slot] = r;
     }
   }
@@ -223,7 +263,9 @@ function meteteredRandomDataGenerator(update) {
   }
   const data = JSON.parse(JSON.stringify(micboard.transmitters[slot]));
 
-  data.id = `HH${slot.toString().padStart(2, '0')}`;
+  // ⛔ No `data.id` here. It used to be rewritten to `HH##` on every tick, which
+  // would undo the seeded label within a second or two and turn every bodypack
+  // and IEM back into a handheld. The clone above already carries the right one.
 
   data.timestamp = unixtimestamp();
   switch (update) {
