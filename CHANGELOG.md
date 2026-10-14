@@ -10,6 +10,108 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.5] - 2026-10-14
+
+The answer to the beta.4 photographs. Fifteen changes, almost all of them to the card and the rules
+that decide its size — and the first build where **Side by side means what it says**.
+
+⛔ **This is the build to put on the wall.** Everything below was measured on a development board with
+the television's geometry injected, because the browser available during development cannot run the
+real layout pass. The faults these fix were found on the wall; the fixes have not been there.
+
+### Added
+- **A third place for the status colour: Edge rail.** The colour moves off the name band and onto a
+  stripe down the card's leading edge, so the band shrinks to the text it holds and the photograph
+  takes the height back. On a wall that is the whole trade — a bigger face for the same card. *Band
+  only* and *Whole card* are unchanged and still there.
+
+- **The board pages through channels it cannot show at once, and says why.** When a layout cannot fit
+  every channel, the board shows what fits and brings the rest round on a timer rather than wrapping
+  into a shape nobody asked for. A bar at the foot says which page it is on, how many channels there
+  are in total, and how long until it moves — and it holds on a page when a channel there needs
+  attention rather than cycling past it.
+
+  ⚠️ Your *Page through* switch is never rewritten. If the board must page, it does, and the view
+  panel says *"On anyway — 48 channels, 12 fit. Showing all of them in 4 parts."* When the channel
+  count drops back, your setting simply takes effect again.
+
+- **Config → Screens gained a Dock section.** What is on the table below a screen is described once —
+  a **charging dock** that charges what sits in it, or a **pickup pad** where microphones are left
+  without charging — and each screen points at the one beneath it.
+
+  ⭐ This is what decides how many columns a board shows. A column points at a position on the table,
+  so it may never be narrower than one. Measure the width of a single position: the SBC200 is 3.9in.
+
+  ⛔ A board already describing a screen keeps working and keeps its column width; the Dock picker
+  shows *"4.5in — from before, add a dock to replace it"* until you describe the dock itself.
+
+### Changed
+- **Side by side is always one row.** It used to become a grid as soon as there were more channels
+  than columns — twelve channels on *Max 6* quietly became two rows of six. It now stays one row and
+  pages the rest, because a column points at a dock position and there is no second row of dock for a
+  second row of cards to point at. The cards are twice as tall for it.
+
+  ⚠️ If you use *Side by side* with a fixed card shape (16:9 or 3:4), the board is a strip by
+  construction — one row of 16:9 cards can only be so tall. Use *Auto* for one row, or *Fit* / *Grid*
+  for a shaped card.
+
+- **The card no longer drops anything to fit.** It used to hide the device name below 190px and the
+  runtime digits below 120px. Width was never the right question: a 155px card in a one-row board has
+  a thousand pixels of height. Narrow cards now restack what they carry instead of shedding it, and
+  nothing on the card is ever hidden by width again.
+
+- **The info drawer is two sparklines instead of a chart.** Audio and RF each get a trend line with
+  their current value beside it, over one row of figures. Nobody read a value off the old streaming
+  plot — the question is *"is it steady?"* — and the drawer now takes a third of the height it did,
+  which the photograph gets back.
+
+- **The device name is printed once.** It appeared both as the column heading and inside the name
+  band. The band's copy is gone and the runtime takes its place, which is also what the 1.15.0 layout
+  said would happen and never did.
+
+- **Demo mode shows the system as it is.** It was missing every receiver type added since the fork,
+  labelled every channel a handheld, and left the receiver heading reading *Slot N* on every card —
+  which looks exactly like a real fault that is open on the issue tracker.
+
+### Fixed
+- **The screens editor no longer deletes the row you are filling in.** Saving replaced the form with
+  the server's answer, which cannot contain an incomplete row — so the row being typed vanished, in
+  the same breath as being told it had not been saved. ⭐ This is why no screen was ever successfully
+  described, and therefore why the column minimum never took effect at all.
+
+- **A fixed card shape no longer leaves the board a strip, and no longer runs off the bottom.** Twelve
+  16:9 cards side by side filled 8% of a 1080p screen; twelve 3:4 cards needed 1692px of it and cut
+  the last row off. The column count now gives way to the shape, and rows that do not fit become
+  pages rather than disappearing below the fold.
+
+- **The frequency reads MHz.** It said `Hz`, wrong by six orders of magnitude, on every card in every
+  photograph taken of the wall.
+
+- **The Help panel is readable.** It was translucent, so the board showed through the text — on the
+  one screen somebody reads when they do not yet know how the board works. Its link was also too
+  faint against the panel to meet contrast.
+
+- **The card fills its own width in desk mode**, rather than leaving a gap down one side, and the
+  name box no longer overlaps the drawer beneath it.
+
+- **Switching from TV to Desk no longer collapses the board to a single column.** The TV layout left
+  its column template behind, and desk mode could not use it.
+
+- **`/data.json` names its own failures.** The board's payload was built as one expression, so any
+  part of it failing took the whole endpoint down with no indication of which part — a board asking
+  for its channels got nothing at all. Each piece is now built separately and logged by name, one bad
+  receiver no longer hides every other receiver, and the device list is copied before it is read so a
+  configuration save cannot quietly serve a board fewer receivers than it has.
+
+### Known
+- ⏳ **Nothing in this release has run on a television.** That is what it is for.
+- ⏳ **The 500 on `/data.json` seen on the beta.4 board is not diagnosed.** The leading explanation —
+  a configuration save colliding with a poll — was tested and ruled out. If it happens again, the log
+  will now name the section that failed, which should be enough to finish it.
+- ⏳ **Grid still shrinks its cards without limit.** Past about 48 channels the photograph is squeezed
+  out entirely and the board becomes a coloured list. Deliberately left alone: it stays legible, and
+  *Side by side* — the arrangement the wall runs — is unaffected.
+
 ## [2.0.0-beta.4] - 2026-10-13
 Columns that line up with the microphones underneath them.
 
