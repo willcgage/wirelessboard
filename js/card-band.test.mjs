@@ -312,12 +312,27 @@ test('⛔ the edge rail carries the status colour, and the band goes neutral', (
 });
 
 /**
- * ⛔ The never-shed list, settled with the maintainer for #193/#195.
+ * ⛔ The shed order, and the never-shed list (#193/#195).
  *
- * What a card drops as it narrows: the frequency, then the status word, then
- * the position. What never gives way: the face, the person, the status, the
- * device name, and **the battery icon** — the battery is why somebody walks to
- * the rack.
+ * As the card narrows:
+ *
+ *     above 190px   everything shows
+ *     190px         the position goes; the runtime takes a full centred row
+ *     120px         the runtime digits go; the battery icon stays
+ *
+ * What never gives way at any width: the photograph, the person's name, the
+ * device name, the status chip, and **the battery icon** — the battery is why
+ * somebody walks to the rack.
+ *
+ * ⚠️ An earlier version of this comment, and of #193/#195, said the order was
+ * "frequency, then the status word, then the position". That was never true of
+ * the code and has been corrected on the issues:
+ *
+ *   - the **frequency** lives in the info drawer, not the band, so it is
+ *     governed by the `elinfo` setting and never sheds by width at all;
+ *   - the **status word** has no rule hiding it at any width, and should not —
+ *     dropping it would leave colour and a glyph, and the chip exists precisely
+ *     because colour alone is not enough.
  *
  * ⚠️ One order for every wash. Defined per-wash they drift apart, which is the
  * specific failure the rail was designed to avoid.
@@ -345,6 +360,28 @@ test('⛔ the device name is not shed at any width', () => {
       block(tier),
       /device-name\s*\{[^}]*display:\s*none/,
       `${tier} must not hide the device name`,
+    );
+  }
+});
+
+/**
+ * ⛔ The status word is not a width casualty.
+ *
+ * "Status is never colour alone" is the oldest rule on this card — red and
+ * amber are the two states that matter most and the two hardest to tell apart
+ * over a photograph. A glyph plus a word is how that is kept. Shedding the word
+ * at a narrow width would leave colour and a glyph at exactly the size where
+ * the glyph is hardest to read.
+ *
+ * ⚠️ The card mockups for #193 drew a status *dot* at 155px. That was never
+ * built, and on this reasoning it should not be.
+ */
+test('⛔ no width tier hides the status word', () => {
+  for (const tier of ['@container (max-width: 190px) {', '@container (max-width: 120px) {']) {
+    assert.doesNotMatch(
+      block(tier),
+      /chip-word\s*\{[^}]*display:\s*none/,
+      `${tier} must not drop the status word — colour and a glyph is not enough`,
     );
   }
 });
