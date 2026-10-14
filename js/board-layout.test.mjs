@@ -248,10 +248,13 @@ test('the top bar is hidden from body, not from the container', () => {
   );
 });
 
-test('the slot and the position share one row, at opposite ends', () => {
-  // Two rows, not three: the name has a line, and the two short tags share the
-  // one below it. Stacking them cost a whole line each for about six
-  // characters, and lines are what the photo pays for.
+test('the name has a row and the runtime has the one below it', () => {
+  // ⛔ Two rows, one column, since #206. It was two columns -- the device name
+  // at the start, the runtime at the end -- but the device name had already
+  // moved to the column heading in 1.15.0 and the band's copy was left behind,
+  // so every card printed the same string twice. Removing it empties the left
+  // half, and the runtime takes the side the device had, which is what that
+  // move said it would do.
   const scss = readFileSync(
     fileURLToPath(new URL('../css/style.scss', import.meta.url)),
     'utf8',
@@ -260,11 +263,12 @@ test('the slot and the position share one row, at opposite ends', () => {
   // ⚠️ Scan for the band's own area list rather than the first one in the file:
   // `.mic_name` has a single-area grid of its own since #130.
   const areas = scss.split('.mic_name .card-band {')[1].split('}')[0];
-  assert.match(areas, /"name name"/, 'the name should span the row above');
-  assert.match(
+  assert.match(areas, /"name"/, 'the name should have the row above');
+  assert.match(areas, /"runtime"/, 'and the runtime the one below it');
+  assert.doesNotMatch(
     areas,
-    /"position runtime"/,
-    'the position and the runtime should share one row',
+    /"position/,
+    'there is no position area: nothing ever filled it but a duplicate (#206)',
   );
 
   // These selectors each appear more than once, so scan the blocks rather than
@@ -273,17 +277,18 @@ test('the slot and the position share one row, at opposite ends', () => {
     .split(selector).slice(1)
     .some((chunk) => pattern.test(chunk.split('}')[0]));
 
-  // ⛔ The device name is a column header now (#130), not the left-hand tag:
-  // it is the same string on every row of the board, so it reads once above the
-  // card instead of inside it. The position took its place, and the runtime --
-  // the figure anyone glancing at the board actually wants -- took the end.
+  // ⛔ The device name is a column header (#130) and ONLY a column header
+  // (#206): it is the same string on every row of the board, so it reads once
+  // above the card and never inside it. The runtime takes the start of its row
+  // -- the place the device name used to hold -- so the card has one left edge.
   assert.ok(
-    declares('.mic_name .mic_id {', /justify-self:\s*start/),
-    'the position should sit at the start of its row',
+    declares('.mic_name .card-runtime {', /justify-self:\s*start/),
+    'the runtime should sit at the start of its row',
   );
-  assert.ok(
-    declares('.mic_name .card-runtime {', /justify-self:\s*end/),
-    'the runtime should sit at the end of its row',
+  assert.doesNotMatch(
+    scss,
+    /\.mic_id/,
+    'the band must not style a device name of its own; the heading is the only one',
   );
 });
 
