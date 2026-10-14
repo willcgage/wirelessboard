@@ -16,6 +16,7 @@ import {
 import { isLocked } from './viewer-lock.mjs';
 import {
   screenProblem, toPayload as screensToPayload, saveSummary as screensSaveSummary,
+  mergeSaved,
 } from './screens-editor.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
 import { assignNumbers } from './slot-numbering.mjs';
@@ -5371,7 +5372,11 @@ function saveScreens() {
   // must not drop every socket for two seconds (#116).
   postJSON('api/screens', { screens: payload }, (resp) => {
     if (resp && resp.ok) {
-      screenRows = (resp.screens || []).map((s) => ({ ...s }));
+      // ⛔ Merged, never replaced (#180). The response holds only what was
+      // stored, so assigning it over the form deleted the row somebody was
+      // still filling in -- in the same breath as telling them it had not been
+      // saved, and with nothing left to correct.
+      screenRows = mergeSaved(screenRows, resp.screens);
       renderScreenRows();
       updateScreenStatus(summary);
     } else {
