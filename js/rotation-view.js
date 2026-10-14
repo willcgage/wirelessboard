@@ -9,7 +9,7 @@
 import { micboard } from './app.js';
 import { renderDisplayList } from './channelview.js';
 import {
-  buildPages, shouldPage, nextPage, rotationLabel,
+  buildPages, pagingReason, nextPage, rotationLabel, DEFAULT_DWELL_SECONDS,
 } from './rotation.mjs';
 
 const BAR_ID = 'rotation-bar';
@@ -54,33 +54,73 @@ function criticalSlots() {
  * rows fitted and nothing ever overflowed. The board's own scroll height is the
  * honest measure; it just has to be taken at the right moment.
  */
-let overflowedWhenFull = false;
-let measured = false;
+// ⛔ No DOM overflow measurement any more (#202). It read
+// `board.scrollHeight > board.clientHeight` on the full board -- but under
+// capacity-driven paging the full board is never rendered, so it would have
+// read false for ever and paging would never have started. The layout says
+// whether every channel fits, arithmetically, before anything is drawn.
 
 /**
- * Take the measurement, but only once there is something to measure.
+ * The pages this board has, and how many channels one screenful holds.
  *
- * ⛔ Taken at startup it was always false: the driver starts on
- * DOMContentLoaded and the board has no cards yet, so nothing overflowed and
- * that answer was then trusted for the life of the session. It has to wait for
- * the first render, and it has to happen before a page replaces the full board.
+ * %s `perPage` was always here and never supplied. `buildPages` has split a
+ * group into pages since #113 -- comment, behaviour and fourteen test call
+ * sites -- but the only production caller passed `micboard.rotationPerPage`,
+ * which is read here and written nowhere in the project. It was always
+ * `undefined`, so the capacity fell to `Infinity` and a group was never split.
+ * Everything needed to page was built; this one number was missing.
+ *
+ * %s A board with no groups still has to page. `buildPages` works from the
+ * group list, so a board that never configured one produced an empty page list,
+ * `pageCount > 1` failed, and nothing paged -- which would have left the
+ * guarantee holding only for boards that happen to use groups. One implicit
+ * group of everything on the display list stands in.
  */
-function measureOverflowOnce() {
-  if (measured) return;
-  const board = document.getElementById('micboard');
-  if (!board || !board.querySelector('.mic_name')) return;
-  overflowedWhenFull = board.scrollHeight > board.clientHeight + 1;
-  measured = true;
-}
-
 function pagesNow() {
+  // ⭐ Published by `updateTvLayoutMetrics`, which already computed it. Deriving
+  // it again here would mean two places reading the container's width and
+  // calling `computeLayout`, which is the fault #57 was about -- and they would
+  // disagree the first time one of them was changed.
+  const capacity = Number(micboard.boardCapacity) > 0
+    ? Number(micboard.boardCapacity)
+    : Infinity;
   const groups = micboard.config && Array.isArray(micboard.config.groups)
     ? micboard.config.groups
     : [];
-  return buildPages(groups, { perPage: micboard.rotationPerPage });
+  const pages = buildPages(groups, { perPage: capacity });
+  if (pages.length) {
+    return { pages, capacity };
+  }
+
+  const slots = (micboard.displayList || []).filter((slot) => Number(slot) > 0);
+  if (!slots.length) {
+    return { pages: [], capacity };
+  }
+  return {
+    pages: buildPages(
+      [{ group: 0, title: '', slots }],
+      { perPage: capacity },
+    ),
+    capacity,
+  };
 }
 
-function renderBar(pages, held, reason) {
+/**
+ * The bar at the foot of the wall.
+ *
+ * %s It says *why* the board is moving, because "required" and "requested" look
+ * identical on screen and are not the same thing to the person watching. A
+ * board paging because it must also says how many channels there are, which is
+ * the question an operator actually has when a wall starts moving on its own:
+ * am I seeing everything? The answer is yes, in parts.
+ *
+ * %s No countdown while holding. A hold has no end time, and a number that never
+ * reaches zero reads as a frozen board -- the one impression this must never
+ * give.
+ */
+function renderBar(pages, {
+  held = false, heldReason = '', why = null, secondsLeft = null, shown = 0, total = 0,
+} = {}) {
   let bar = document.getElementById(BAR_ID);
   if (!pages.length) {
     if (bar && bar.parentElement) bar.parentElement.removeChild(bar);
@@ -98,9 +138,38 @@ function renderBar(pages, held, reason) {
   // frozen board, which is the one impression this must never give.
   const name = rotationLabel(pages, pageIndex);
   const dots = pages.map((_, i) => (i === pageIndex ? '●' : '○')).join(' ');
-  bar.textContent = held ? `${name} — holding: ${reason}` : name;
+
+  // %s Built from spans rather than one string, because the parts are styled
+  // differently and were previously concatenated into `textContent` -- which is
+  // why the dots, set on `dataset`, were never drawn by anything.
+  bar.textContent = '';
+  const part = (text, className) => {
+    const el = document.createElement('span');
+    el.className = className;
+    el.textContent = text;
+    bar.appendChild(el);
+    return el;
+  };
+
+  part(held ? `${name} — holding: ${heldReason}` : name, 'rotation-bar__name');
+
+  // The channel count, only when the board is paging because it has to. On a
+  // rotation the operator asked for, nothing is being withheld, so saying
+  // "12 of 12" would raise a question that does not exist.
+  if (why === 'required' && Number(total) > 0) {
+    part(`${shown} of ${total} channels`, 'rotation-bar__scope');
+  }
+
+  part(dots, 'rotation-bar__dots');
+
+  if (!held && Number.isFinite(secondsLeft)) {
+    part(`${Math.max(0, Math.ceil(secondsLeft))}s`, 'rotation-bar__secs');
+  }
+
   bar.dataset.dots = dots;
+  bar.dataset.why = why || '';
   bar.classList.toggle('is-held', !!held);
+  bar.classList.toggle('is-required', why === 'required');
 }
 
 function stopRendering() {
@@ -109,13 +178,28 @@ function stopRendering() {
 }
 
 function tick() {
-  measureOverflowOnce();
-  const pages = pagesNow();
-  const enabled = micboard.rotation === 'on';
+  const { pages, capacity } = pagesNow();
+  const total = (micboard.displayList || []).filter((slot) => Number(slot) > 0).length;
 
-  if (!shouldPage({ enabled, overflows: overflowedWhenFull, pageCount: pages.length })) {
-    // ⛔ Everything fits, or rotation is off. The board goes back to showing
-    // what it was showing and says nothing — this is not a screensaver.
+  // ⛔ One decider, and it answers *why*. Nothing else in here asks
+  // `micboard.rotation` directly, so the preference and the overflow cannot be
+  // read as contending answers to the same question.
+  const why = pagingReason({
+    rotationPref: micboard.rotation,
+    overflows: Number.isFinite(capacity) && capacity < total,
+    pageCount: pages.length,
+  });
+
+  // ⛔ So the view panel can say why the switch is not in force. A board
+  // visibly paging while the panel reads "Off" is the bug, even when the code
+  // is right -- that was the maintainer's warning about this being "a little
+  // bit of both".
+  micboard.pagingReason = why;
+  micboard.pagingScope = why ? { shown: capacity, total } : null;
+
+  if (!why) {
+    // ⛔ Everything fits and the operator did not ask. The board goes back to
+    // showing what it was showing and says nothing -- this is not a screensaver.
     stopRendering();
     applied = false;
     return;
@@ -128,7 +212,12 @@ function tick() {
     applied = true;
     heldSince = Date.now();
     renderDisplayList(pages[pageIndex].slots);
-    renderBar(pages, false, '');
+    renderBar(pages, {
+      why,
+      secondsLeft: (pages[pageIndex] && pages[pageIndex].dwell) || DEFAULT_DWELL_SECONDS,
+      shown: pages[pageIndex].slots.length,
+      total,
+    });
     return;
   }
 
@@ -147,19 +236,40 @@ function tick() {
       heldSince = Date.now();
       renderDisplayList(pages[pageIndex].slots);
     }
-    renderBar(pages, true, step.reason);
+    renderBar(pages, {
+      held: true,
+      heldReason: step.reason,
+      why,
+      shown: pages[pageIndex].slots.length,
+      total,
+    });
     return;
   }
 
   if (elapsed < currentDwell) {
-    renderBar(pages, false, '');
+    // ⭐ The countdown was computed here all along and never passed on:
+    // `elapsed` and `currentDwell` are both above, and `renderBar` only ever
+    // received the page name.
+    renderBar(pages, {
+      why,
+      secondsLeft: currentDwell - elapsed,
+      shown: pages[pageIndex].slots.length,
+      total,
+    });
     return;
   }
 
   pageIndex = step.index;
   heldSince = Date.now();
   renderDisplayList(pages[pageIndex].slots);
-  renderBar(pages, false, '');
+  // ⚠️ The page has just turned, so the countdown starts at this page's own
+  // dwell rather than carrying the one that ran out.
+  renderBar(pages, {
+    why,
+    secondsLeft: (pages[pageIndex] && pages[pageIndex].dwell) || DEFAULT_DWELL_SECONDS,
+    shown: pages[pageIndex].slots.length,
+    total,
+  });
 }
 
 /** Note that somebody is using the board, so the page does not move under them. */
@@ -183,11 +293,9 @@ export function startRotation() {
   // first page for the whole quiet period -- press R, watch nothing happen for
   // thirty seconds, conclude it is broken.
   lastInteraction = 0;
-  // ⛔ Measured here, before the first page replaces the full board. This is
-  // the only moment the question "does the whole show fit" can be answered by
-  // looking.
-  measured = false;
-  measureOverflowOnce();
+  // ⛔ Nothing to measure here any more (#202). Whether the show fits is
+  // arithmetic from the layout, not something that has to be read off the DOM
+  // in the one instant before the first page replaces the full board.
   // ⚠️ And show the first page now rather than on the next tick. The hold
   // branch only redraws when the page *changes*, so starting on page 0 left
   // the board showing every channel while the bar said "Worship".

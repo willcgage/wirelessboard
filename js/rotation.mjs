@@ -21,14 +21,48 @@ const MIN_DWELL = 5;
 const MAX_DWELL = 600;
 
 /**
- * Whether this board should be paging at all.
+ * Why this board is paging, or `null` if it is not.
  *
- * ⛔ Three things have to be true, and the overflow is the one that stops this
- * being a screensaver: a board where everything fits never pages, however it is
- * configured.
+ * ⛔ **One decider, and it answers *why* rather than *whether*** (#202).
+ *
+ * The maintainer's call was that auto-paging is "a little bit of both"
+ * technically -- a state the board enters *and* a setting the operator holds --
+ * with the warning that the code must not end up confused about which. It would
+ * have: if `micboard.rotation === 'on'` meant "the board is paging" *and* the
+ * board could also page while that reads `'off'`, every call site asking the
+ * question gets an ambiguous answer and two of them eventually disagree.
+ *
+ * So the preference is an input to this function and nothing else in the
+ * project asks it directly. The two inputs can never contend, because they are
+ * resolved in a fixed order:
+ *
+ *   1. the layout cannot show every channel -> `'required'`. Not the operator's
+ *      to switch off: the only alternative is hiding one, and that is the single
+ *      failure this display cannot afford.
+ *   2. otherwise the stored preference -> `'requested'`. Everything would fit;
+ *      the operator asked to cycle the groups anyway.
+ *   3. otherwise `null`.
+ *
+ * ⭐ The return reads correctly as a condition, so a caller that only wants
+ * yes-or-no gets the right answer without a second helper existing to drift
+ * from this one. That is why `shouldPage` was replaced rather than kept beside
+ * it -- two functions answering nearly the same question was the shape of the
+ * problem, not the fix.
+ *
+ * ⚠️ `pageCount > 1` still gates both: a single page is not a rotation, and a
+ * board that "pages" through one page would just be a board.
  */
-export function shouldPage({ enabled, overflows, pageCount } = {}) {
-  return enabled === true && overflows === true && Number(pageCount) > 1;
+export function pagingReason({ rotationPref, overflows, pageCount } = {}) {
+  if (Number(pageCount) <= 1) {
+    return null;
+  }
+  if (overflows === true) {
+    return 'required';
+  }
+  if (rotationPref === 'on') {
+    return 'requested';
+  }
+  return null;
 }
 
 /** Whether a group takes part in the rotation. */

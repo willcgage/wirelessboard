@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   DEFAULT_DWELL_SECONDS,
-  shouldPage,
+  pagingReason,
   rotates,
   dwellFor,
   buildPages,
@@ -18,27 +18,41 @@ const GROUPS = [
   { group: 3, title: 'Drama', slots: [7, 8, 9] },
 ];
 
-test('⛔ a board where everything fits never pages', () => {
-  // This is not a screensaver. The timer exists only because the density
-  // control can make the wall smaller than the show.
-  assert.equal(shouldPage({ enabled: true, overflows: false, pageCount: 3 }), false);
+test('⛔ a board where everything fits does not page on its own', () => {
+  // This is not a screensaver. A board with room for every channel only cycles
+  // because the operator asked it to.
+  assert.equal(pagingReason({ rotationPref: 'off', overflows: false, pageCount: 3 }), null);
+  assert.equal(pagingReason({ rotationPref: 'on', overflows: false, pageCount: 3 }), 'requested');
 });
 
-test('rotation off never pages, however full the board is', () => {
-  assert.equal(shouldPage({ enabled: false, overflows: true, pageCount: 3 }), false);
+test('⛔ a board that cannot show every channel pages whatever the switch says', () => {
+  // ⚠️ This inverts the old rule, deliberately. It used to read "rotation off
+  // never pages, however full the board is" -- which meant an operator could
+  // switch off the only thing bringing the twelfth channel round, and the board
+  // would simply not show it. Hiding a channel is the one failure this display
+  // cannot afford, so overflow outranks the preference.
+  //
+  // The stored preference is NOT rewritten; it is just not the deciding input
+  // here. What the operator sees instead is the board saying why it is paging.
+  assert.equal(pagingReason({ rotationPref: 'off', overflows: true, pageCount: 3 }), 'required');
+  assert.equal(pagingReason({ rotationPref: 'on', overflows: true, pageCount: 3 }), 'required');
 });
 
 test('one page is not a rotation', () => {
-  assert.equal(shouldPage({ enabled: true, overflows: true, pageCount: 1 }), false);
+  assert.equal(pagingReason({ rotationPref: 'on', overflows: true, pageCount: 1 }), null);
+  assert.equal(pagingReason({ rotationPref: 'on', overflows: false, pageCount: 1 }), null);
 });
 
-test('an overflowing board with rotation on and pages to show, pages', () => {
-  assert.equal(shouldPage({ enabled: true, overflows: true, pageCount: 2 }), true);
+test('⭐ the reason is the answer, and it also reads as a yes-or-no', () => {
+  // A caller that only wants to know *whether* gets the right answer from the
+  // same call, so no second helper exists to drift from this one.
+  assert.ok(pagingReason({ rotationPref: 'off', overflows: true, pageCount: 2 }));
+  assert.ok(!pagingReason({ rotationPref: 'off', overflows: false, pageCount: 2 }));
 });
 
 test('missing information means no paging', () => {
-  assert.equal(shouldPage(), false);
-  assert.equal(shouldPage({}), false);
+  assert.equal(pagingReason(), null);
+  assert.equal(pagingReason({}), null);
 });
 
 test('⚠️ a group takes part unless it says otherwise', () => {
@@ -194,4 +208,52 @@ test('rubbish in does not throw', () => {
   assert.deepEqual(buildPages([{ group: 1, slots: 'all of them' }], { perPage: 2 }), []);
   assert.equal(alertPageIndex(null, [1]), null);
   assert.equal(rotationLabel([], 0), '');
+});
+
+// ---------------------------------------------------------------------------
+// #201/#202 — the capacity that was always asked for and never supplied
+// ---------------------------------------------------------------------------
+
+test('⛔ a capacity splits a group; no capacity never did', () => {
+  // ⚠️ This is the whole reason none of this ran. `buildPages` has taken
+  // `perPage` since #113, and the one production caller passed
+  // `micboard.rotationPerPage` — read there and written nowhere in the project.
+  // It was always undefined, so the capacity fell to Infinity.
+  const group = [{ group: 1, title: 'Worship', slots: [1, 2, 3, 4, 5, 6, 7, 8] }];
+
+  const unsupplied = buildPages(group, { perPage: undefined });
+  assert.equal(unsupplied.length, 1, 'no capacity is how it behaved for years: one page');
+  assert.equal(unsupplied[0].slots.length, 8);
+
+  const supplied = buildPages(group, { perPage: 3 });
+  assert.equal(supplied.length, 3, 'a capacity of three splits eight into three pages');
+  assert.deepEqual(supplied.map((p) => p.slots.length), [3, 3, 2]);
+});
+
+test('⛔ every channel survives being paged', () => {
+  // The rule that has not moved: shown now, or on a page that exists. A channel
+  // that appears on no page has been hidden, which is the one failure this
+  // display cannot afford.
+  const slots = Array.from({ length: 29 }, (_, i) => i + 1);
+  for (const perPage of [1, 2, 5, 12, 28, 29, 30]) {
+    const pages = buildPages([{ group: 1, title: 'All', slots }], { perPage });
+    const seen = pages.flatMap((p) => p.slots);
+    assert.deepEqual(
+      seen,
+      slots,
+      `perPage ${perPage}: the pages do not add back up to the channels`,
+    );
+  }
+});
+
+test('⭐ a board with no groups can still be paged', () => {
+  // ⛔ `buildPages` works from the group list, so a board that never configured
+  // one produced an empty page list and could not page at all — which would
+  // have left the guarantee holding only for boards that happen to use groups.
+  // The driver stands an implicit group in; this is the shape it passes.
+  const implicit = [{ group: 0, title: '', slots: [4, 5, 6, 7] }];
+  const pages = buildPages(implicit, { perPage: 2 });
+  assert.equal(pages.length, 2);
+  assert.deepEqual(pages.flatMap((p) => p.slots), [4, 5, 6, 7]);
+  assert.equal(pages[0].parts, 2, 'and it still reports which part of how many');
 });

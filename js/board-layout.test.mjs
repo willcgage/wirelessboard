@@ -92,12 +92,67 @@ test('a shaped card uses the width it will really get, not the configured one', 
     shape: 'wide',
   });
 
-  assert.equal(columns, 3, 'twelve 16:9 cards in one row would be an 87px strip');
+  // ⚠️ Four, not three. Three was the best *wrapping* answer; with one row the
+  // card width caps at the configured 420px, so four columns is as tall as a
+  // single 16:9 row can be made.
+  assert.equal(columns, 4, 'twelve 16:9 cards in one row would be an 87px strip');
   assert.ok(
     Math.abs(rowHeight - cardWidth / (16 / 9)) < 0.01,
     `the 16:9 height must follow the real card width, got ${rowHeight} for ${cardWidth}`,
   );
   assert.ok(boardHeight <= 1080, 'and the board it chose still fits the screen');
+});
+
+test('⚠️ Side by side with a named shape is a strip, and that is the choice being made', () => {
+  // ⛔ Not a defect, and not something the layout can fix. `Side by side` is one
+  // row (#201) and a named shape fixes the card's height from its width, so the
+  // board's height is decided before the screen is consulted: one row of 16:9
+  // cards no wider than 420px is 236px tall whatever the screen is.
+  //
+  // #185 reduces the column count until a shaped board fills the height, and it
+  // still does wherever wrapping is allowed -- but it cannot add the rows that
+  // filling would need here. An operator who wants a shaped card to fill a wall
+  // wants Fit or Grid; one who wants one row wants `auto`.
+  const strip = computeLayout({
+    slotCount: 12,
+    containerWidth: 1920,
+    availableHeight: 1080,
+    slotWidth: 420,
+    gap: 6,
+    arrangement: 'row',
+    shape: 'wide',
+    columns: 'auto',
+  });
+  assert.equal(strip.rows, 1);
+  assert.ok(strip.boardHeight < 1080 * 0.4, 'the strip is real and is being asserted on purpose');
+  assert.equal(strip.scrolls, false, 'it underfills; it does not overflow');
+  assert.equal(strip.pages, true, 'and the channels it cannot show are on other pages');
+});
+
+test('⚠️ Side by side with a named shape is a strip, and that is the choice being made', () => {
+  // ⛔ Not a defect, and not something the layout can fix. `Side by side` is one
+  // row (#201) and a named shape fixes the card's height from its width, so the
+  // board's height is decided before the screen is consulted: one row of 16:9
+  // cards no wider than 420px is 236px tall whatever the screen is.
+  //
+  // #185 reduces the column count until a shaped board fills the height, and it
+  // still does wherever wrapping is allowed -- but it cannot add the rows that
+  // filling would need here. An operator who wants a shaped card to fill a wall
+  // wants Fit or Grid; one who wants one row wants `auto`.
+  const strip = computeLayout({
+    slotCount: 12,
+    containerWidth: 1920,
+    availableHeight: 1080,
+    slotWidth: 420,
+    gap: 6,
+    arrangement: 'row',
+    shape: 'wide',
+    columns: 'auto',
+  });
+  assert.equal(strip.rows, 1);
+  assert.ok(strip.boardHeight < 1080 * 0.4, 'the strip is real and is being asserted on purpose');
+  assert.equal(strip.scrolls, false, 'it underfills; it does not overflow');
+  assert.equal(strip.pages, true, 'and the channels it cannot show are on other pages');
 });
 
 test('a degenerate measurement does not collapse the board', () => {
@@ -376,11 +431,17 @@ test('stacking ignores the ceiling, because one is already fewer', () => {
   assert.equal(columnsFor({ ...WIDE, arrangement: 'column', columns: '4' }), 1);
 });
 
-test('⛔ a ceiling wraps channels onto more rows and never drops one', () => {
+test('⛔ a ceiling pages channels rather than wrapping them, and never drops one', () => {
   // The whole risk of this control: a board that quietly shows eight of twelve
-  // during a service. Paging (#113) is how a board shows fewer on purpose;
-  // until then every channel has to be on the board somewhere.
+  // during a service. That risk has not changed -- what changed is the answer.
+  //
+  // ⚠️ This used to assert the ceiling *wrapped*: `columns * rows >= 12`, a
+  // second row holding whatever did not fit on the first. `Side by side` is
+  // always one row (#201), because a column points at a position on the dock or
+  // pickup pad below the screen and there is no second row of furniture for a
+  // second row of cards to point at. The excess pages instead.
   for (const ceiling of ['4', '6', '8', '10', '12']) {
+    const n = Number(ceiling);
     const layout = computeLayout({
       slotCount: 12,
       containerWidth: 1920,
@@ -388,15 +449,26 @@ test('⛔ a ceiling wraps channels onto more rows and never drops one', () => {
       arrangement: 'row',
       columns: ceiling,
     });
+
+    assert.equal(layout.columns, n);
+    assert.equal(layout.rows, 1, `ceiling ${ceiling} drew ${layout.rows} rows; Side by side is one`);
+    assert.equal(layout.capacity, n, `ceiling ${ceiling} should hold ${n} at a time`);
+
+    // ⛔ Nothing is dropped: every channel is on the screen or on a page.
+    const pageCount = Math.ceil(12 / layout.capacity);
     assert.ok(
-      layout.columns * layout.rows >= 12,
-      `ceiling ${ceiling} left room for only ${layout.columns * layout.rows} of 12`,
+      layout.capacity * pageCount >= 12,
+      `ceiling ${ceiling}: ${pageCount} pages of ${layout.capacity} cannot hold 12`,
     );
-    assert.equal(layout.columns, Number(ceiling));
+    assert.equal(layout.pages, n < 12, `ceiling ${ceiling} should say whether it pages`);
   }
 });
 
-test('a ceiling still divides the height so the rows fit the page', () => {
+test('a ceiling gives its one row the whole height', () => {
+  // ⚠️ Was `rows: 2, rowHeight: 500` -- twelve channels over six columns
+  // wrapping into two half-height rows. One row now takes the full height and
+  // the other six channels are a second page, so the cards are twice as tall
+  // as they were for the same board.
   const layout = computeLayout({
     slotCount: 12,
     containerWidth: 1920,
@@ -405,8 +477,10 @@ test('a ceiling still divides the height so the rows fit the page', () => {
     arrangement: 'row',
     columns: '6',
   });
-  assert.equal(layout.rows, 2);
-  assert.equal(layout.rowHeight, 500);
+  assert.equal(layout.rows, 1);
+  assert.equal(layout.rowHeight, 1000);
+  assert.equal(layout.capacity, 6);
+  assert.equal(layout.pages, true);
   assert.equal(layout.scrolls, false);
 });
 

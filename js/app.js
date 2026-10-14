@@ -430,6 +430,12 @@ function mapGroups() {
     boardOptionValue,
     setDisplayMode,
     getDisplayMode: () => micboard.displayMode,
+    // ⛔ So the panel can say why Page through is not doing what it says.
+    getPagingState: () => ({
+      reason: micboard.pagingReason || null,
+      shown: micboard.pagingScope && micboard.pagingScope.shown,
+      total: micboard.pagingScope && micboard.pagingScope.total,
+    }),
     getGroups: () => micboard.groups || {},
     getGroup: () => micboard.group || 0,
     setGroup: (n) => renderGroup(n),
@@ -901,7 +907,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // ⚠️ Always started: the driver itself decides each tick whether there is
   // anything to page, so turning rotation on needs no restart and a board
   // where everything fits pays one cheap check a second.
-  try { if (micboard.rotation === 'on') startRotation(); } catch (_) {}
+  // ⛔ Unconditional, which is what the line above has claimed since #113 while
+  // the code read `if (micboard.rotation === 'on')`. With that gate the driver
+  // never started on a board with rotation off, so it never got to notice that
+  // the layout cannot show every channel -- the whole `required` path was
+  // unreachable (#202). Caught on a running board; no unit test could see it.
+  try { startRotation(); } catch (_) {}
   // Somebody using the board stops the page moving under their hand.
   try {
     ['keydown', 'pointerdown', 'wheel'].forEach((evt) => {
