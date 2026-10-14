@@ -2532,6 +2532,34 @@ body.live-strip-bottom .wirelessboard-board {
   color: rgba(255, 255, 255, 0.8);
   border-top-right-radius: 4px;
   font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* ⭐ The dots, drawn at last. `renderBar` has set `bar.dataset.dots` since
+   #113 and no rule has ever displayed it, so the one thing that said how many
+   pages exist was in the DOM and invisible. They are now a real element, since
+   a data attribute could only have been drawn through `content`, which puts
+   text in a pseudo-element where nothing can read it aloud. */
+.rotation-bar__dots {
+  letter-spacing: 0.12em;
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+/* How many channels there are, when the board is paging because it must. The
+   question an operator has when a wall starts moving on its own is whether
+   they are seeing everything, so this answers it rather than decorating. */
+.rotation-bar__scope {
+  color: #C4CFC6;
+}
+
+/* ⚠️ Tabular figures: the countdown changes every second, and proportional
+   digits make the whole bar twitch sideways as it does. */
+.rotation-bar__secs {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
 
 /* A rotation that simply stops looks like a frozen board, which is the one
@@ -2753,4 +2781,11 @@ body.viewer-locked {
   background: #3a2102;
   color: #ffc07a;
   border-top-color: #7a4a0c;
+}
+
+/* ⚠️ The board is paging because it must, and the switch beside this still
+   reads Off. Amber because it explains a contradiction the operator can see on
+   the wall -- not an error, but not nothing either. */
+.vp-row-note.is-forced {
+  color: #EF9D51;
 }

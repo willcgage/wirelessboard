@@ -315,18 +315,46 @@ export function rowHeightFor({
  */
 function geometryFor({
   columns, slotCount, containerWidth, availableHeight, slotWidth, gap, shape,
+  maxRows = Infinity,
 }) {
-  const rows = Math.max(1, Math.ceil(slotCount / columns));
+  // What the channels ask for, before any mode or screen has its say.
+  const needed = Math.max(1, Math.ceil(slotCount / columns));
   const measured = Number(containerWidth);
   const share = Number.isFinite(measured) && measured > 0
     ? (measured - gap * (columns - 1)) / columns
     : slotWidth;
   const cardWidth = Math.max(1, Math.min(slotWidth, share));
+
+  // ⛔ The arrangement's promise (#201). `Side by side` means one row, so a
+  // thirteenth channel on a board of twelve columns does not quietly become a
+  // second row -- it becomes a second page. Before this, `rows` was
+  // `ceil(slotCount / columns)` and nothing else, which is how 72 channels on
+  // Max 12 turned into a 12x6 grid while the control still said Side by side.
+  let rows = Math.max(1, Math.min(needed, maxRows));
+
+  // ⭐ A named shape fixes the row height from the card's width, so how many
+  // rows fit is knowable before deciding how many to draw. `auto` derives the
+  // height from the count instead, so every row fits by construction and there
+  // is nothing to cap -- which is why an `auto` board never pages.
+  if (shape !== 'auto') {
+    const fixed = rowHeightFor({
+      shape, cardWidth, rows, availableHeight, gap,
+    });
+    const height = Number(availableHeight);
+    if (Number.isFinite(height) && height > 0 && fixed > 0) {
+      rows = Math.max(1, Math.min(rows, Math.floor((height + gap) / (fixed + gap))));
+    }
+  }
+
   const rowHeight = rowHeightFor({
     shape, cardWidth, rows, availableHeight, gap,
   });
   return {
-    rows, cardWidth, rowHeight, boardHeight: rowHeight * rows + gap * (rows - 1),
+    rows,
+    needed,
+    cardWidth,
+    rowHeight,
+    boardHeight: rowHeight * rows + gap * (rows - 1),
   };
 }
 
@@ -355,14 +383,18 @@ function geometryFor({
  */
 export function columnsForShape({
   columns, slotCount, containerWidth, availableHeight, slotWidth, gap, shape,
+  maxRows = Infinity,
 }) {
   const height = Number(availableHeight);
   if (shape === 'auto' || !Number.isFinite(height) || height <= 0) {
     return columns;
   }
 
+  // ⚠️ The same row cap the real geometry will use. Measuring without it would
+  // choose a column count against a board that is never drawn -- `Side by side`
+  // would be compared at four rows and then rendered at one.
   const measure = (c) => geometryFor({
-    columns: c, slotCount, containerWidth, availableHeight, slotWidth, gap, shape,
+    columns: c, slotCount, containerWidth, availableHeight, slotWidth, gap, shape, maxRows,
   }).boardHeight;
 
   // Already taller than the screen: fewer columns can only make it taller, so
@@ -410,19 +442,51 @@ export function computeLayout({
     maxColumnsAtMinimum: floor,
   });
 
+  // ⏳ The arrangement's own row cap is NOT applied yet, and this is the hook
+  // for it (#201).
+  //
+  // The design says `Side by side` should mean one row and page the rest. Built
+  // and measured, it changes two boards the maintainer photographed and
+  // accepted at the venue: Max 6 with twelve channels goes from 6x2 to 6x1 with
+  // two pages, and #170's dock floor goes from 10x2 to 10x1 with two pages. In
+  // both, every channel currently fits on screen at a comfortable size, and the
+  // cap would put half of them behind a timer for nothing.
+  //
+  // ⛔ So the cap waits on a decision rather than being chosen here. What #201
+  // was actually about -- 72 channels silently becoming a 12x6 grid -- is a
+  // question about how far an `auto` board may shrink before the card stops
+  // being worth looking at, which is a number nobody has stated.
+  //
+  // Turning it on is this line: `arrangement === 'row' ? 1 : Infinity`.
+  const maxRows = Infinity;
+
   // ⭐ A named shape beats the column count (#185). `auto` is untouched.
   const columns = columnsForShape({
-    columns: asked, slotCount: n, containerWidth, availableHeight, slotWidth: width, gap, shape,
+    columns: asked,
+    slotCount: n,
+    containerWidth,
+    availableHeight,
+    slotWidth: width,
+    gap,
+    shape,
+    maxRows,
   });
 
   // The width a card will actually be given. `fit` and `grid` never ask for
   // more columns than fit, so this is the configured width; `row` and `column`
   // may, and there the configured width is a maximum the cards fall below.
   const {
-    rows, cardWidth, rowHeight, boardHeight,
+    rows, needed, cardWidth, rowHeight, boardHeight,
   } = geometryFor({
-    columns, slotCount: n, containerWidth, availableHeight, slotWidth: width, gap, shape,
+    columns, slotCount: n, containerWidth, availableHeight, slotWidth: width, gap, shape, maxRows,
   });
+
+  // ⭐ How many channels one screenful holds (#201/#202). This is the number
+  // `buildPages` has always taken as `perPage` and never been given: it is read
+  // from `micboard.rotationPerPage`, which nothing in the project writes, so a
+  // group has never once been split. Everything needed to page was built; only
+  // this was missing.
+  const capacity = Math.max(1, columns * rows);
 
   return {
     columns,
@@ -452,6 +516,20 @@ export function computeLayout({
     // ⚠️ So a caller can say *why* a board wrapped. Without it, an operator
     // who asked for one row and got two has no way to tell a bug from a rule.
     columnsLimitedByWidth: floor !== null && columns >= floor && n > floor,
+
+    // ⭐ How many channels this screenful holds, and how many there are (#201).
+    //
+    // `capacity` is `buildPages`' `perPage`. ⛔ It is NOT a limit on what the
+    // board shows over time -- the channels past it are on the next page, which
+    // comes round on a timer. Nothing is hidden; that rule has not moved.
+    capacity,
+    // How many rows the channels asked for, against how many the mode and the
+    // screen allow. `needed > rows` is exactly "there is more than one page".
+    rowsNeeded: needed,
+    // ⛔ The single question a caller should ask before paging. Derived here so
+    // two callers cannot answer it differently -- which is what happened with
+    // the two overflow notions this replaces.
+    pages: capacity < n,
   };
 }
 

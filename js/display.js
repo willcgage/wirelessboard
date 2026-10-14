@@ -203,11 +203,15 @@ export function cycleTypeSize() {
 export function cycleRotation() {
   micboard.rotation = nextOption(ROTATION_STATES, micboard.rotation);
   writePref({ storage: safeStorage(), key: ROTATION_KEY, value: micboard.rotation });
-  if (micboard.rotation === 'on') {
-    startRotation();
-  } else {
+  // ⛔ The driver decides whether to page, not this (#202). Switching rotation
+  // off must not stop a board that cannot show every channel: the alternative
+  // to paging there is hiding one. `startRotation` restarts from page one and
+  // ticks immediately, so the answer is known by the next line.
+  startRotation();
+  if (!micboard.pagingReason) {
+    // Nothing forces paging, and the operator has turned it off: back to
+    // whatever the board was showing before it started.
     stopRotation();
-    // Back to whatever the board was showing before it started paging.
     renderGroup(micboard.group || 0);
   }
   updateHash();

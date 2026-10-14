@@ -142,22 +142,45 @@ test('the column count never exceeds what the operator allowed', () => {
   }
 });
 
-test('the grid always has room for every channel', () => {
+test('no channel is ever lost: a board either holds them all or says it pages', () => {
   // ⛔ A board that quietly shows eleven of twelve is the one failure this
-  // display cannot afford.
+  // display cannot afford. That rule has not moved -- what changed is how it is
+  // kept.
   //
-  // ⚠️ Only "has room for". A column ceiling legitimately makes the grid wider
-  // than the channel count needs — six channels at Max 6 is 6×1 with no waste,
-  // and eight is 6×2 with four empty cells, which is what a ceiling means.
+  // ⚠️ This used to assert `columns * rows >= slotCount`: every channel on the
+  // screen at once, always. A named card shape cannot honour that -- twelve 3:4
+  // cards need 1692px of a 1080px screen -- so the board used to overflow and
+  // cut the last row off (#171). It now draws the rows that fit and pages the
+  // rest (#201/#202), so the guarantee is the same promise by a different
+  // route: **shown now, or on a page that exists.**
   for (const { label, input } of everyBoard()) {
-    const { columns, rows } = computeLayout(input);
-    assert.ok(
-      columns * rows >= input.slotCount,
-      `${label}: ${columns}×${rows} cannot hold ${input.slotCount}`,
+    const {
+      columns, rows, capacity, pages,
+    } = computeLayout(input);
+
+    assert.equal(
+      capacity,
+      columns * rows,
+      `${label}: capacity ${capacity} should be ${columns}×${rows}`,
     );
+    assert.ok(capacity >= 1, `${label}: a board has to hold at least one channel`);
+
+    // The whole rule, in one line: it fits, or the board admits it pages.
     assert.ok(
-      rows === Math.ceil(input.slotCount / columns),
-      `${label}: ${rows} rows is not what ${input.slotCount} channels over ${columns} columns needs`,
+      capacity >= input.slotCount || pages === true,
+      `${label}: ${columns}×${rows} holds ${capacity} of ${input.slotCount} and does not say it pages`,
+    );
+
+    // ⛔ And never the other way round: a board that fits must not claim to page,
+    // or it would rotate for no reason and look broken.
+    if (capacity >= input.slotCount) {
+      assert.equal(pages, false, `${label}: fits ${input.slotCount} but claims to page`);
+    }
+
+    // Rows are what the channels need, unless the screen could not take them.
+    assert.ok(
+      rows <= Math.ceil(input.slotCount / columns),
+      `${label}: ${rows} rows is more than ${input.slotCount} channels need`,
     );
   }
 });
@@ -329,9 +352,19 @@ test('⭐ the 1080p television in the venue, every arrangement, twelve channels'
   assert.deepEqual([six.columns, six.rows], [6, 2]);
   assert.ok(Math.abs(six.boardHeight - 1080) < 1.5);
 
-  // ⛔ And the one that overflows: a fixed shape over four columns needs 1692px
-  // of a 1080px screen. The board must report it so #113 can page instead.
+  // ⛔ The one that used to overflow: twelve 3:4 cards over four columns need
+  // 1692px of a 1080px screen. It no longer runs off the bottom -- the board
+  // draws the rows that fit and pages the rest (#201/#202), which is both what
+  // #202 asked for and what #171 is about.
   const overflow = at('fit', 'auto', 'tall');
-  assert.ok(overflow.boardHeight > 1080, 'expected the overflow this is about');
-  assert.equal(overflow.scrolls, true, 'and the board has to admit it');
+  assert.ok(overflow.boardHeight <= 1080 + 1.5, 'the board no longer runs off the screen');
+  assert.equal(overflow.pages, true, 'it pages instead, and says so');
+  assert.ok(
+    overflow.capacity < 12,
+    `expected fewer than twelve on screen, got ${overflow.capacity}`,
+  );
+  assert.ok(
+    overflow.rowsNeeded > overflow.rows,
+    'and the rows it could not draw are what the pages are for',
+  );
 });

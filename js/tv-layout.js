@@ -64,6 +64,12 @@ export function updateTvLayoutMetrics() {
     // full-width column. Five of the six things reset above were, and this one
     // was not.
     board.style.gridTemplateColumns = gridTemplateFor({ isTvMode: false });
+    // ⛔ Desk mode does not page by capacity: none of the layout controls apply
+    // there, so there is no screenful to be over. Rotation through groups still
+    // works -- `pagingReason` reaches that on the operator's preference, not on
+    // this. `Infinity` is "never splits a group", which is what `buildPages`
+    // did for every board before #201.
+    micboard.boardCapacity = Infinity;
     return;
   }
 
@@ -96,6 +102,7 @@ export function updateTvLayoutMetrics() {
 
   const {
     columns, rows, rowHeight, cardWidth, boardHeight, scale, scrolls, columnsLimitedByWidth,
+    capacity,
   } = computeLayout({
     slotCount,
     containerWidth,
@@ -121,6 +128,16 @@ export function updateTvLayoutMetrics() {
   container.classList.toggle('tvmode-scrolls', Boolean(scrolls));
 
   container.style.setProperty('--tvmode-card-width', `${cardWidth}px`);
+
+  // ⭐ How many channels one screenful holds, published for the rotation driver
+  // (#201/#202). It is `buildPages`' `perPage`, which has been read from
+  // `micboard.rotationPerPage` and written nowhere since #113 -- so a group has
+  // never once been split.
+  //
+  // ⛔ Published rather than recomputed. The driver deriving it would mean two
+  // places reading the container's width and calling `computeLayout`, and they
+  // would disagree the first time either changed.
+  micboard.boardCapacity = capacity;
 
   // ⚠️ So an operator who asked for one row and got two can tell a rule from
   // a bug. Nothing styles this yet; it is the hook for saying so.

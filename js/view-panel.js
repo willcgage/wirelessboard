@@ -57,6 +57,7 @@ let board = {
   getGroups: () => ({}),
   getGroup: () => 0,
   setGroup: () => {},
+  getPagingState: () => ({ reason: null }),
 };
 
 /**
@@ -337,6 +338,25 @@ export function renderViewPanel() {
         note.className = 'vp-row-note';
         note.textContent = described;
         section.appendChild(note);
+      }
+
+      // ⛔ The switch keeps the operator's value and the board says why it is
+      // not in force (#202). The alternative was writing their stored setting
+      // for them, which is the mistake behind "never flip a persisted flag as a
+      // side effect" -- and it would leave a board later cut back to twelve
+      // channels still rotating, with no record of why it was ever turned on.
+      if (control.id === 'rotation') {
+        const paging = board.getPagingState() || {};
+        if (paging.reason === 'required') {
+          const forced = document.createElement('p');
+          forced.className = 'vp-row-note is-forced';
+          const parts = Number(paging.total) > 0 && Number(paging.shown) > 0
+            ? ` — ${paging.total} channels, ${paging.shown} fit. Showing all of them in `
+              + `${Math.ceil(paging.total / paging.shown)} parts.`
+            : '.';
+          forced.textContent = `On anyway${parts}`;
+          section.appendChild(forced);
+        }
       }
     });
 
