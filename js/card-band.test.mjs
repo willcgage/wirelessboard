@@ -164,16 +164,22 @@ test('⛔ nothing quietly un-positions the chip', () => {
   );
 });
 
-test('a narrow card drops the tags it has no room for', () => {
-  // The operator chose how many channels to see (#112); the card works out what
-  // fits. Without this a 126px card wrapped "Teaching" into "Teac / hing".
-  assert.match(css, /@container \(max-width: 190px\)/, 'there should be a narrow tier');
-  assert.match(css, /@container \(max-width: 120px\)/, 'and a narrower one');
+test('a narrow card restacks the tags rather than dropping them', () => {
+  // ⚠️ This test used to be called "drops the tags it has no room for" and
+  // asserted two tiers, one of which hid the position and one the runtime.
+  // The maintainer's rule is that the board does not shed information, and the
+  // one-row card is why it never had to: at twelve columns a card is 155px wide
+  // and 1040px tall. The remaining tier changes the *shape* of the pair.
+  assert.match(css, /@container \(max-width: 190px\)/, 'there should still be a narrow tier');
   assert.match(
     block('.col-sm {\n    container-type'),
     /inline-size/,
-    'the column has to be a container for those queries to ask',
+    'the column has to be a container for that query to ask',
   );
+
+  const narrow = block('@container (max-width: 190px) {');
+  assert.match(narrow, /grid-template-areas/, 'the narrow tier restacks the band');
+  assert.doesNotMatch(narrow, /display:\s*none/, 'and drops nothing');
 
   const tagRules = block('.mic_name .mic_id,\n  .mic_name .card-runtime {');
   assert.match(tagRules, /white-space:\s*nowrap/, 'tags should not wrap mid-word');
@@ -312,76 +318,120 @@ test('⛔ the edge rail carries the status colour, and the band goes neutral', (
 });
 
 /**
- * ⛔ The shed order, and the never-shed list (#193/#195).
+ * ⛔ The board does not shed information (#193).
  *
- * As the card narrows:
+ * Settled with the maintainer: *"I don't want to shed information or data."*
+ * Nothing on a card disappears because the card got narrow.
  *
- *     above 190px   everything shows
- *     190px         the position goes; the runtime takes a full centred row
- *     120px         the runtime digits go; the battery icon stays
+ * The one-row card is why that costs nothing. At twelve columns on a 1920×1080
+ * screen a card is **155px wide and 1040px tall** — almost no width and an
+ * enormous amount of height. Everything it carries stacks down it with room to
+ * spare. Shedding was never about information not fitting; it was about a
+ * layout that assumed a wide card.
  *
- * What never gives way at any width: the photograph, the person's name, the
- * device name, the status chip, and **the battery icon** — the battery is why
- * somebody walks to the rack.
+ * ⚠️ Width was the wrong question all along. A 155px card in a one-row board
+ * has a thousand pixels of height; the same 155px card in a four-row board has
+ * two hundred. So the remaining tier changes the *shape* of the band, never
+ * whether something is in it.
  *
- * ⚠️ An earlier version of this comment, and of #193/#195, said the order was
- * "frequency, then the status word, then the position". That was never true of
- * the code and has been corrected on the issues:
+ * ⚠️ Two earlier versions of this comment were wrong, both recorded on the
+ * issues: it claimed an order of "frequency, then the status word, then the
+ * position" (neither was ever true of this code — the frequency lives in the
+ * drawer and is governed by `elinfo`, and the status word has no rule hiding it
+ * anywhere), and then an order of "position, then the runtime digits", which
+ * was true until this change removed both.
  *
- *   - the **frequency** lives in the info drawer, not the band, so it is
- *     governed by the `elinfo` setting and never sheds by width at all;
- *   - the **status word** has no rule hiding it at any width, and should not —
- *     dropping it would leave colour and a glyph, and the chip exists precisely
- *     because colour alone is not enough.
- *
- * ⚠️ One order for every wash. Defined per-wash they drift apart, which is the
- * specific failure the rail was designed to avoid.
+ * ⛔ If a card genuinely cannot hold its contents, the answer is fewer columns,
+ * not less truth: `columnsForShape` (#185) and the screen minimum (#170) both
+ * act on the layout rather than on what the card says.
  */
-test('⛔ the battery icon survives the narrowest tier; only the digits go', () => {
-  const narrowest = block('@container (max-width: 120px) {');
+/**
+ * ⚠️ A container query holds whole rules, so its block cannot be read with
+ * `block()` — that stops at the first `}`, which here is the end of the first
+ * rule *inside* the tier rather than the end of the tier. A guard written that
+ * way sees only the first rule and passes on anything after it. It did, and a
+ * reintroduced `display: none` went straight through.
+ */
+function containerBlocks() {
+  const out = [];
+  const opener = /@container \([^)]*\) \{/g;
+  let match = opener.exec(css);
+  while (match) {
+    let depth = 1;
+    let i = match.index + match[0].length;
+    while (i < css.length && depth > 0) {
+      if (css[i] === '{') depth += 1;
+      else if (css[i] === '}') depth -= 1;
+      i += 1;
+    }
+    out.push({ selector: match[0], body: css.slice(match.index + match[0].length, i - 1) });
+    match = opener.exec(css);
+  }
+  return out;
+}
 
-  assert.match(
-    narrowest,
-    /\.card-runtime \.runtime-text\s*\{[^}]*display:\s*none/,
-    'the runtime digits are what give way at this width',
-  );
-  assert.doesNotMatch(
-    narrowest,
-    /\.card-runtime\s*\{[^}]*display:\s*none/,
-    'hiding .card-runtime takes the battery icon with it — it is on the never-shed list',
-  );
-});
+test('⛔ no width tier hides anything, in any wash', () => {
+  const tiers = containerBlocks();
+  assert.ok(tiers.length > 0, 'the card should still respond to its column width');
 
-test('⛔ the device name is not shed at any width', () => {
-  // It reads across the row so the headings line up with the rack (#130), and
-  // it is the one thing somebody walking to the rack needs.
-  for (const tier of ['@container (max-width: 190px) {', '@container (max-width: 120px) {']) {
+  for (const { selector, body } of tiers) {
     assert.doesNotMatch(
-      block(tier),
-      /device-name\s*\{[^}]*display:\s*none/,
-      `${tier} must not hide the device name`,
+      body,
+      /display:\s*none/,
+      `${selector} hides something — the board does not shed information`,
     );
   }
 });
 
+test('⛔ the narrow tier restacks the band instead', () => {
+  const narrow = block('@container (max-width: 190px) {');
+
+  assert.match(narrow, /grid-template-areas/, 'the pair stacks when there is no width for it');
+  assert.match(narrow, /"position"/, 'the position keeps its own row rather than going');
+  assert.match(narrow, /"runtime"/, 'and so does the runtime');
+});
+
 /**
- * ⛔ The status word is not a width casualty.
+ * ⛔ Three things that must never be hidden, named individually.
  *
- * "Status is never colour alone" is the oldest rule on this card — red and
- * amber are the two states that matter most and the two hardest to tell apart
- * over a photograph. A glyph plus a word is how that is kept. Shedding the word
- * at a narrow width would leave colour and a glyph at exactly the size where
- * the glyph is hardest to read.
+ * The blanket rule above would catch these, but each has its own reason and
+ * each has been lost at least once:
  *
- * ⚠️ The card mockups for #193 drew a status *dot* at 155px. That was never
- * built, and on this reasoning it should not be.
+ *   - the **battery icon** is why somebody walks to the rack;
+ *   - the **device name** reads across the row so the headings line up with the
+ *     rack (#130);
+ *   - the **status word** is half of "status is never colour alone" — the
+ *     oldest rule on this card. Dropping it leaves colour and a glyph at
+ *     exactly the size where a glyph is hardest to read. The #193 mockups drew
+ *     a status *dot* at 155px; that was never built and should not be.
  */
-test('⛔ no width tier hides the status word', () => {
-  for (const tier of ['@container (max-width: 190px) {', '@container (max-width: 120px) {']) {
-    assert.doesNotMatch(
-      block(tier),
-      /chip-word\s*\{[^}]*display:\s*none/,
-      `${tier} must not drop the status word — colour and a glyph is not enough`,
+test('⛔ the battery, the device name and the status word are never hidden', () => {
+  // ⚠️ Built from the brace-matched tier bodies, not from a regex over the
+  // whole stylesheet. The previous version interpolated `\.` and `\s` into a
+  // template literal, where the backslash is eaten before `new RegExp` ever
+  // sees it: the pattern became `display:s*none`, which matches nothing, so
+  // the test passed on everything. A guard that cannot fail is worse than no
+  // guard, because it reads like proof.
+  const rules = [];
+  for (const { selector, body } of containerBlocks()) {
+    const rule = /([^{}]+)\{([^{}]*)\}/g;
+    let match = rule.exec(body);
+    while (match) {
+      rules.push({ tier: selector, on: match[1], declarations: match[2] });
+      match = rule.exec(body);
+    }
+  }
+
+  // `mic_id` is the class the card band actually carries; `device-name` is the
+  // receiver heading beside it. Both are the equipment label and neither goes.
+  for (const target of ['card-runtime', 'batt-icon', 'runtime-text', 'mic_id', 'device-name', 'chip-word']) {
+    const hidden = rules.filter(
+      (r) => r.on.includes(target) && /display:\s*none/.test(r.declarations),
+    );
+    assert.deepEqual(
+      hidden.map((r) => `${r.tier} ${r.on.trim()}`),
+      [],
+      `${target} must not be hidden by a width tier`,
     );
   }
 });

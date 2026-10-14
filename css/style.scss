@@ -563,37 +563,46 @@ canvas.slotgraph {
     container-type: inline-size;
   }
 
-  // Narrow: the position goes and the runtime takes the whole row, because
-  // "how long has this pack got" outlives "what are they doing".
+  // ⛔ Narrow: the pair stacks. Nothing is dropped.
+  //
+  // This tier used to hide the position outright and give the runtime the whole
+  // row. The maintainer's rule is that the board does not shed information, and
+  // the one-row card is why it never needed to: at twelve columns a card is
+  // 155px wide and **1040px tall**, so there is no shortage of room -- only a
+  // shortage of width. Everything the card carries fits going down.
+  //
+  // ⚠️ Width was always the wrong question. A 155px card in a one-row board has
+  // a thousand pixels of height; the same 155px card in a four-row board has
+  // two hundred. The tier that remains changes the *shape* of the pair, never
+  // whether it is there.
   @container (max-width: 190px) {
-    .mic_name .mic_id {
-      display: none;
+    .mic_name .card-band {
+      grid-template-areas:
+        "name"
+        "position"
+        "runtime";
+      grid-template-columns: 1fr;
     }
 
+    .mic_name .mic_id,
     .mic_name .card-runtime {
-      grid-column: 1 / -1;
       justify-self: center;
       text-align: center;
     }
   }
 
-  // Narrower still: a face, a name, and how long the pack has got.
+  // ⛔ There is no narrower tier, and there is nothing below this that drops.
   //
-  // ⛔ #193. This used to hide `.card-runtime` outright, taking the battery
-  // icon with it. The battery is why somebody walks to the rack, so it is on
-  // the never-shed list settled with the maintainer -- the face, the person,
-  // the status, the device name and the battery. The *digits* give way here;
-  // the icon alone still says "this pack is nearly out", which is the question
-  // being asked at this width.
+  // What stood here hid `.card-runtime` outright, taking the battery icon with
+  // it -- the one thing that tells somebody to walk to the rack. It was then
+  // narrowed to hide only the digits, and now it is gone: **the board does not
+  // shed information.**
   //
-  // ⚠️ This changes `band` and `full` too, not just `rail`. That is deliberate:
-  // the shed order is one order for every wash, or they drift apart, which is
-  // the specific failure #193 exists to avoid.
-  @container (max-width: 120px) {
-    .mic_name .card-runtime .runtime-text {
-      display: none;
-    }
-  }
+  // ⚠️ If a card ever genuinely cannot hold its contents, the answer is fewer
+  // columns, not less truth. `columnsForShape` (#185) already reduces the count
+  // when a shape cannot be satisfied, and #170's minimum stops a column going
+  // narrower than the microphone it points at. Both act on the layout rather
+  // than on what the card says.
 
   // ⛔ Colour is never the only signal. A chip with a glyph and a word sits in
   // the corner of the card, so a critical channel is still a critical channel
