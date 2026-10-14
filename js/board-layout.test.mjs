@@ -438,7 +438,7 @@ test('⛔ a ceiling pages channels rather than wrapping them, and never drops on
   // ⚠️ This used to assert the ceiling *wrapped*: `columns * rows >= 12`, a
   // second row holding whatever did not fit on the first. `Side by side` is
   // always one row (#201), because a column points at a position on the dock or
-  // pickup pad below the screen and there is no second row of furniture for a
+  // pickup pad below the screen and there is no second row of them for a
   // second row of cards to point at. The excess pages instead.
   for (const ceiling of ['4', '6', '8', '10', '12']) {
     const n = Number(ceiling);

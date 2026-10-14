@@ -1,4 +1,4 @@
-import { positionInchesForScreen, furnitureById } from './furniture.mjs';
+import { positionInchesForScreen, dockById } from './docks.mjs';
 
 /**
  * Turning a screen's physical size into a minimum column width (#170).
@@ -113,9 +113,11 @@ export function normalizeScreens(list) {
       id,
       name: String(entry.name || '').trim() || id,
       diagonal_inches: diagonal,
-      // ⭐ Which piece of furniture is underneath (#203). A screen with nothing
+      // ⭐ Which dock or pad is underneath (#203). A screen with nothing
       // under it is still worth describing; it simply imposes no minimum.
-      furniture_id: String(entry.furniture_id || '').trim() || null,
+      // ⚠️ `furniture_id` too, for the same window as the `furniture` key.
+      // Without it a board from that window keeps its docks and loses the link.
+      dock_id: String(entry.dock_id || entry.furniture_id || '').trim() || null,
       // ⛔ Legacy, and deliberately still read. Before #203 the position width
       // lived here. A board configured under the old shape keeps its floor
       // until the screens are next saved -- see `positionInchesForScreen`.
@@ -134,14 +136,14 @@ export function screenById(screens, id) {
 /**
  * What the device picker offers. "Not set" first, and it is the default.
  *
- * ⚠️ Takes the furniture now (#203), because the column width it quotes is no
+ * ⚠️ Takes the dock now (#203), because the column width it quotes is no
  * longer the screen's own. Called without it the labels simply say less rather
  * than saying something wrong.
  */
-export function screenChoices(screens, furniture = []) {
+export function screenChoices(screens, docks = []) {
   return [{ value: '', label: 'Not set — no minimum' }]
     .concat(normalizeScreens(screens).map((s) => {
-      const inches = positionInchesForScreen({ screen: s, furniture });
+      const inches = positionInchesForScreen({ screen: s, docks });
       return {
         value: s.id,
         label: inches
@@ -160,13 +162,13 @@ export function screenChoices(screens, furniture = []) {
  * did before any of this existed.
  */
 export function minColumnPixelsForScreen({
-  screens, screenId, widthPx, heightPx, furniture = [],
+  screens, screenId, widthPx, heightPx, docks = [],
 }) {
   const screen = screenById(screens, screenId);
-  // ⛔ The width comes from the furniture under the screen now (#203), with the
+  // ⛔ The width comes from the dock under the screen now (#203), with the
   // screen's own legacy value as the fallback. The arithmetic below is
   // untouched: this changes where the number is kept, never what it does.
-  const inches = positionInchesForScreen({ screen, furniture });
+  const inches = positionInchesForScreen({ screen, docks });
   if (!screen || !inches) {
     return null;
   }
@@ -180,22 +182,22 @@ export function minColumnPixelsForScreen({
 
 /** One line for the view panel, saying what the choice actually means here. */
 export function describeScreenChoice({
-  screens, screenId, widthPx, heightPx, furniture = [],
+  screens, screenId, widthPx, heightPx, docks = [],
 }) {
   const screen = screenById(screens, screenId);
   if (!screen) {
     return 'No minimum column width on this screen.';
   }
   const px = minColumnPixelsForScreen({
-    screens, screenId, widthPx, heightPx, furniture,
+    screens, screenId, widthPx, heightPx, docks,
   });
   if (!px) {
     return `${screen.name}: ${screen.diagonal_inches}in, nothing underneath it.`;
   }
-  // ⭐ Names the furniture where there is some, because "a 3.9in column" does
+  // ⭐ Names the dock where there is one, because "a 3.9in column" does
   // not tell anybody *why* 3.9 — and the reason is the thing on the table.
-  const under = furnitureById(furniture, screen.furniture_id);
-  const inches = positionInchesForScreen({ screen, furniture });
+  const under = dockById(docks, screen.dock_id);
+  const inches = positionInchesForScreen({ screen, docks });
   const because = under ? ` (${under.name})` : '';
   return `${screen.name}: a ${inches}in position${because} is ${px}px here, so the board will not go narrower.`;
 }

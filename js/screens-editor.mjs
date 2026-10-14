@@ -74,7 +74,7 @@ export function screensHaveProblems(rows) {
 /**
  * ⭐ The pairing, the merge and the summary are `editor-rows.mjs` now (#203).
  *
- * ⛔ Extracted rather than copied when the furniture editor needed the same
+ * ⛔ Extracted rather than copied when the dock editor needed the same
  * shape. This is #180's logic — the reason a save cannot delete the row
  * somebody is typing into — and two copies of it is two places for that to go
  * wrong again. The twenty-one tests in `screens-editor.test.mjs` go through
@@ -87,13 +87,13 @@ const SPEC = {
     name: String(row.name).trim(),
     diagonal_inches: positive(row.diagonal_inches),
     // ⭐ Which dock or pad is underneath (#203). The width itself lives on the
-    // furniture now; this is the reference to it.
-    furniture_id: String(row.furniture_id || '').trim() || null,
+    // dock now; this is the reference to it.
+    dock_id: String(row.dock_id || '').trim() || null,
     // ⛔ Carried forward, not dropped. A board configured before #203 has its
     // position width here, and a save that discarded it would silently widen
     // that board's columns past the dock they were measured against. It stops
-    // being written once the row names furniture instead.
-    min_column_inches: String(row.furniture_id || '').trim()
+    // being written once the row names a dock instead.
+    min_column_inches: String(row.dock_id || '').trim()
       ? null
       : positive(row.min_column_inches),
   }),

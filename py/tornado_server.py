@@ -674,10 +674,10 @@ class ScreensHandler(web.RequestHandler):
         self.write(json.dumps({
             'ok': True,
             'screens': config.get_screens(),
-            # ⭐ Both, from one endpoint (#203). A screen names the furniture
+            # ⭐ Both, from one endpoint (#203). A screen names the dock
             # beneath it, so a client that fetched them separately could render
-            # a screen pointing at furniture it had not loaded yet.
-            'furniture': config.get_furniture(),
+            # a screen pointing at dock it had not loaded yet.
+            'docks': config.get_docks(),
         }))
 
     def post(self):
@@ -693,12 +693,12 @@ class ScreensHandler(web.RequestHandler):
         incoming = payload.get('screens') if isinstance(payload, dict) else payload
         # ⚠️ Absent means "not editing this", not "empty" -- the same rule as
         # `update_group` and `config_mix` (#114). A client that sends only the
-        # screens must not have its furniture wiped by omission.
-        has_furniture = isinstance(payload, dict) and 'furniture' in payload
-        incoming_furniture = payload.get('furniture') if has_furniture else config.get_furniture()
+        # screens must not have its dock wiped by omission.
+        has_docks = isinstance(payload, dict) and 'docks' in payload
+        incoming_docks = payload.get('docks') if has_docks else config.get_docks()
 
         try:
-            saved = config.update_screens_and_furniture(incoming, incoming_furniture)
+            saved = config.update_screens_and_docks(incoming, incoming_docks)
         except Exception:
             logger.exception('Failed to save the screen list')
             self.set_status(500)
@@ -708,7 +708,7 @@ class ScreensHandler(web.RequestHandler):
         self.write(json.dumps({
             'ok': True,
             'screens': saved['screens'],
-            'furniture': saved['furniture'],
+            'docks': saved['docks'],
         }))
 
 

@@ -1572,10 +1572,18 @@ def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
             'id': screen_id,
             'name': str(entry.get('name') or '').strip() or screen_id,
             'diagonal_inches': diagonal,
-            # ⭐ Which piece of furniture is underneath (#203). A screen worth
+            # ⭐ Which dock or pad is underneath (#203). A screen worth
             # describing may still have nothing below it, and must then impose
             # no minimum.
-            'furniture_id': str(entry.get('furniture_id') or '').strip() or None,
+            # ⚠️ `furniture_id` is read for the same reason `furniture` is, and
+            # for the same hour-long window. Without it a board from that window
+            # keeps its docks and silently loses the *link* to them, which drops
+            # its column floor -- the half-migration is worse than none.
+            'dock_id': (
+                str(entry.get('dock_id') or '').strip()
+                or str(entry.get('furniture_id') or '').strip()
+                or None
+            ),
             # ⛔ Legacy, and deliberately still stored. Before #203 the position
             # width lived here. A board configured under the old shape keeps its
             # floor until the screens are next saved; dropping it on read would
@@ -1587,14 +1595,14 @@ def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
     return out
 
 
-FURNITURE_KINDS = ('dock', 'pad')
+DOCK_KINDS = ('dock', 'pad')
 
 
-def normalize_furniture(payload: Any) -> List[Dict[str, Any]]:
-    """The furniture below the screens: charging docks and pickup pads (#203).
+def normalize_docks(payload: Any) -> List[Dict[str, Any]]:
+    """The dock below the screens: charging docks and pickup pads (#203).
 
     ⭐ This is what a column points at. The television hangs above a piece of
-    furniture with positions in it, and a column is meant to correspond to one
+    dock with positions in it, and a column is meant to correspond to one
     of them -- narrower than a position and it stops pointing at anything.
 
     ⛔ Two kinds because a room has two: a **dock** charges what sits in it (the
@@ -1603,7 +1611,7 @@ def normalize_furniture(payload: Any) -> List[Dict[str, Any]]:
     charges. ⚠️ Nothing in the layout branches on the kind -- both are rows of
     positions with a width and impose the same floor. It is there so a person
     editing the list knows which object they are looking at, and so the section
-    can grow to IEM transmitters without "dock" having to cover everything.
+    can take IEM transmitters later without every entry having to be a charger.
 
     ⛔ Separate from the screens because a dock is not a property of a screen:
     one dock can sit under several, one screen can have none, and a dock can be
@@ -1640,21 +1648,33 @@ def normalize_furniture(payload: Any) -> List[Dict[str, Any]]:
             'name': str(entry.get('name') or '').strip() or item_id,
             # ⚠️ An unrecognised kind becomes a dock rather than losing the
             # entry. The width is the part that matters and it is present.
-            'kind': kind if kind in FURNITURE_KINDS else 'dock',
+            'kind': kind if kind in DOCK_KINDS else 'dock',
             'position_inches': width,
             'positions': _positive(entry.get('positions')),
         })
     return out
 
 
-def ensure_furniture() -> List[Dict[str, Any]]:
-    normalized = normalize_furniture(config_tree.get('furniture'))
-    config_tree['furniture'] = normalized
+def ensure_docks() -> List[Dict[str, Any]]:
+    # ⚠️ `furniture` was this key's name for about an hour, between #203 landing
+    # and the maintainer settling on "Dock". It was never in a release, so this
+    # reads it only so that a board running `main` in that window does not lose
+    # a dock it had described -- and since this width decides the column count
+    # (#201), losing one changes what the wall shows.
+    #
+    # ⛔ Read, never written: the value moves to `docks` the first time the
+    # screens are saved. Safe to delete once no checkout can still be holding
+    # the old key.
+    stored = config_tree.get('docks')
+    if stored is None and config_tree.get('furniture') is not None:
+        stored = config_tree.get('furniture')
+    normalized = normalize_docks(stored)
+    config_tree['docks'] = normalized
     return normalized
 
 
-def get_furniture() -> List[Dict[str, Any]]:
-    return copy.deepcopy(ensure_furniture())
+def get_docks() -> List[Dict[str, Any]]:
+    return copy.deepcopy(ensure_docks())
 
 
 def ensure_screens() -> List[Dict[str, Any]]:
@@ -1667,11 +1687,11 @@ def get_screens() -> List[Dict[str, Any]]:
     return copy.deepcopy(ensure_screens())
 
 
-def update_screens_and_furniture(screens: Any, furniture: Any) -> Dict[str, Any]:
+def update_screens_and_docks(screens: Any, docks: Any) -> Dict[str, Any]:
     """Store both lists in one save (#203).
 
-    ⛔ **One save, not two.** A screen names the furniture beneath it, so saving
-    them separately leaves a window in which a screen points at furniture that
+    ⛔ **One save, not two.** A screen names the dock beneath it, so saving
+    them separately leaves a window in which a screen points at dock that
     does not exist yet -- and the board reads the pair on every layout pass. One
     write means the two can never disagree on disk.
 
@@ -1679,14 +1699,14 @@ def update_screens_and_furniture(screens: Any, furniture: Any) -> Dict[str, Any]
     these numbers change how a board lays itself out and nothing about the
     receivers, so recording a tape measure must not tear every socket down.
     """
-    normalized_furniture = normalize_furniture(furniture)
+    normalized_docks = normalize_docks(dock)
     normalized_screens = normalize_screens(screens)
-    config_tree['furniture'] = normalized_furniture
+    config_tree['docks'] = normalized_docks
     config_tree['screens'] = normalized_screens
     save_current_config()
     return {
         'screens': copy.deepcopy(normalized_screens),
-        'furniture': copy.deepcopy(normalized_furniture),
+        'docks': copy.deepcopy(normalized_docks),
     }
 
 
