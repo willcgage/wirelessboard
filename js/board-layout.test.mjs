@@ -10,7 +10,7 @@ import {
   isArrangement, isCardShape, isTypeSize, isTopBarState,
   migrateArrangement, migrateCardShape,
   COLUMN_CHOICES, COLUMNS_AUTO, isColumnChoice, columnCeiling,
-  WASH_STYLES, isWashStyle,
+  WASH_STYLES, isWashStyle, gridTemplateFor,
 } from './board-layout.mjs';
 
 const WIDE = { slotCount: 12, maxColumns: 12 };
@@ -421,4 +421,79 @@ test('the column validators accept exactly the supported values', () => {
   assert.equal(columnCeiling('nonsense'), null);
   assert.equal(columnCeiling('8'), 8);
   assert.equal(COLUMNS_AUTO, 'auto');
+});
+
+// ---------------------------------------------------------------------------
+// #204 — the board's inline grid template, and the case that broke
+// ---------------------------------------------------------------------------
+
+test('⛔ desk mode gets an empty grid template, for every arrangement', () => {
+  // ⛔ This is the bug. `updateTvLayoutMetrics` has two exits; the TV one wrote
+  // this property and the desk one returned before reaching it, so a template
+  // written in TV mode survived the switch. `--tvmode-slot-width` is declared
+  // on `.tvmode` only, so in desk mode the var() is invalid at computed-value
+  // time, the declaration computes to `none`, and the board collapses to one
+  // full-width column -- measured at 1600x1000 as five 304px tracks becoming
+  // one of 1569px.
+  //
+  // ⚠️ Every arrangement, because the old code only wrote the property when the
+  // arrangement was not `fit`. A board that had never left `fit` could not
+  // reach the fault, which is why it survived.
+  for (const arrangement of ARRANGEMENTS) {
+    assert.equal(
+      gridTemplateFor({ isTvMode: false, arrangement, columns: 12 }),
+      '',
+      `desk mode must not keep a template for ${arrangement}`,
+    );
+  }
+});
+
+test('⛔ the not-TV answer does not depend on anything else being passed', () => {
+  // The desk branch has no column count in scope -- it returns before the
+  // layout is computed. If the rule needed one, the caller would have to invent
+  // a number to ask for nothing, which is how the reset gets skipped again.
+  assert.equal(gridTemplateFor({ isTvMode: false }), '');
+  assert.equal(gridTemplateFor({}), '');
+  assert.equal(gridTemplateFor(), '');
+});
+
+test('TV mode states the column count for a named arrangement', () => {
+  for (const arrangement of ['row', 'column', 'grid']) {
+    assert.equal(
+      gridTemplateFor({ isTvMode: true, arrangement, columns: 12 }),
+      'repeat(12, minmax(0, var(--tvmode-slot-width)))',
+      `${arrangement} has to state its count or auto-fit would ignore it`,
+    );
+  }
+});
+
+test('TV mode leaves `fit` to the stylesheet', () => {
+  // `fit` is driven by auto-fit, which packs as many across as fit. An explicit
+  // count would override exactly the behaviour it is named for.
+  assert.equal(gridTemplateFor({ isTvMode: true, arrangement: 'fit', columns: 8 }), '');
+  assert.equal(gridTemplateFor({ isTvMode: true, arrangement: '', columns: 8 }), '');
+  assert.equal(gridTemplateFor({ isTvMode: true, columns: 8 }), '');
+});
+
+test('⛔ both branches of the caller read this one function', () => {
+  // ⚠️ A property test cannot see the caller: `tv-layout.js` reaches the DOM and
+  // imports `app.js`, and there is no jsdom here, so it cannot be imported in a
+  // test at all. What can be checked is that neither branch builds the string
+  // itself -- which is the shape the bug had, one branch holding a rule the
+  // other had to remember.
+  const src = readFileSync(
+    fileURLToPath(new URL('../js/tv-layout.js', import.meta.url)),
+    'utf8',
+  ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+  assert.doesNotMatch(
+    src,
+    /repeat\(\$\{/,
+    'tv-layout.js should not assemble a grid template; gridTemplateFor owns it',
+  );
+  assert.equal(
+    (src.match(/gridTemplateColumns/g) || []).length,
+    2,
+    'both exits should set it: the TV one and the desk one',
+  );
 });
