@@ -294,6 +294,85 @@ export function rowHeightFor({
   return usable > 1 ? usable / r : width / LANDSCAPE_RATIO;
 }
 
+/**
+ * The geometry a given column count produces.
+ *
+ * ⛔ Extracted so `computeLayout` and `columnsForShape` cannot drift: one of
+ * them chooses the column count by measuring boards, the other builds the board
+ * it chose, and they have to measure the same way or the choice is made against
+ * geometry that never ships.
+ */
+function geometryFor({
+  columns, slotCount, containerWidth, availableHeight, slotWidth, gap, shape,
+}) {
+  const rows = Math.max(1, Math.ceil(slotCount / columns));
+  const measured = Number(containerWidth);
+  const share = Number.isFinite(measured) && measured > 0
+    ? (measured - gap * (columns - 1)) / columns
+    : slotWidth;
+  const cardWidth = Math.max(1, Math.min(slotWidth, share));
+  const rowHeight = rowHeightFor({
+    shape, cardWidth, rows, availableHeight, gap,
+  });
+  return {
+    rows, cardWidth, rowHeight, boardHeight: rowHeight * rows + gap * (rows - 1),
+  };
+}
+
+/**
+ * ⭐ The shape wins when it was asked for (#185).
+ *
+ * `auto` is fit-to-page by construction, so it is left exactly as it was. A
+ * *named* shape is a statement about the photograph, and the maintainer's call
+ * is that it beats the column count: "photo size wins when specified".
+ *
+ * Without this, Side by side asks for all twelve in one row and 16:9 asks for a
+ * shape, and on a 1920x1080 screen both were honoured literally — 155x87 cards
+ * filling **8% of the screen** and the rest black. Neither choice was wrong on
+ * its own; the pair is unsatisfiable, and the column count is the half that can
+ * give way, because the control is a *ceiling* ("Max 8"), so coming in under it
+ * is what it already promises.
+ *
+ * Returns the column count whose board comes closest to filling the height
+ * without passing it. ⚠️ Every count is measured rather than assuming board
+ * height falls monotonically with columns: `rows` is a step function and
+ * `cardWidth` is capped at the slot width, so the curve is flat in places.
+ *
+ * ⛔ Never returns more columns than it was given. The ceiling, the physical
+ * floor (#170) and the arrangement have all had their say before this runs, and
+ * none of them may be overridden here.
+ */
+export function columnsForShape({
+  columns, slotCount, containerWidth, availableHeight, slotWidth, gap, shape,
+}) {
+  const height = Number(availableHeight);
+  if (shape === 'auto' || !Number.isFinite(height) || height <= 0) {
+    return columns;
+  }
+
+  const measure = (c) => geometryFor({
+    columns: c, slotCount, containerWidth, availableHeight, slotWidth, gap, shape,
+  }).boardHeight;
+
+  // Already taller than the screen: fewer columns can only make it taller, so
+  // there is nothing to win here. That board overflows, which is #171's
+  // question and not this one's.
+  if (measure(columns) > height + 0.5) {
+    return columns;
+  }
+
+  let best = columns;
+  let bestHeight = measure(columns);
+  for (let c = columns - 1; c >= 1; c -= 1) {
+    const boardHeight = measure(c);
+    if (boardHeight <= height + 0.5 && boardHeight > bestHeight) {
+      best = c;
+      bestHeight = boardHeight;
+    }
+  }
+  return best;
+}
+
 export function computeLayout({
   slotCount, containerWidth, availableHeight, slotWidth = 420, gap = 0,
   arrangement = 'fit', shape = 'auto', columns: columnChoice = COLUMNS_AUTO,
@@ -312,28 +391,27 @@ export function computeLayout({
     ? Math.max(1, Math.floor(Number(containerWidth) / Number(minColumnWidth)))
     : null;
 
-  const columns = columnsFor({
+  const asked = columnsFor({
     slotCount: n,
     maxColumns,
     arrangement,
     columns: columnChoice,
     maxColumnsAtMinimum: floor,
   });
-  const rows = Math.max(1, Math.ceil(n / columns));
+
+  // ⭐ A named shape beats the column count (#185). `auto` is untouched.
+  const columns = columnsForShape({
+    columns: asked, slotCount: n, containerWidth, availableHeight, slotWidth: width, gap, shape,
+  });
 
   // The width a card will actually be given. `fit` and `grid` never ask for
   // more columns than fit, so this is the configured width; `row` and `column`
   // may, and there the configured width is a maximum the cards fall below.
-  const measured = Number(containerWidth);
-  const share = Number.isFinite(measured) && measured > 0
-    ? (measured - gap * (columns - 1)) / columns
-    : width;
-  const cardWidth = Math.max(1, Math.min(width, share));
-
-  const rowHeight = rowHeightFor({
-    shape, cardWidth, rows, availableHeight, gap,
+  const {
+    rows, cardWidth, rowHeight, boardHeight,
+  } = geometryFor({
+    columns, slotCount: n, containerWidth, availableHeight, slotWidth: width, gap, shape,
   });
-  const boardHeight = rowHeight * rows + gap * (rows - 1);
 
   return {
     columns,

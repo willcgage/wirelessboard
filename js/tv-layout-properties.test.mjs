@@ -162,25 +162,89 @@ test('the grid always has room for every channel', () => {
   }
 });
 
-test('⚠️ a fixed card shape may waste the screen, and the board says so', () => {
-  // #170. A fixed aspect at a high column count is arithmetically correct and
-  // practically unusable — 3:4 across twelve columns on a 1080p screen is a
-  // 206px strip, 19% of the display. That is the operator's choice to make,
-  // but the board has to be able to tell them, so the number has to be
-  // available rather than implicit.
-  const { boardHeight, scrolls } = computeLayout({
-    slotCount: 12,
-    containerWidth: 1920,
-    availableHeight: 1080,
-    slotWidth: 420,
-    gap: 6,
-    arrangement: 'row',
-    shape: 'tall',
-    columns: 'auto',
-  });
+/**
+ * ⭐ #185. This test used to assert the defect — "expected the strip this issue
+ * is about" — because at the time the board could only describe the waste, not
+ * avoid it. Twelve 16:9 cards side by side on a 1080p screen were 155×87 and
+ * filled **8% of the display**, which is what was photographed on the wall.
+ *
+ * The maintainer's call: **the photo size wins when it is specified.** So a
+ * named shape now reduces the column count until the board fills the height.
+ * The columns control is a *ceiling* ("Max 8"), so coming in under it is what
+ * it already promises; the shape is a statement that cannot be partly honoured.
+ */
+test('⭐ a named card shape fills the screen rather than leaving a strip', () => {
+  for (const shape of ['wide', 'tall']) {
+    const { boardHeight, scrolls, columns } = computeLayout({
+      slotCount: 12,
+      containerWidth: 1920,
+      availableHeight: 1080,
+      slotWidth: 420,
+      gap: 6,
+      arrangement: 'row',
+      shape,
+      columns: 'auto',
+    });
 
-  assert.ok(boardHeight / 1080 < 0.25, 'expected the strip this issue is about');
-  assert.equal(scrolls, false, 'it wastes the screen rather than overflowing it');
+    const used = boardHeight / 1080;
+    assert.ok(used > 0.6, `${shape}: used only ${Math.round(used * 100)}% of the screen`);
+    assert.ok(used <= 1, `${shape}: ${Math.round(used * 100)}% overflows rather than fits`);
+    assert.equal(scrolls, false, `${shape}: a board that fits must not claim it scrolls`);
+    assert.ok(columns < 12, `${shape}: the column count has to give way for the shape to hold`);
+  }
+});
+
+test('⛔ giving way to a shape never adds columns, only removes them', () => {
+  // The ceiling, the physical floor (#170) and the arrangement have all had
+  // their say before the shape does. None of them may be overridden here.
+  for (const { label, input } of everyBoard()) {
+    if (input.shape === 'auto') continue;
+
+    const shaped = computeLayout(input);
+    const unshaped = computeLayout({ ...input, shape: 'auto' });
+
+    assert.ok(
+      shaped.columns <= unshaped.columns,
+      `${label}: a shape asked for ${shaped.columns} columns, more than the ${unshaped.columns} allowed`,
+    );
+    assert.ok(shaped.columns >= 1, `${label}: ${shaped.columns} columns`);
+  }
+});
+
+/**
+ * ⚠️ Stated as optimality, not as a percentage.
+ *
+ * A threshold ("never under half the screen") reads well and is simply false:
+ * four 3:4 cards on a landscape tablet reach 47% and three columns would
+ * overflow, so 47% *is* the best board available. A few 16:9 cards on a 4K
+ * screen stop at 45% because the card is already at its configured maximum
+ * width. Neither is the fault #185 is about.
+ *
+ * What has to be true is that nothing better was passed over.
+ */
+test('⭐ a shaped board is the tallest one that still fits', () => {
+  for (const { label, input } of everyBoard()) {
+    // `row` is where `columnsFor` maps a ceiling to exactly that many columns,
+    // so an alternative can be requested precisely. It is also where the fault
+    // was photographed.
+    if (input.shape === 'auto' || input.arrangement !== 'row') continue;
+
+    const chosen = computeLayout(input);
+    if (chosen.scrolls) continue;
+
+    const allowed = computeLayout({ ...input, shape: 'auto' }).columns;
+    for (let c = 1; c <= allowed; c += 1) {
+      const alt = computeLayout({ ...input, columns: String(c) });
+      if (alt.columns !== c) continue;
+      if (alt.boardHeight > input.availableHeight + 0.5) continue;
+
+      assert.ok(
+        alt.boardHeight <= chosen.boardHeight + 0.5,
+        `${label}: ${c} columns would have used ${Math.round(alt.boardHeight)}px of `
+        + `${input.availableHeight}px, better than the ${Math.round(chosen.boardHeight)}px chosen`,
+      );
+    }
+  }
 });
 
 test('⛔ a described screen never puts a column under the physical minimum', () => {
