@@ -250,20 +250,55 @@ def localURL():
 
     return _LOCAL_URL_FALLBACK
 
+def _section(name, produce, fallback):
+    """One piece of /data.json, and which piece failed if it does (#183).
+
+    ⛔ The board's whole payload used to be one expression, so **anything**
+    inside it raising took the endpoint out with a bare "Uncaught exception GET
+    /data.json" and no indication of which of the eleven calls it was. That is
+    what was photographed on the venue board, and the traceback sat behind a
+    collapsed block nobody expanded.
+
+    ⚠️ This does not catch a fault, it *names* one. A section that fails is
+    logged with its traceback and its own name, and the payload carries on with
+    a safe value -- because a board that loses its discovery list should still
+    get its receivers, and before this it got nothing at all.
+    """
+    try:
+        return produce()
+    except Exception:
+        logger.exception('/data.json: the %s section could not be built', name)
+        _DATA_JSON_FAILURES.append(name)
+        return fallback
+
+
+# ⚠️ Which sections have failed since the server started, so the health check
+# and the log both have something concrete to say rather than "it broke once".
+_DATA_JSON_FAILURES = []
+
+
 def wirelessboard_json(network_devices):
-    offline_devices = offline.offline_json()
+    offline_devices = _section('offline devices', offline.offline_json, None)
     data = []
     discovered = []
-    for net_device in network_devices:
-        data.append(net_device.net_json())
+    # ⛔ Copied before iterating. `_reconfig_locked` does `del
+    # `shure.NetworkDevices[:]` on a worker thread and then sleeps two seconds,
+    # so this list can be emptied underneath the loop -- which would silently
+    # serve a board with fewer receivers than it has rather than raising.
+    for net_device in list(network_devices):
+        entry = _section('receiver %s' % getattr(net_device, 'ip', '?'),
+                         net_device.net_json, None)
+        if entry is not None:
+            data.append(entry)
 
     if offline_devices:
         data.append(offline_devices)
 
-    media = background_file_lists()
-    url = localURL()
+    media = _section('background files', background_file_lists,
+                     {'gif': [], 'image': [], 'video': []})
+    url = _section('local url', localURL, '')
 
-    for device in discover.time_filterd_discovered_list():
+    for device in _section('discovery list', discover.time_filterd_discovered_list, []):
         discovered.append(device)
 
     return json.dumps({
@@ -320,9 +355,39 @@ class AboutHandler(web.RequestHandler):
         self.set_status(200)
 
 class JsonHandler(web.RequestHandler):
+    """The payload every open board polls (#183).
+
+    ⛔ It must not be able to fail silently. Each piece of the payload is built
+    on its own and names itself if it cannot be (see `_section`), so the common
+    case is now a board that loses one section rather than all of them.
+
+    ⚠️ This is the last resort for anything that gets past that -- most likely
+    `json.dumps` itself, on a value no section produced. It logs the traceback
+    with a line saying what the endpoint is for, and answers with a readable
+    error instead of Tornado's bare "Uncaught exception", which is what the
+    venue board showed: a 500 with the cause behind a collapsed block nobody
+    expanded.
+
+    ⚠️ Still a 500, deliberately. This endpoint failing *is* a server fault and
+    dressing it as a 200 would hide it from exactly the logs that caught it.
+    """
+
     def get(self):
         self.set_header('Content-Type', 'application/json')
-        self.write(wirelessboard_json(shure.NetworkDevices))
+        try:
+            self.write(wirelessboard_json(shure.NetworkDevices))
+        except Exception as exc:
+            logger.exception(
+                '/data.json could not be served. This is the payload every open '
+                'board polls, so a board asking now sees no receivers at all.')
+            self.set_status(500)
+            self.write(json.dumps({
+                'error': 'Could not build the board payload',
+                'detail': '%s: %s' % (type(exc).__name__, exc),
+                # What has failed since the server started, so a report can say
+                # more than "it broke once".
+                'failed_sections': list(_DATA_JSON_FAILURES),
+            }))
 
     def head(self):
         # Indicate availability; clients should GET to retrieve JSON
