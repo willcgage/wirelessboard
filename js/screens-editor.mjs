@@ -1,3 +1,10 @@
+import {
+  pairRows as rowsPairRows,
+  toPayload as rowsToPayload,
+  mergeSaved as rowsMergeSaved,
+  saveSummary as rowsSaveSummary,
+} from './editor-rows.mjs';
+
 /**
  * Editing the list of screens an installation has (#170).
  *
@@ -65,94 +72,48 @@ export function screensHaveProblems(rows) {
 }
 
 /**
- * Every row paired with the entry it will be sent as, or `null` where it has a
- * problem and is held back.
+ * ⭐ The pairing, the merge and the summary are `editor-rows.mjs` now (#203).
  *
- * ⭐ Exists so a save can find its way back: the response only carries what was
- * stored, and without the pairing there is no way to tell which row produced
- * which saved screen — which is how the row somebody was typing into used to be
- * thrown away (#180).
+ * ⛔ Extracted rather than copied when the furniture editor needed the same
+ * shape. This is #180's logic — the reason a save cannot delete the row
+ * somebody is typing into — and two copies of it is two places for that to go
+ * wrong again. The twenty-one tests in `screens-editor.test.mjs` go through
+ * these wrappers, so they prove the extraction is faithful as well as the rules.
  */
+const SPEC = {
+  problem: screenProblem,
+  entry: (row, ids) => ({
+    id: row.id || uniqueScreenId(String(row.name).trim(), ids),
+    name: String(row.name).trim(),
+    diagonal_inches: positive(row.diagonal_inches),
+    // ⭐ Which dock or pad is underneath (#203). The width itself lives on the
+    // furniture now; this is the reference to it.
+    furniture_id: String(row.furniture_id || '').trim() || null,
+    // ⛔ Carried forward, not dropped. A board configured before #203 has its
+    // position width here, and a save that discarded it would silently widen
+    // that board's columns past the dock they were measured against. It stops
+    // being written once the row names furniture instead.
+    min_column_inches: String(row.furniture_id || '').trim()
+      ? null
+      : positive(row.min_column_inches),
+  }),
+};
+
 export function pairRows(rows) {
-  const ids = [];
-  return (rows || []).map((row) => {
-    if (screenProblem(row)) return { row, entry: null };
-    const name = String(row.name).trim();
-    const id = row.id || uniqueScreenId(name, ids);
-    ids.push(id);
-    return {
-      row,
-      entry: {
-        id,
-        name,
-        diagonal_inches: positive(row.diagonal_inches),
-        min_column_inches: positive(row.min_column_inches),
-      },
-    };
-  });
+  return rowsPairRows(rows, SPEC);
 }
 
-/**
- * The rows as the server wants them.
- *
- * ⛔ Rows with problems are left out rather than sent half-made: the server
- * would drop them anyway, and sending them would make the saved list disagree
- * with the form in a way nobody could see.
- */
 export function toPayload(rows) {
-  return pairRows(rows).map((pair) => pair.entry).filter(Boolean);
+  return rowsToPayload(rows, SPEC);
 }
 
-/**
- * The form after a save.
- *
- * ⛔ The whole point of #180. A save sends only the complete rows, so the
- * response cannot contain the one somebody is still filling in — and replacing
- * the form with that response deleted their work while telling them it had not
- * been saved. A saved row takes the server's canonical values; a row the server
- * never saw stays exactly as it was typed, still editable, still flagged.
- */
 export function mergeSaved(rows, saved) {
-  const byId = new Map();
-  (saved || []).forEach((screen) => {
-    if (screen && screen.id) byId.set(String(screen.id), { ...screen });
-  });
-
-  const taken = new Set();
-  const merged = pairRows(rows).map(({ row, entry }) => {
-    const key = entry && String(entry.id);
-    // ⚠️ A complete row the server did not store comes back as it was typed
-    // rather than vanishing, for the same reason an incomplete one does.
-    if (key && byId.has(key)) {
-      taken.add(key);
-      return byId.get(key);
-    }
-    return { ...row };
-  });
-
-  // A screen in the response that no row produced. Should not happen while one
-  // board holds the form, but showing it beats dropping something the server
-  // says it is storing.
-  (saved || []).forEach((screen) => {
-    if (screen && screen.id && !taken.has(String(screen.id))) merged.push({ ...screen });
-  });
-
-  return merged;
+  return rowsMergeSaved(rows, saved, SPEC);
 }
 
-/** What the Save button should say happened. */
 export function saveSummary(rows) {
-  const payload = toPayload(rows);
-  const dropped = (rows || []).length - payload.length;
-  if (!payload.length && !dropped) {
-    return 'No screens. Boards will have no minimum column width.';
-  }
-  const kept = `${payload.length} screen${payload.length === 1 ? '' : 's'} saved`;
-  if (!dropped) return `${kept}.`;
-  // ⚠️ Says it rather than hiding it: a row silently not saved is the kind of
-  // thing somebody discovers weeks later when a board behaves oddly. And it
-  // says the row is still there, because until #180 it was not — the sentence
-  // and the deletion together were the fault.
-  const rowWord = dropped === 1 ? 'row is' : 'rows are';
-  return `${kept}. ${dropped} incomplete ${rowWord} still here to finish.`;
+  return rowsSaveSummary(rows, SPEC, {
+    noun: (n) => `screen${n === 1 ? '' : 's'}`,
+    nothing: 'No screens. Boards will have no minimum column width.',
+  });
 }

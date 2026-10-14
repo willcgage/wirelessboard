@@ -1,3 +1,5 @@
+import { positionInchesForScreen, furnitureById } from './furniture.mjs';
+
 /**
  * Turning a screen's physical size into a minimum column width (#170).
  *
@@ -111,8 +113,12 @@ export function normalizeScreens(list) {
       id,
       name: String(entry.name || '').trim() || id,
       diagonal_inches: diagonal,
-      // Optional: a screen with no dock under it is still worth describing,
-      // it simply imposes no minimum.
+      // ⭐ Which piece of furniture is underneath (#203). A screen with nothing
+      // under it is still worth describing; it simply imposes no minimum.
+      furniture_id: String(entry.furniture_id || '').trim() || null,
+      // ⛔ Legacy, and deliberately still read. Before #203 the position width
+      // lived here. A board configured under the old shape keeps its floor
+      // until the screens are next saved -- see `positionInchesForScreen`.
       min_column_inches: positive(entry.min_column_inches),
     });
     return out;
@@ -125,15 +131,24 @@ export function screenById(screens, id) {
   return normalizeScreens(screens).find((s) => s.id === wanted) || null;
 }
 
-/** What the device picker offers. "Not set" first, and it is the default. */
-export function screenChoices(screens) {
+/**
+ * What the device picker offers. "Not set" first, and it is the default.
+ *
+ * ⚠️ Takes the furniture now (#203), because the column width it quotes is no
+ * longer the screen's own. Called without it the labels simply say less rather
+ * than saying something wrong.
+ */
+export function screenChoices(screens, furniture = []) {
   return [{ value: '', label: 'Not set — no minimum' }]
-    .concat(normalizeScreens(screens).map((s) => ({
-      value: s.id,
-      label: s.min_column_inches
-        ? `${s.name} — ${s.diagonal_inches}in, ${s.min_column_inches}in columns`
-        : `${s.name} — ${s.diagonal_inches}in`,
-    })));
+    .concat(normalizeScreens(screens).map((s) => {
+      const inches = positionInchesForScreen({ screen: s, furniture });
+      return {
+        value: s.id,
+        label: inches
+          ? `${s.name} — ${s.diagonal_inches}in, ${inches}in columns`
+          : `${s.name} — ${s.diagonal_inches}in`,
+      };
+    }));
 }
 
 /**
@@ -145,33 +160,42 @@ export function screenChoices(screens) {
  * did before any of this existed.
  */
 export function minColumnPixelsForScreen({
-  screens, screenId, widthPx, heightPx,
+  screens, screenId, widthPx, heightPx, furniture = [],
 }) {
   const screen = screenById(screens, screenId);
-  if (!screen || !screen.min_column_inches) {
+  // ⛔ The width comes from the furniture under the screen now (#203), with the
+  // screen's own legacy value as the fallback. The arithmetic below is
+  // untouched: this changes where the number is kept, never what it does.
+  const inches = positionInchesForScreen({ screen, furniture });
+  if (!screen || !inches) {
     return null;
   }
   return minColumnPixels({
     widthPx,
     heightPx,
     diagonalInches: screen.diagonal_inches,
-    minColumnInches: screen.min_column_inches,
+    minColumnInches: inches,
   });
 }
 
 /** One line for the view panel, saying what the choice actually means here. */
 export function describeScreenChoice({
-  screens, screenId, widthPx, heightPx,
+  screens, screenId, widthPx, heightPx, furniture = [],
 }) {
   const screen = screenById(screens, screenId);
   if (!screen) {
     return 'No minimum column width on this screen.';
   }
   const px = minColumnPixelsForScreen({
-    screens, screenId, widthPx, heightPx,
+    screens, screenId, widthPx, heightPx, furniture,
   });
   if (!px) {
-    return `${screen.name}: ${screen.diagonal_inches}in, no column minimum set.`;
+    return `${screen.name}: ${screen.diagonal_inches}in, nothing underneath it.`;
   }
-  return `${screen.name}: a ${screen.min_column_inches}in column is ${px}px here, so the board will not go narrower.`;
+  // ⭐ Names the furniture where there is some, because "a 3.9in column" does
+  // not tell anybody *why* 3.9 — and the reason is the thing on the table.
+  const under = furnitureById(furniture, screen.furniture_id);
+  const inches = positionInchesForScreen({ screen, furniture });
+  const because = under ? ` (${under.name})` : '';
+  return `${screen.name}: a ${inches}in position${because} is ${px}px here, so the board will not go narrower.`;
 }

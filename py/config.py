@@ -1572,11 +1572,89 @@ def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
             'id': screen_id,
             'name': str(entry.get('name') or '').strip() or screen_id,
             'diagonal_inches': diagonal,
-            # Optional: a screen worth describing may still have no dock below
-            # it, and must then impose no minimum.
+            # ⭐ Which piece of furniture is underneath (#203). A screen worth
+            # describing may still have nothing below it, and must then impose
+            # no minimum.
+            'furniture_id': str(entry.get('furniture_id') or '').strip() or None,
+            # ⛔ Legacy, and deliberately still stored. Before #203 the position
+            # width lived here. A board configured under the old shape keeps its
+            # floor until the screens are next saved; dropping it on read would
+            # silently widen that board's columns past the dock they were
+            # measured against -- and since #201 that number decides the column
+            # count, so it would be a visible fault rather than a quiet one.
             'min_column_inches': _positive(entry.get('min_column_inches')),
         })
     return out
+
+
+FURNITURE_KINDS = ('dock', 'pad')
+
+
+def normalize_furniture(payload: Any) -> List[Dict[str, Any]]:
+    """The furniture below the screens: charging docks and pickup pads (#203).
+
+    ⭐ This is what a column points at. The television hangs above a piece of
+    furniture with positions in it, and a column is meant to correspond to one
+    of them -- narrower than a position and it stops pointing at anything.
+
+    ⛔ Two kinds because a room has two: a **dock** charges what sits in it (the
+    venue's is a Shure SBC200, 3.9in per position, two bays, not networked), a
+    **pad** is a place on the table where microphones are left and nothing
+    charges. ⚠️ Nothing in the layout branches on the kind -- both are rows of
+    positions with a width and impose the same floor. It is there so a person
+    editing the list knows which object they are looking at, and so the section
+    can grow to IEM transmitters without "dock" having to cover everything.
+
+    ⛔ Separate from the screens because a dock is not a property of a screen:
+    one dock can sit under several, one screen can have none, and a dock can be
+    replaced without the screen changing.
+    """
+    entries = payload if isinstance(payload, list) else []
+    out: List[Dict[str, Any]] = []
+    seen = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        item_id = str(entry.get('id') or '').strip()
+        if not item_id or item_id in seen:
+            continue
+
+        def _positive(value):
+            if isinstance(value, bool):
+                return None
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return None
+            return round(number, 2) if number > 0 else None
+
+        width = _positive(entry.get('position_inches'))
+        # An entry with no width could be chosen and would impose nothing, so
+        # it is dropped rather than stored half-made.
+        if not width:
+            continue
+        seen.add(item_id)
+        kind = entry.get('kind')
+        out.append({
+            'id': item_id,
+            'name': str(entry.get('name') or '').strip() or item_id,
+            # ⚠️ An unrecognised kind becomes a dock rather than losing the
+            # entry. The width is the part that matters and it is present.
+            'kind': kind if kind in FURNITURE_KINDS else 'dock',
+            'position_inches': width,
+            'positions': _positive(entry.get('positions')),
+        })
+    return out
+
+
+def ensure_furniture() -> List[Dict[str, Any]]:
+    normalized = normalize_furniture(config_tree.get('furniture'))
+    config_tree['furniture'] = normalized
+    return normalized
+
+
+def get_furniture() -> List[Dict[str, Any]]:
+    return copy.deepcopy(ensure_furniture())
 
 
 def ensure_screens() -> List[Dict[str, Any]]:
@@ -1587,6 +1665,29 @@ def ensure_screens() -> List[Dict[str, Any]]:
 
 def get_screens() -> List[Dict[str, Any]]:
     return copy.deepcopy(ensure_screens())
+
+
+def update_screens_and_furniture(screens: Any, furniture: Any) -> Dict[str, Any]:
+    """Store both lists in one save (#203).
+
+    ⛔ **One save, not two.** A screen names the furniture beneath it, so saving
+    them separately leaves a window in which a screen points at furniture that
+    does not exist yet -- and the board reads the pair on every layout pass. One
+    write means the two can never disagree on disk.
+
+    ⛔ Still deliberately **not** a `reconfig`, for the same reason as before:
+    these numbers change how a board lays itself out and nothing about the
+    receivers, so recording a tape measure must not tear every socket down.
+    """
+    normalized_furniture = normalize_furniture(furniture)
+    normalized_screens = normalize_screens(screens)
+    config_tree['furniture'] = normalized_furniture
+    config_tree['screens'] = normalized_screens
+    save_current_config()
+    return {
+        'screens': copy.deepcopy(normalized_screens),
+        'furniture': copy.deepcopy(normalized_furniture),
+    }
 
 
 def update_screens(payload: Any) -> List[Dict[str, Any]]:
