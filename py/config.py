@@ -1699,7 +1699,16 @@ def update_screens_and_docks(screens: Any, docks: Any) -> Dict[str, Any]:
     these numbers change how a board lays itself out and nothing about the
     receivers, so recording a tape measure must not tear every socket down.
     """
-    normalized_docks = normalize_docks(dock)
+    # ⛔ `docks`, the parameter. This said `dock` from the #212 rename until the
+    # venue found it: every save of a screen or a dock raised
+    # `NameError: name 'dock' is not defined` and answered 500, so the Dock
+    # section could not be used at all on beta.5.
+    #
+    # ⚠️ The save path had been verified end to end by hand *before* the rename
+    # and never again after it, and no test called this function -- the tests
+    # covered `normalize_docks` and `normalize_screens` either side of it. A
+    # mechanical rename needs the same end-to-end check as the change it renames.
+    normalized_docks = normalize_docks(docks)
     normalized_screens = normalize_screens(screens)
     config_tree['docks'] = normalized_docks
     config_tree['screens'] = normalized_screens
