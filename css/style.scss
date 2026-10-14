@@ -1811,7 +1811,14 @@ a:link, a:visited, a:hover, a:active {
   right: 16px;
   bottom: 16px;
   z-index: 1060;
-  opacity: 0.85;
+  // ⛔ #187. This carried `opacity: 0.85`, which fades the whole subtree --
+  // the text, not just the surface -- so the board read straight through the
+  // guide. Photographed on the venue wall with card photographs, names and
+  // slot labels showing inside the sentences.
+  //
+  // This is the one screen somebody reads when they do not yet know how the
+  // board works, and it was the hardest screen on the board to read. Nothing
+  // restores the opacity on hover or focus; it was flat and permanent.
   background-color: var(--color-white);
   color: var(--color-black);
   font-family: 'IBM Plex Sans';
@@ -1886,6 +1893,14 @@ a:link, a:visited, a:hover, a:active {
 
 #hud .hud-card a {
   font-weight: 500;
+  // ⛔ #187. Measured on the rendered panel, not guessed: Bootstrap's link blue
+  // is **3.13:1** against this surface's #D7D7D7, and the board's own
+  // `--color-blue` is 4.49 -- failing by a hair, which is still failing.
+  //
+  // Both are tuned for the near-black board behind them. On a light panel they
+  // need a darker step, exactly as the icon work found a light browser tab
+  // needs #3F8A52 where the board uses #69B578. This one measures 5.9:1.
+  color: #00527a;
 }
 
 @media (max-width: 576px) {
