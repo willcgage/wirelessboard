@@ -47,9 +47,16 @@ const cardMarkup = markup
 
 test('the card has a band, and the text lives inside it', () => {
   assert.match(cardMarkup, /class="card-band"/, 'the card needs a band to put text in');
-  for (const line of ['class="name"', 'class="mic_id"', 'class="card-runtime"']) {
+  for (const line of ['class="name"', 'class="card-runtime"']) {
     assert.ok(cardMarkup.includes(line), `${line} should be inside the card`);
   }
+  // ⛔ #206. The device name is the column heading and nothing else. It sat in
+  // the band as well until the duplicate was found on a running board -- the
+  // same string, twice, on every card, in both desk and TV mode.
+  assert.ok(
+    !cardMarkup.includes('class="mic_id"'),
+    'the band must not carry a second copy of the device name',
+  );
 });
 
 test('the band carries the status colour, so the photo does not have to', () => {
@@ -164,12 +171,14 @@ test('⛔ nothing quietly un-positions the chip', () => {
   );
 });
 
-test('a narrow card restacks the tags rather than dropping them', () => {
-  // ⚠️ This test used to be called "drops the tags it has no room for" and
-  // asserted two tiers, one of which hid the position and one the runtime.
-  // The maintainer's rule is that the board does not shed information, and the
-  // one-row card is why it never had to: at twelve columns a card is 155px wide
-  // and 1040px tall. The remaining tier changes the *shape* of the pair.
+test('a narrow card centres the runtime rather than dropping anything', () => {
+  // ⚠️ Named twice before this: "drops the tags it has no room for", which
+  // asserted two tiers that hid things, and then "restacks the tags", after the
+  // board stopped shedding information. Neither applies now. The band is one
+  // column at every width since #206, so there is nothing left to restack --
+  // what the tier still does is centre the runtime, because on a card this
+  // narrow a left-aligned runtime leaves the whole right half empty and there
+  // is no second tag to balance it.
   assert.match(css, /@container \(max-width: 190px\)/, 'there should still be a narrow tier');
   assert.match(
     block('.col-sm {\n    container-type'),
@@ -178,12 +187,12 @@ test('a narrow card restacks the tags rather than dropping them', () => {
   );
 
   const narrow = block('@container (max-width: 190px) {');
-  assert.match(narrow, /grid-template-areas/, 'the narrow tier restacks the band');
+  assert.match(narrow, /justify-self:\s*center/, 'the narrow tier centres the runtime');
   assert.doesNotMatch(narrow, /display:\s*none/, 'and drops nothing');
 
-  const tagRules = block('.mic_name .mic_id,\n  .mic_name .card-runtime {');
-  assert.match(tagRules, /white-space:\s*nowrap/, 'tags should not wrap mid-word');
-  assert.match(tagRules, /text-overflow:\s*ellipsis/, 'they should trail off instead');
+  const tagRules = block('.mic_name .card-runtime {');
+  assert.match(tagRules, /white-space:\s*nowrap/, 'the runtime should not wrap mid-word');
+  assert.match(tagRules, /text-overflow:\s*ellipsis/, 'it should trail off instead');
 });
 
 test('a healthy channel wears no badge', () => {
@@ -383,12 +392,16 @@ test('⛔ no width tier hides anything, in any wash', () => {
   }
 });
 
-test('⛔ the narrow tier restacks the band instead', () => {
+test('⛔ the narrow tier changes placement, never presence', () => {
   const narrow = block('@container (max-width: 190px) {');
 
-  assert.match(narrow, /grid-template-areas/, 'the pair stacks when there is no width for it');
-  assert.match(narrow, /"position"/, 'the position keeps its own row rather than going');
-  assert.match(narrow, /"runtime"/, 'and so does the runtime');
+  assert.match(narrow, /justify-self/, 'it moves what is there');
+  assert.doesNotMatch(narrow, /display:\s*none/, 'it never removes it');
+  assert.doesNotMatch(
+    narrow,
+    /visibility:\s*hidden|font-size:\s*0/,
+    'nor hides it by a route that merely looks like layout',
+  );
 });
 
 /**

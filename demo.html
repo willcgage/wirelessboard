@@ -1055,7 +1055,9 @@
           <div class="status-chip"><span class="chip-glyph"></span><span class="chip-word"></span></div>
           <div class="card-band">
             <p class="name"></p>
-            <p class="mic_id"></p>
+            <!-- ⛔ No device name here. It is the column heading above the card
+                 (p.device-name); printing it here as well put the same string
+                 on every card twice over, which #206 removed. -->
             <!-- The battery, beside the time it is a measure of. The outline
                  stays when nothing has been reported; only the fill goes. -->
             <p class="card-runtime">

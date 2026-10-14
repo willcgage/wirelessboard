@@ -157,9 +157,11 @@ function updateFrequency(slotSelector, data) {
   }
 }
 
-function updateID(slotSelector, data) {
-  slotSelector.querySelector('p.mic_id').innerHTML = data.id;
-}
+// ⛔ No updateID. `data.id` used to be written into `p.mic_id` inside the band,
+// where it printed the same string the column heading already shows -- the
+// device name, twice on every card (#206). `updateDeviceName` writes the one
+// that remains, and it reads `device_id` rather than `id` because the heading
+// wants the equipment with the person's name stripped off.
 
 function updateName(slotSelector, data) {
   slotSelector.querySelector('p.name').innerHTML = data.name;
@@ -308,9 +310,6 @@ function updateCheck(data, key, callback) {
 }
 
 function updateSelector(slotSelector, data) {
-  updateCheck(data, 'id', () => {
-    updateID(slotSelector, data);
-  });
   updateCheck(data, 'name', () => {
     updateName(slotSelector, data);
   });
@@ -352,9 +351,6 @@ function updateSelector(slotSelector, data) {
 export function updateViewOnly(slotSelector, data) {
   if ('status' in data) {
     updateStatus(slotSelector, data);
-  }
-  if ('id' in data) {
-    updateID(slotSelector, data);
   }
   if ('name' in data) {
     updateName(slotSelector, data);
