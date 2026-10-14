@@ -196,24 +196,51 @@ test('no channel is ever lost: a board either holds them all or says it pages', 
  * The columns control is a *ceiling* ("Max 8"), so coming in under it is what
  * it already promises; the shape is a statement that cannot be partly honoured.
  */
-test('⭐ a named card shape fills the screen rather than leaving a strip', () => {
-  for (const shape of ['wide', 'tall']) {
-    const { boardHeight, scrolls, columns } = computeLayout({
-      slotCount: 12,
-      containerWidth: 1920,
-      availableHeight: 1080,
-      slotWidth: 420,
-      gap: 6,
-      arrangement: 'row',
-      shape,
-      columns: 'auto',
-    });
+test('⭐ a named card shape never overflows, and pages what it cannot show', () => {
+  // ⚠️ This test has been rewritten twice and the reason matters both times.
+  //
+  // It first asserted the defect -- a 155x87 strip over 8% of the screen -- then
+  // #185 made the column count give way so a shaped board *filled* the height,
+  // and it asserted `used > 0.6`.
+  //
+  // ⛔ Filling is no longer always reachable, and that is the better trade. A
+  // named shape fixes the row height from the card's width, so the screen holds
+  // a whole number of rows and usually not a convenient one: twelve 3:4 cards at
+  // 1920x1080 want 560px a row, and two rows is 1126px. The board used to draw
+  // the extra row anyway and run off the bottom, which is #171. It now draws
+  // what fits and pages the rest.
+  //
+  // So the guarantee is no longer "fills" -- it is "never overflows, never
+  // hides". Whether it also fills is `a shaped board is the tallest one that
+  // still fits`, below, which is the half #185 actually bought.
+  for (const arrangement of ['fit', 'grid']) {
+    for (const shape of ['wide', 'tall']) {
+      const {
+        boardHeight, scrolls, pages, capacity,
+      } = computeLayout({
+        slotCount: 12,
+        containerWidth: 1920,
+        availableHeight: 1080,
+        slotWidth: 420,
+        gap: 6,
+        arrangement,
+        shape,
+        columns: 'auto',
+      });
 
-    const used = boardHeight / 1080;
-    assert.ok(used > 0.6, `${shape}: used only ${Math.round(used * 100)}% of the screen`);
-    assert.ok(used <= 1, `${shape}: ${Math.round(used * 100)}% overflows rather than fits`);
-    assert.equal(scrolls, false, `${shape}: a board that fits must not claim it scrolls`);
-    assert.ok(columns < 12, `${shape}: the column count has to give way for the shape to hold`);
+      const where = `${arrangement}/${shape}`;
+      const used = boardHeight / 1080;
+      assert.ok(used <= 1, `${where}: ${Math.round(used * 100)}% overflows rather than fits`);
+      assert.equal(scrolls, false, `${where}: a board that fits must not claim it scrolls`);
+
+      // ⛔ Nothing is lost by underfilling: what is not on the screen is on a
+      // page. A board that showed fewer than twelve and did not say it pages
+      // would be hiding channels, which is the one failure that matters.
+      assert.ok(
+        capacity >= 12 || pages === true,
+        `${where}: holds ${capacity} of 12 and does not say it pages`,
+      );
+    }
   }
 });
 
@@ -302,10 +329,14 @@ test('⛔ and an undescribed screen is left exactly as it was', () => {
   }
 });
 
-test('⭐ the minimum wraps the venue board instead of making slivers', () => {
+test('⭐ the minimum narrows the venue board to the dock, and pages the rest', () => {
   // The fault in the photographs: Side by side with no ceiling gave twelve
   // 155px columns. A 4.5in dock position is 180px on that screen, so the board
-  // has to wrap rather than go narrower.
+  // may not go narrower.
+  //
+  // ⚠️ It used to *wrap* to 10x2. It now stays one row of ten and pages the other
+  // two (#201): a column points at a dock or pickup-pad position below the
+  // screen, and the second row pointed at nothing.
   const venue = {
     slotCount: 12,
     containerWidth: 1920,
@@ -321,7 +352,9 @@ test('⭐ the minimum wraps the venue board instead of making slivers', () => {
   const after = computeLayout({ ...venue, minColumnWidth: 180 });
 
   assert.deepEqual([before.columns, before.rows], [12, 1], 'the fault as photographed');
-  assert.deepEqual([after.columns, after.rows], [10, 2], 'wrapped rather than narrowed');
+  assert.deepEqual([after.columns, after.rows], [10, 1], 'narrowed to the dock, still one row');
+  assert.equal(after.capacity, 10, 'ten positions, so ten channels at a time');
+  assert.equal(after.pages, true, 'and the other two are a second page');
   assert.ok(after.cardWidth > before.cardWidth);
   assert.equal(after.columnsLimitedByWidth, true, 'and says why, so a rule is not mistaken for a bug');
 });
@@ -347,9 +380,14 @@ test('⭐ the 1080p television in the venue, every arrangement, twelve channels'
     assert.ok(Math.abs(r.boardHeight - 1080) < 1.5);
   }
 
-  // Side by side honours the ceiling and stays on the screen.
+  // Side by side honours the ceiling, stays on the screen, and is one row.
+  // ⚠️ Was [6, 2]: twelve channels wrapping into two rows of six. One row now
+  // (#201), six channels at a time, the other six on a second page -- and the
+  // cards are twice as tall for it.
   const six = at('row', '6', 'auto');
-  assert.deepEqual([six.columns, six.rows], [6, 2]);
+  assert.deepEqual([six.columns, six.rows], [6, 1]);
+  assert.equal(six.capacity, 6);
+  assert.equal(six.pages, true);
   assert.ok(Math.abs(six.boardHeight - 1080) < 1.5);
 
   // ⛔ The one that used to overflow: twelve 3:4 cards over four columns need

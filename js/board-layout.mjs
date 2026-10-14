@@ -442,23 +442,30 @@ export function computeLayout({
     maxColumnsAtMinimum: floor,
   });
 
-  // ⏳ The arrangement's own row cap is NOT applied yet, and this is the hook
-  // for it (#201).
+  // ⛔⛔ `Side by side` is ALWAYS one row (#201). Settled by the maintainer,
+  // 2026-10-14, and it is not a preference the layout may trade away:
   //
-  // The design says `Side by side` should mean one row and page the rest. Built
-  // and measured, it changes two boards the maintainer photographed and
-  // accepted at the venue: Max 6 with twelve channels goes from 6x2 to 6x1 with
-  // two pages, and #170's dock floor goes from 10x2 to 10x1 with two pages. In
-  // both, every channel currently fits on screen at a comfortable size, and the
-  // cap would put half of them behind a timer for nothing.
+  //   "Side by Side is always 1 row, and that row is dictated by the width of
+  //    the charging dock or pickup pad. The column/card should not get any less
+  //    wide than the dock width."
   //
-  // ⛔ So the cap waits on a decision rather than being chosen here. What #201
-  // was actually about -- 72 channels silently becoming a 12x6 grid -- is a
-  // question about how far an `auto` board may shrink before the card stops
-  // being worth looking at, which is a number nobody has stated.
+  // ⭐ Which says what a column *is* on this board: a column points at a
+  // physical position on the table below the screen -- a bay on a charging dock,
+  // or a spot on a pickup pad where microphones are left without charging. The
+  // column count is the furniture's, not the channel count's, and a thirteenth
+  // channel on twelve positions goes to a second page rather than a second row,
+  // because there is no second row of furniture for it to point at.
   //
-  // Turning it on is this line: `arrangement === 'row' ? 1 : Infinity`.
-  const maxRows = Infinity;
+  // ⚠️ Two boards change, both of them deliberately: Max 6 with twelve channels
+  // goes 6x2 -> 6x1 and pages, and #170's dock floor goes 10x2 -> 10x1 and
+  // pages. They were photographed at the venue wrapping, and wrapping is what
+  // this corrects -- the second row pointed at nothing.
+  //
+  // ⛔ The *width* floor that keeps a column at least one position wide is
+  // `minColumnWidth`, applied above by `columnsFor`. These two rules are halves
+  // of the same one and have to stay together: the cap stops the board growing
+  // downwards, the floor stops it growing sideways into slivers.
+  const maxRows = arrangement === 'row' ? 1 : Infinity;
 
   // ⭐ A named shape beats the column count (#185). `auto` is untouched.
   const columns = columnsForShape({
