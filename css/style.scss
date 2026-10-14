@@ -869,8 +869,14 @@ canvas.slotgraph {
   }
 
   /* electrode */
+  // ⛔ #184. `max-height`, never `height`. `.tvmode .mic_name` is `flex: 1 1
+  // auto`, and on a flex item `flex-grow` beats `height` -- so this reserve was
+  // silently ignored and the band grew to the card's bottom, straight over the
+  // drawer that lives there. Measured on a 152x1040 card: the name overlapped
+  // the frequency by 32px; with `max-height` it clears it by 37px and the box
+  // lands on its intended 954px.
   .elinfo01 .col-sm .mic_name {
-    height: calc(100% - (var(--tvmode-scale) * 125px));
+    max-height: calc(100% - (var(--tvmode-scale) * 125px));
     /* background-color: black; */
     background: #262626;
   }
@@ -887,7 +893,7 @@ canvas.slotgraph {
 
   /* info drawer */
   .elinfo10 .col-sm .mic_name {
-    height: calc(100% - (var(--tvmode-scale) * 250px));
+    max-height: calc(100% - (var(--tvmode-scale) * 250px));
   }
 
   .elinfo10 .col-sm .electrode {
@@ -900,7 +906,7 @@ canvas.slotgraph {
 
   /* electrode and info drawer */
   .elinfo11 .col-sm .mic_name {
-    height: calc(100% - (var(--tvmode-scale) * 375px));
+    max-height: calc(100% - (var(--tvmode-scale) * 375px));
     background: var(--color-black);
   }
 
@@ -908,7 +914,11 @@ canvas.slotgraph {
     display: block;
   }
 
-  .elinfo11 .col-sm info-drawer {
+  // ⚠️ This selector was `info-drawer` -- no leading dot -- so it matched an
+  // element type that does not exist and never applied. It worked anyway only
+  // because a div defaults to `display: block` and no rule hides the drawer in
+  // this mode. Corrected so the rule says what it meant.
+  .elinfo11 .col-sm .info-drawer {
     display: block;
   }
 

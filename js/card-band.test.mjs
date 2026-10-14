@@ -223,3 +223,45 @@ test('⛔ the desk-mode card is one box, not two of different widths', () => {
     'the name box must fill the card, or it disagrees with the drawer below it',
   );
 });
+
+/**
+ * The info drawer's reserved space has to survive flex layout (#184).
+ *
+ * ⛔ `.tvmode .mic_name` is `flex: 1 1 auto`. On a flex item `flex-grow` beats
+ * `height`, so the `elinfo` reserves were written as `height` and silently did
+ * nothing: the band grew to the card's bottom and sat on top of the drawer that
+ * lives there — the frequency, the chart and the battery bars are all
+ * absolutely positioned against `.col-sm` with `bottom:` offsets.
+ *
+ * Measured on a simulated 152×1040 card with the real computed metrics
+ * (`--tvmode-scale: 0.2289`): the name overlapped the frequency by **32px**.
+ * With `max-height` it clears it by 37px and the box lands on its intended
+ * 954px. `max-height` constrains a flex item; `height` does not.
+ */
+test('⛔ the drawer reserve uses max-height, which flex-grow cannot eat', () => {
+  ['elinfo01', 'elinfo10', 'elinfo11'].forEach((mode) => {
+    const rule = block(`.${mode} .col-sm .mic_name {`);
+
+    assert.ok(rule, `${mode} should still reserve space for its drawer`);
+    assert.match(
+      rule,
+      /max-height:\s*calc\(100% - \(var\(--tvmode-scale\)/,
+      `${mode} must reserve with max-height — plain height loses to flex-grow`,
+    );
+    assert.doesNotMatch(
+      rule,
+      /(^|[;\s])height:\s*calc/,
+      `${mode} must not use plain height, which flex-grow overrides`,
+    );
+  });
+});
+
+test('⚠️ the drawer rules select a class, not an element type', () => {
+  // `.elinfo11 .col-sm info-drawer` matched nothing for a long time and worked
+  // only because a div defaults to display:block.
+  assert.doesNotMatch(
+    css,
+    /\.col-sm\s+info-drawer/,
+    'a missing leading dot makes the rule dead',
+  );
+});
