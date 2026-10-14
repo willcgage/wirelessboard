@@ -1,7 +1,7 @@
 import { Sortable, Plugins } from '@shopify/draggable';
 
 import { micboard } from './app.js';
-import { initChart, charts } from './chart-smoothie.js';
+import { initChart, charts } from './signal-view.js';
 import { renderDisplayList, updateViewOnly } from './channelview.js';
 import { postJSON } from './data.js';
 import { toggleDisplayMode } from './display.js';

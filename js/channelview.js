@@ -1,6 +1,6 @@
 import { micboard, updateHash } from './app.js';
 import { updateBackground } from './gif.js';
-import { initChart, charts } from './chart-smoothie.js';
+import { initChart, charts } from './signal-view.js';
 import { seedTransmitters, autoRandom } from './demodata.js';
 import { updateEditor } from './dnd.js';
 import { deviceHeading } from './device-label.mjs';
@@ -51,17 +51,18 @@ function infoToggle() {
 
 function updateTXOffset(slotSelector, data) {
   if (data.tx_offset !== 255) {
-    slotSelector.querySelector('p.offset').innerHTML = `${data.tx_offset} dB`;
+    slotSelector.querySelector('.offset').innerHTML = `${data.tx_offset} dB`;
   } else {
-    slotSelector.querySelector('p.offset').innerHTML = '';
+    slotSelector.querySelector('.offset').innerHTML = '';
   }
 }
 
 function updateRuntime(slotSelector, data) {
-  slotSelector.querySelector('p.runtime').innerHTML = data.runtime;
-
-  // The same figure on the card itself (#130). The drawer keeps its copy: it is
-  // the detail view, and it is what a desk-mode board shows.
+  // ⛔ One place, not two (#195). This used to write `p.runtime` in the drawer
+  // as well, on the reasoning that the drawer is the detail view and the one a
+  // desk-mode board shows. That stopped being true: the band renders in both
+  // modes -- measured directly while fixing #181 -- so the drawer's copy was
+  // the same figure twice on every surface, written by this one function.
   //
   // ⛔ Only the text node, never the whole element -- the battery icon lives in
   // here too, and writing textContent would delete it.
@@ -125,9 +126,9 @@ function updateStatusChip(slotSelector, data) {
 
 function updatePowerlock(slotSelector, data) {
   if (data.power_lock === 'ON') {
-    slotSelector.querySelector('p.powerlock').style.display = 'block';
+    slotSelector.querySelector('.powerlock').style.display = 'block';
   } else {
-    slotSelector.querySelector('p.powerlock').style.display = 'none';
+    slotSelector.querySelector('.powerlock').style.display = 'none';
   }
 }
 
@@ -141,7 +142,7 @@ function updateQuality(slotSelector, data) {
     5: '&#9679;&#9679;&#9679;&#9679;&#9679;',
     255: '',
   };
-  slotSelector.querySelector('p.quality').innerHTML = QualityTable[data.quality];
+  slotSelector.querySelector('.quality').innerHTML = QualityTable[data.quality];
 }
 
 function updateFrequency(slotSelector, data) {
@@ -149,7 +150,7 @@ function updateFrequency(slotSelector, data) {
   // into `528.850`, and `demodata.js` generates 474-597 -- the UHF band these
   // systems work in. Printing a bare "Hz" was wrong by six orders of magnitude
   // and shipped on every card, in every photograph taken of the wall.
-  slotSelector.querySelector('p.frequency').innerHTML = `${data.frequency} MHz`;
+  slotSelector.querySelector('.frequency').innerHTML = `${data.frequency} MHz`;
   if (data.frequency === '000000') {
     slotSelector.querySelector('.frequency').style.display = 'none';
   } else {
@@ -237,29 +238,17 @@ function updateCardBattery(slotSelector, data) {
   holder.setAttribute('title', batteryDescription(data && data.battery, data && data.runtime));
 }
 
-const BatteryTable = {
-  0: ['batt_led_off', 'batt_led_off', 'batt_led_off', 'batt_led_off', 'batt_led_off'],
-  1: ['batt_led_danger', 'batt_led_off', 'batt_led_off', 'batt_led_off', 'batt_led_off'],
-  2: ['batt_led_danger', 'batt_led_danger', 'batt_led_off', 'batt_led_off', 'batt_led_off'],
-  3: ['batt_led_warning', 'batt_led_warning', 'batt_led_warning', 'batt_led_off', 'batt_led_off'],
-  4: ['batt_led_good', 'batt_led_good', 'batt_led_good', 'batt_led_good', 'batt_led_off'],
-  5: ['batt_led_good', 'batt_led_good', 'batt_led_good', 'batt_led_good', 'batt_led_good'],
-  255: ['batt_led_off', 'batt_led_off', 'batt_led_off', 'batt_led_off', 'batt_led_off'],
-  led: [],
-};
-
 function updateBattery(slotSelector, data) {
-  const outputBars = BatteryTable[data.battery];
-
-  slotSelector.querySelectorAll('.battery-bar').forEach((b) => {
-    b.classList.remove('batt_led_off', 'batt_led_danger', 'batt_led_warning', 'batt_led_good');
-  });
-
-  slotSelector.querySelector('.battery-bar-1').classList.add(outputBars[0]);
-  slotSelector.querySelector('.battery-bar-2').classList.add(outputBars[1]);
-  slotSelector.querySelector('.battery-bar-3').classList.add(outputBars[2]);
-  slotSelector.querySelector('.battery-bar-4').classList.add(outputBars[3]);
-  slotSelector.querySelector('.battery-bar-5').classList.add(outputBars[4]);
+  // ⛔ No battery bars (#195). Five segments in the drawer painted the same
+  // `data.battery` the band already draws as an icon -- one number, two shapes,
+  // one card. The icon is the one that stays: it is on the never-shed list, it
+  // reads at every card width, and it is beside the runtime it is a measure of.
+  //
+  // ⚠️ `BatteryTable` went with them. It mapped a battery level to five CSS
+  // classes and nothing else ever read it -- the band's icon is drawn from
+  // `batteryFraction` in `battery-icon.mjs`, which is a different and finer
+  // mapping. Keeping the table "just in case" would have left a second, stale
+  // answer to "how full is this battery" sitting next to the real one.
 
   if (micboard.group !== 0) {
     let hideChart = false;
@@ -268,12 +257,16 @@ function updateBattery(slotSelector, data) {
       hideChart = micboard.groups[micboard.group].hide_charts;
     }
 
+    // ⭐ A group that hides charts hides the signal lines, not a canvas. The
+    // rows carry the whole line -- label, trend and value -- so hiding them
+    // leaves the figures underneath, which is what somebody turning charts off
+    // is asking for.
     if (hideChart) {
-      if (data.battery === 255) {
-        slotSelector.querySelector('.slotgraph').style.display = 'none';
-      } else {
-        slotSelector.querySelector('.slotgraph').style.display = 'block';
-      }
+      const hidden = data.battery === 255;
+      slotSelector.querySelectorAll('.spark-row').forEach((row) => {
+        // eslint-disable-next-line no-param-reassign
+        row.style.display = hidden ? 'none' : '';
+      });
     }
   }
 }
