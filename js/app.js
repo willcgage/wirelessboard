@@ -15,7 +15,7 @@ import {
 } from './display.js';
 import { drawerBits, drawerModeWith } from './panel-controls.mjs';
 import { initViewPanel, toggleViewPanel } from './view-panel.js';
-import { setTimeMode } from './chart-smoothie.js';
+import { setTimeMode } from './signal-view.js';
 import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, bindScreenHandlers,
   configureConfigModule, scheduleBackgroundFilenameGuide,

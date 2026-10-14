@@ -6,7 +6,7 @@ import {
   dataURL, ActivateMessageBoard, micboard, updateNavLinks, announceConfigLoaded,
 } from './app.js';
 import { renderGroup, updateSlot } from './channelview.js';
-import { updateChart } from './chart-smoothie.js';
+import { updateChart } from './signal-view.js';
 
 export function postJSON(url, data, callback, onError) {
   fetch(url, {
