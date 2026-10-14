@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   screenId, uniqueScreenId, screenProblem, screensHaveProblems, toPayload, saveSummary,
+  pairRows, mergeSaved,
 } from './screens-editor.mjs';
 
 const WALL = { name: 'Auditorium wall', diagonal_inches: 55, min_column_inches: 4.5 };
@@ -82,11 +83,14 @@ test('numbers arriving as text from a form are numbers in the payload', () => {
   assert.equal(payload[0].min_column_inches, 4.5);
 });
 
-test('⚠️ saving says when a row was not saved', () => {
+test('⚠️ saving says when a row was not saved, and that it is still there', () => {
   // A row silently dropped is discovered weeks later, when a board behaves oddly.
   assert.equal(saveSummary([WALL]), '1 screen saved.');
-  assert.equal(saveSummary([WALL, { name: 'Broken' }]), '1 screen saved. 1 incomplete row not saved.');
-  assert.match(saveSummary([WALL, {}, {}]), /2 incomplete rows not saved/);
+  assert.equal(
+    saveSummary([WALL, { name: 'Broken' }]),
+    '1 screen saved. 1 incomplete row is still here to finish.',
+  );
+  assert.match(saveSummary([WALL, {}, {}]), /2 incomplete rows are still here to finish/);
 });
 
 test('an empty list says what that means rather than nothing', () => {
@@ -97,4 +101,80 @@ test('screensHaveProblems is the form-level answer', () => {
   assert.equal(screensHaveProblems([WALL]), false);
   assert.equal(screensHaveProblems([WALL, { name: 'Broken' }]), true);
   assert.equal(screensHaveProblems([]), false);
+});
+
+test('pairRows keeps every row, and says which ones are being sent', () => {
+  const pairs = pairRows([WALL, { name: 'Half done' }]);
+
+  assert.equal(pairs.length, 2, 'a held-back row is still a row');
+  assert.equal(pairs[0].entry.id, 'auditorium-wall');
+  assert.equal(pairs[1].entry, null);
+  assert.equal(pairs[1].row.name, 'Half done', 'and it still carries what was typed');
+});
+
+/**
+ * ⛔ #180. Found on the venue wall: the status line said "1 incomplete row not
+ * saved" and the row it referred to had been deleted from the form, so there
+ * was nothing left to finish. No screen could be described, so no board had a
+ * minimum column width, so #170 never engaged at all.
+ */
+test('⛔ a save keeps the row you were still filling in', () => {
+  const typing = { name: 'Lobby', diagonal_inches: '', min_column_inches: '' };
+  // The server only ever sees the complete one, so that is all it sends back.
+  const merged = mergeSaved([WALL, typing], [{ ...WALL, id: 'auditorium-wall' }]);
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[1].name, 'Lobby', 'the half-finished row survives the save');
+  assert.match(screenProblem(merged[1]), /How big is it/, 'and is still flagged');
+});
+
+test('⛔ what was typed into the kept row is not quietly rewritten', () => {
+  const typing = { name: 'Lobby', diagonal_inches: 'about fifty', min_column_inches: '4.5' };
+  const merged = mergeSaved([typing], []);
+
+  assert.deepEqual(merged, [typing], 'byte for byte, so the cursor lands where it was');
+});
+
+test('a saved row takes the server\'s values, not the form\'s', () => {
+  // ⭐ The id matters most: it is what a board stores to say which screen it is.
+  const merged = mergeSaved(
+    [{ name: 'Auditorium wall', diagonal_inches: '55', min_column_inches: '4.5' }],
+    [{
+      id: 'auditorium-wall', name: 'Auditorium wall', diagonal_inches: 55, min_column_inches: 4.5,
+    }],
+  );
+
+  assert.equal(merged[0].id, 'auditorium-wall');
+  assert.equal(merged[0].diagonal_inches, 55, 'a number, not the string the form held');
+});
+
+test('order is the order the rows were in', () => {
+  const merged = mergeSaved(
+    [{ name: 'Broken' }, WALL, { diagonal_inches: 15 }],
+    [{ ...WALL, id: 'auditorium-wall' }],
+  );
+
+  assert.deepEqual(merged.map((s) => s.name), ['Broken', 'Auditorium wall', undefined]);
+});
+
+test('⚠️ a complete row the server refused comes back rather than vanishing', () => {
+  // Same reason as an incomplete one: a row that disappears takes the only
+  // copy of somebody's work with it.
+  const merged = mergeSaved([WALL], []);
+
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].name, 'Auditorium wall');
+});
+
+test('a screen in the response that no row produced is shown, not dropped', () => {
+  const merged = mergeSaved([], [{ id: 'youth', name: 'Youth room TV', diagonal_inches: 43 }]);
+
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].id, 'youth');
+});
+
+test('merging nothing into nothing is an empty form, not a crash', () => {
+  assert.deepEqual(mergeSaved([], []), []);
+  assert.deepEqual(mergeSaved(null, null), []);
+  assert.deepEqual(mergeSaved(undefined, [{ id: 'wall', name: 'Wall', diagonal_inches: 55 }]).length, 1);
 });
