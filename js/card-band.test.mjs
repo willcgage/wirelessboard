@@ -265,3 +265,27 @@ test('⚠️ the drawer rules select a class, not an element type', () => {
     'a missing leading dot makes the rule dead',
   );
 });
+
+/**
+ * The frequency is in megahertz (#194).
+ *
+ * ⛔ `py/channel.py` `set_frequency` turns the receiver's `528850` into
+ * `528.850`, and `js/demodata.js` generates 474-597 — the UHF band these
+ * systems work in. The card printed a bare `Hz`, which is wrong by six orders
+ * of magnitude and shipped on every card in every photograph of the wall.
+ *
+ * ⚠️ Pinned here because a unit is exactly the kind of thing that reads fine in
+ * review and is only wrong against the physical world.
+ */
+test('⛔ the frequency reads MHz, because that is what it is', () => {
+  assert.match(
+    view,
+    /\$\{data\.frequency\} MHz/,
+    'the card must state megahertz',
+  );
+  assert.doesNotMatch(
+    view,
+    /\$\{data\.frequency\} Hz/,
+    'a bare Hz is off by a factor of a million',
+  );
+});

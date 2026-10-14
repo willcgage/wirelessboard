@@ -145,7 +145,11 @@ function updateQuality(slotSelector, data) {
 }
 
 function updateFrequency(slotSelector, data) {
-  slotSelector.querySelector('p.frequency').innerHTML = `${data.frequency} Hz`;
+  // ⛔ Megahertz. `py/channel.py` `set_frequency` turns the receiver's `528850`
+  // into `528.850`, and `demodata.js` generates 474-597 -- the UHF band these
+  // systems work in. Printing a bare "Hz" was wrong by six orders of magnitude
+  // and shipped on every card, in every photograph taken of the wall.
+  slotSelector.querySelector('p.frequency').innerHTML = `${data.frequency} MHz`;
   if (data.frequency === '000000') {
     slotSelector.querySelector('.frequency').style.display = 'none';
   } else {
