@@ -74,9 +74,15 @@ test('a named shape derives height from the card width, ignoring the space', () 
 });
 
 test('a shaped card uses the width it will really get, not the configured one', () => {
-  // One row of twelve on a 1920px screen gives ~155px cards. A 16:9 height
-  // computed from the configured 420px would be for a card that never existed.
-  const { cardWidth, rowHeight } = computeLayout({
+  // ⚠️ Updated for #185. This used to assert 160x90 — one row of twelve, which
+  // is an 87px strip on a 1080p screen. A named shape now reduces the column
+  // count until the board fills the height, so that board is no longer built.
+  //
+  // The invariant the test exists for is unchanged and is asserted directly:
+  // the row height is derived from the width a card is *actually* given.
+  const {
+    columns, cardWidth, rowHeight, boardHeight,
+  } = computeLayout({
     slotCount: 12,
     containerWidth: 1920,
     availableHeight: 1080,
@@ -85,8 +91,13 @@ test('a shaped card uses the width it will really get, not the configured one', 
     arrangement: 'row',
     shape: 'wide',
   });
-  assert.equal(cardWidth, 160);
-  assert.equal(rowHeight, 90);
+
+  assert.equal(columns, 3, 'twelve 16:9 cards in one row would be an 87px strip');
+  assert.ok(
+    Math.abs(rowHeight - cardWidth / (16 / 9)) < 0.01,
+    `the 16:9 height must follow the real card width, got ${rowHeight} for ${cardWidth}`,
+  );
+  assert.ok(boardHeight <= 1080, 'and the board it chose still fits the screen');
 });
 
 test('a degenerate measurement does not collapse the board', () => {
