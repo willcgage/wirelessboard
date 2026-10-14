@@ -99,15 +99,19 @@ export const VIEW_CONTROLS = [
     group: 'Card',
     storageKey: WASH_KEY,
     options: WASH_STYLES,
-    optionLabels: { band: 'Band only', full: 'Whole card' },
+    optionLabels: { band: 'Band only', full: 'Whole card', rail: 'Edge rail' },
     // ⭐ Says why it may appear to do nothing (#130). With a photo present the
     // whole-card wash is almost entirely behind the picture -- which is why
     // the band is the default on a board where most people have photos. The
     // control is still right for photo-less cards, and a control that looks
     // broken is worse than one that explains itself in a line.
-    describe: (value) => (value === 'full'
-      ? 'Visible on cards with no photo — a picture covers the wash.'
-      : 'The band carries the colour, so the photo stays clear.'),
+    describe: (value) => {
+      if (value === 'full') return 'Visible on cards with no photo — a picture covers the wash.';
+      // ⭐ #193. Names the trade rather than the mechanism: what somebody gets
+      // for moving the colour off the band is a bigger face.
+      if (value === 'rail') return 'A stripe down the edge, so the band shrinks and the photo grows.';
+      return 'The band carries the colour, so the photo stays clear.';
+    },
   },
   {
     id: 'typeSize',

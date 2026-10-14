@@ -577,9 +577,20 @@ canvas.slotgraph {
     }
   }
 
-  // Narrower still: a face and a name, which is the whole point of the board.
+  // Narrower still: a face, a name, and how long the pack has got.
+  //
+  // ⛔ #193. This used to hide `.card-runtime` outright, taking the battery
+  // icon with it. The battery is why somebody walks to the rack, so it is on
+  // the never-shed list settled with the maintainer -- the face, the person,
+  // the status, the device name and the battery. The *digits* give way here;
+  // the icon alone still says "this pack is nearly out", which is the question
+  // being asked at this width.
+  //
+  // ⚠️ This changes `band` and `full` too, not just `rail`. That is deliberate:
+  // the shed order is one order for every wash, or they drift apart, which is
+  // the specific failure #193 exists to avoid.
   @container (max-width: 120px) {
-    .mic_name .card-runtime {
+    .mic_name .card-runtime .runtime-text {
       display: none;
     }
   }
@@ -649,6 +660,58 @@ canvas.slotgraph {
   // over it, and the scrim doing the work of making text readable.
   &.wash-full .mic_name .card-band {
     background: transparent;
+  }
+
+  // ---- `rail`: the colour down the edge (#193) --------------------------
+  //
+  // ⭐ The band stops carrying the status, so it stops needing to be a band --
+  // it shrinks to the text it holds and the photograph takes the height back.
+  // On a wall that is the whole trade: a bigger face for the same card.
+  //
+  // ⛔ The rail lives inside `.mic_name` because that is where `--status` is
+  // set (`updateStatus` writes the status class onto that element), and
+  // `.tvmode .mic_name` is already `position: relative`. Reaching for
+  // `.col-sm` instead would put the rail outside the element that knows the
+  // colour.
+  &.wash-rail .mic_name {
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: calc(0.55rem * var(--tvmode-scale-clamped));
+      background: var(--status, var(--color-gray));
+      z-index: 2;
+    }
+  }
+
+  // The band is neutral here, and opaque for the same reason `band` is: it
+  // covers the picture exactly where the text is and nowhere else.
+  &.wash-rail .mic_name .card-band {
+    background: var(--color-black);
+    color: var(--color-white);
+    // Clear of the rail, so a long name never runs under the colour.
+    padding-left: calc(0.55rem * var(--tvmode-scale-clamped) + 0.6rem);
+  }
+
+  &.wash-rail .mic_name .card-band .name,
+  &.wash-rail .mic_name .card-band .mic_id,
+  &.wash-rail .mic_name .card-band .card-runtime {
+    color: inherit;
+    text-shadow: none;
+  }
+
+  // ⚠️ `band` tints this pill with black at 18%, which is invisible on the
+  // neutral band here. Light, for the same contrast against its own ground.
+  &.wash-rail .mic_name .mic_id {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  // The band is opaque, so the scrim behind the text has nothing left to do --
+  // the same reasoning as `band`.
+  &.wash-rail .mic_name .slot-media.is-active::after {
+    opacity: 0;
   }
 
   // ⭐⭐ The text block was mostly not text. Measured on a 356px card: 100px of

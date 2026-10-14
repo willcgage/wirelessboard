@@ -145,10 +145,14 @@ test('nextOption cycles and wraps', () => {
   assert.equal(nextOption(CARD_SHAPES, 'tall'), 'auto');
 });
 
-test('the wash has two styles and starts on the band', () => {
-  assert.deepEqual(WASH_STYLES, ['band', 'full']);
+test('the wash has three styles and starts on the band', () => {
+  // ⭐ `rail` added in #193. It is a third value of this control rather than a
+  // second card: the question "where does the status colour live" is the one
+  // this control already answers.
+  assert.deepEqual(WASH_STYLES, ['band', 'full', 'rail']);
   assert.equal(nextOption(WASH_STYLES, 'band'), 'full');
-  assert.equal(nextOption(WASH_STYLES, 'full'), 'band');
+  assert.equal(nextOption(WASH_STYLES, 'full'), 'rail');
+  assert.equal(nextOption(WASH_STYLES, 'rail'), 'band', 'and it cycles back to the default');
   for (const style of WASH_STYLES) {
     assert.ok(isWashStyle(style));
   }

@@ -90,9 +90,20 @@ export const CARD_SHAPES = ['auto', 'wide', 'tall'];
  * `band` gives the colour to the text band and leaves the photograph alone;
  * `full` tints the whole card, which is what the board did before and reads
  * from further away. The maintainer asked to run `band` and compare the two on
- * the wall, so both ship and `W` switches between them.
+ * the wall, so both ship.
+ *
+ * ⭐ `rail` (#193) takes the colour off the band entirely and puts it on a
+ * vertical rail down the card's leading edge. The band stops needing to be
+ * coloured, so its height goes back to the photograph — which is the whole
+ * point on a wall, where the face is what the board is for.
+ *
+ * ⛔ This is a third value of *this* control rather than a second card,
+ * because "where does the status colour live" is exactly the question this
+ * control already answers. Band and rail are the same card, the same text
+ * block and the same shed order; if an implementation ends up with two
+ * layouts, that is the signal that this went wrong.
  */
-export const WASH_STYLES = ['band', 'full'];
+export const WASH_STYLES = ['band', 'full', 'rail'];
 
 export function isWashStyle(value) {
   return WASH_STYLES.includes(value);

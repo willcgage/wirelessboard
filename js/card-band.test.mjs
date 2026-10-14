@@ -289,3 +289,62 @@ test('⛔ the frequency reads MHz, because that is what it is', () => {
     'a bare Hz is off by a factor of a million',
   );
 });
+
+/**
+ * `rail` is a third wash, not a second card (#193).
+ *
+ * ⛔ The whole argument for this being cheap is that band and rail are the same
+ * card differing in one place. If these ever need a second set of layout rules
+ * — their own grid, their own tiers — that is the signal to stop: the card has
+ * shipped wrong three times, and two layouts triples that exposure.
+ */
+test('⛔ the edge rail carries the status colour, and the band goes neutral', () => {
+  const rail = block('&.wash-rail .mic_name {');
+  assert.match(rail, /&::before/, 'the rail is drawn as a pseudo-element on .mic_name');
+
+  // ⛔ Inside .mic_name because that is where `--status` is set — updateStatus
+  // writes the status class onto that element, not onto .col-sm.
+  assert.match(rail, /background:\s*var\(--status/, 'and it takes its colour from --status');
+
+  const band = block('&.wash-rail .mic_name .card-band {');
+  assert.doesNotMatch(band, /var\(--status/, 'the band must not also carry the colour');
+  assert.match(band, /padding-left/, 'and must stand clear of the rail');
+});
+
+/**
+ * ⛔ The never-shed list, settled with the maintainer for #193/#195.
+ *
+ * What a card drops as it narrows: the frequency, then the status word, then
+ * the position. What never gives way: the face, the person, the status, the
+ * device name, and **the battery icon** — the battery is why somebody walks to
+ * the rack.
+ *
+ * ⚠️ One order for every wash. Defined per-wash they drift apart, which is the
+ * specific failure the rail was designed to avoid.
+ */
+test('⛔ the battery icon survives the narrowest tier; only the digits go', () => {
+  const narrowest = block('@container (max-width: 120px) {');
+
+  assert.match(
+    narrowest,
+    /\.card-runtime \.runtime-text\s*\{[^}]*display:\s*none/,
+    'the runtime digits are what give way at this width',
+  );
+  assert.doesNotMatch(
+    narrowest,
+    /\.card-runtime\s*\{[^}]*display:\s*none/,
+    'hiding .card-runtime takes the battery icon with it — it is on the never-shed list',
+  );
+});
+
+test('⛔ the device name is not shed at any width', () => {
+  // It reads across the row so the headings line up with the rack (#130), and
+  // it is the one thing somebody walking to the rack needs.
+  for (const tier of ['@container (max-width: 190px) {', '@container (max-width: 120px) {']) {
+    assert.doesNotMatch(
+      block(tier),
+      /device-name\s*\{[^}]*display:\s*none/,
+      `${tier} must not hide the device name`,
+    );
+  }
+});
