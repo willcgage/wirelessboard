@@ -454,3 +454,43 @@ export function computeLayout({
     columnsLimitedByWidth: floor !== null && columns >= floor && n > floor,
   };
 }
+
+/**
+ * The board's inline `grid-template-columns`, or `''` to leave the stylesheet
+ * alone (#204).
+ *
+ * ⛔ **Pure, and deliberately covers the not-TV case**, because that case is
+ * what broke. `updateTvLayoutMetrics` has two exits: the TV one wrote this
+ * property and the desk one returned before reaching it, so an inline template
+ * written in TV mode survived the switch to desk. There it was worse than
+ * stale: `--tvmode-slot-width` is declared on `.tvmode` only, so in desk mode
+ * the `var()` is invalid at computed-value time, the whole declaration becomes
+ * `unset` -- which for a non-inherited property means `none` -- and the board
+ * collapsed to a single full-width column. Measured at 1600x1000: five 304px
+ * tracks became one of 1569px.
+ *
+ * ⚠️ The bug was that the rule lived in one branch while the other branch had
+ * to remember it. It lives here now, one function both branches call, and the
+ * not-TV answer is a value rather than an omission. That is also why this is in
+ * this module rather than beside its caller: `tv-layout.js` reaches the DOM and
+ * imports `app.js`, so nothing there can be unit-tested -- there is no jsdom in
+ * this project, and a guard that greps the source for a reset would pass on a
+ * reset that never ran.
+ *
+ * `fit` returns `''` on purpose: it is driven by `auto-fit` in the stylesheet,
+ * which packs as many across as fit, and an explicit count would override it.
+ * Any named arrangement has to state the count outright or it would be ignored.
+ * `minmax(0, ...)` rather than a fixed track, because `row` and `column` are
+ * allowed to ask for more columns than fit at the configured width, and the
+ * cards give way instead of the board overflowing sideways.
+ */
+export function gridTemplateFor({ isTvMode, arrangement, columns } = {}) {
+  if (!isTvMode) {
+    return '';
+  }
+  if (!arrangement || arrangement === 'fit') {
+    return '';
+  }
+  const n = toCount(columns);
+  return `repeat(${n}, minmax(0, var(--tvmode-slot-width)))`;
+}

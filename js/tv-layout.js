@@ -1,5 +1,5 @@
 import { micboard } from './app.js';
-import { computeLayout } from './board-layout.mjs';
+import { computeLayout, gridTemplateFor } from './board-layout.mjs';
 import { minColumnPixelsForScreen } from './display-geometry.mjs';
 
 let tvResizeObserver;
@@ -57,6 +57,13 @@ export function updateTvLayoutMetrics() {
     container.style.setProperty('--tvmode-row-height', '100vh');
     container.style.setProperty('--tvmode-board-height', '100vh');
     container.style.setProperty('--tvmode-scale', '1');
+    // ⛔ The board's grid template is this function's too, so it has to be put
+    // back here (#204). Returning without it left whatever TV mode last wrote,
+    // and `--tvmode-slot-width` does not exist outside `.tvmode` -- the
+    // declaration then computed to `none` and desk mode collapsed to one
+    // full-width column. Five of the six things reset above were, and this one
+    // was not.
+    board.style.gridTemplateColumns = gridTemplateFor({ isTvMode: false });
     return;
   }
 
@@ -119,18 +126,15 @@ export function updateTvLayoutMetrics() {
   // a bug. Nothing styles this yet; it is the hook for saying so.
   container.classList.toggle('tvmode-width-limited', Boolean(columnsLimitedByWidth));
 
-  // The grid template is driven by auto-fit at the slot width, which always
-  // packs as many across as fit. Any named arrangement has to state the column
-  // count outright or it would be ignored.
-  //
-  // minmax(0, ...) rather than a fixed track: `row` and `column` are allowed to
-  // ask for more columns than fit at the configured width, and the cards give
-  // way instead of the board overflowing sideways. Everywhere else the count
-  // never exceeds what fits, so the tracks sit at the configured width exactly
-  // as before.
-  board.style.gridTemplateColumns = micboard.arrangement && micboard.arrangement !== 'fit'
-    ? `repeat(${columns}, minmax(0, var(--tvmode-slot-width)))`
-    : '';
+  // ⭐ The same function the not-TV branch above calls, so the two cannot drift
+  // (#204). Why `fit` and the not-TV case both come back empty is written where
+  // the rule lives, in `board-layout.mjs`, rather than here where only half of
+  // it is visible.
+  board.style.gridTemplateColumns = gridTemplateFor({
+    isTvMode: true,
+    arrangement: micboard.arrangement,
+    columns,
+  });
 }
 
 export function requestTvLayoutUpdate() {
