@@ -1,8 +1,8 @@
 /**
- * The furniture below a screen: charging docks and pickup pads (#203).
+ * The dock below a screen: bays that charge, and pads that do not (#203).
  *
  * ⭐ What this is really describing is **what a column points at.** The
- * television hangs above a piece of furniture with positions in it, and a
+ * television hangs above something with positions in it, and a
  * column on the board is meant to correspond to one of those positions. That is
  * why a column may not be narrower than a position: narrower than that and it
  * stops pointing at anything, which is the whole reason the board is on that
@@ -17,31 +17,30 @@
  *
  * ⚠️ **The board treats them identically.** Both are rows of positions with a
  * width, and the floor they impose is the same. The kind exists so a person
- * editing the list knows which piece of furniture they are looking at, and so
- * the section can grow to IEM transmitters later without the word "dock"
- * having to cover everything. No layout code branches on it, and none should
- * without a reason that is written down.
+ * editing the list knows which one they are looking at, and so the section can
+ * take IEM transmitters later without every entry having to be a charger. No
+ * layout code branches on it, and none should without a reason written down.
  *
  * ⛔ It lives here rather than on a screen row because a dock is not a property
  * of a screen. One dock can sit under several screens; one screen can have no
- * furniture at all; a dock can be replaced without the screen changing. Keeping
+ * dock at all; a dock can be replaced without the screen changing. Keeping
  * the width on the screen meant typing it more than once with nothing keeping
  * the copies in step.
  *
  * Pure, so the rules can be checked without a DOM.
  */
 
-/** What a piece of furniture can be. */
-export const FURNITURE_KINDS = ['dock', 'pad'];
+/** What a dock can be. */
+export const DOCK_KINDS = ['dock', 'pad'];
 
 /** What each kind is called where a person reads it. */
-export const FURNITURE_KIND_LABELS = {
+export const DOCK_KIND_LABELS = {
   dock: 'Charging dock',
   pad: 'Pickup pad',
 };
 
-export function isFurnitureKind(value) {
-  return FURNITURE_KINDS.includes(value);
+export function isDockKind(value) {
+  return DOCK_KINDS.includes(value);
 }
 
 /** A number, or null when it is not one we can use. */
@@ -52,13 +51,13 @@ function positive(value) {
 }
 
 /**
- * The furniture an installation has described, cleaned up.
+ * The docks an installation has described, cleaned up.
  *
  * ⛔ An entry with no id or no position width is dropped rather than kept
  * half-made — it could be chosen from a list and would then silently impose
  * nothing, which is the same trap `normalizeScreens` avoids.
  */
-export function normalizeFurniture(list) {
+export function normalizeDocks(list) {
   if (!Array.isArray(list)) {
     return [];
   }
@@ -75,20 +74,20 @@ export function normalizeFurniture(list) {
       // ⚠️ Anything unrecognised becomes a dock rather than being dropped. The
       // width is the part that matters and it is present; refusing the whole
       // entry over a label would lose a real measurement.
-      kind: isFurnitureKind(entry.kind) ? entry.kind : 'dock',
+      kind: isDockKind(entry.kind) ? entry.kind : 'dock',
       position_inches: width,
       // Optional. Nothing reads it yet; it is what a person counts to check
-      // they have described the right piece of furniture.
+      // they have described the right one.
       positions: positive(entry.positions),
     });
     return out;
   }, []);
 }
 
-export function furnitureById(list, id) {
+export function dockById(list, id) {
   const wanted = String(id || '').trim();
   if (!wanted) return null;
-  return normalizeFurniture(list).find((f) => f.id === wanted) || null;
+  return normalizeDocks(list).find((f) => f.id === wanted) || null;
 }
 
 /**
@@ -102,25 +101,25 @@ export function furnitureById(list, id) {
  * measured against, which — now that the number decides the column count
  * (#201) — is a visible fault rather than a quiet one.
  *
- * ⚠️ A screen that names furniture wins over its own legacy value, so a board
+ * ⚠️ A screen that names a dock wins over its own legacy value, so a board
  * that has been migrated is never pulled back by a leftover field.
  */
-export function positionInchesForScreen({ screen, furniture }) {
+export function positionInchesForScreen({ screen, docks }) {
   if (!screen) {
     return null;
   }
-  const named = furnitureById(furniture, screen.furniture_id);
+  const named = dockById(docks, screen.dock_id);
   if (named) {
     return named.position_inches;
   }
   return positive(screen.min_column_inches);
 }
 
-/** What the furniture picker on a screen row offers. */
-export function furnitureChoices(list) {
+/** What the dock picker on a screen row offers. */
+export function dockChoices(list) {
   return [{ value: '', label: 'Nothing underneath — no minimum' }]
-    .concat(normalizeFurniture(list).map((f) => ({
+    .concat(normalizeDocks(list).map((f) => ({
       value: f.id,
-      label: `${f.name} — ${FURNITURE_KIND_LABELS[f.kind]}, ${f.position_inches}in positions`,
+      label: `${f.name} — ${DOCK_KIND_LABELS[f.kind]}, ${f.position_inches}in positions`,
     })));
 }

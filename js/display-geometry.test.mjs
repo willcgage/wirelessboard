@@ -142,7 +142,7 @@ test('⛔ a screen with nothing underneath it imposes no minimum', () => {
   );
   // ⚠️ Wording changed with #203, deliberately: "no column minimum set" said
   // what the board was not doing, and "nothing underneath it" says why — which
-  // is now the actual model. A screen's minimum comes from the furniture below
+  // is now the actual model. A screen's minimum comes from the dock below
   // it, so a screen with none has nothing to take one from.
   assert.match(describeScreenChoice({
     screens: SCREENS, screenId: 'foh', widthPx: 1920, heightPx: 1080,

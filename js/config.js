@@ -19,14 +19,14 @@ import {
   mergeSaved,
 } from './screens-editor.mjs';
 import {
-  furnitureProblem,
-  toPayload as furnitureToPayload,
-  mergeSaved as furnitureMergeSaved,
+  dockProblem,
+  toPayload as docksToPayload,
+  mergeSaved as dockMergeSaved,
   screensUsing,
-} from './furniture-editor.mjs';
+} from './dock-editor.mjs';
 import {
-  FURNITURE_KINDS, FURNITURE_KIND_LABELS, furnitureChoices,
-} from './furniture.mjs';
+  DOCK_KINDS, DOCK_KIND_LABELS, dockChoices,
+} from './docks.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
 import { assignNumbers } from './slot-numbering.mjs';
 import {
@@ -5278,7 +5278,7 @@ let screenRows = [];
 // ⚠️ Declared here beside `screenRows`, not next to its own renderer: the
 // screen rows draw a picker of these, so `renderScreenRows` reads it from
 // above (#203).
-let furnitureRows = [];
+let dockRows = [];
 
 function renderScreenRows() {
   const host = document.getElementById('screen-list');
@@ -5335,17 +5335,17 @@ function renderScreenRows() {
     underLab.textContent = 'Underneath';
     const under = document.createElement('select');
     under.className = 'form-select form-select-sm';
-    furnitureChoices(furnitureToPayload(furnitureRows)).forEach((choice) => {
+    dockChoices(docksToPayload(dockRows)).forEach((choice) => {
       const opt = document.createElement('option');
       opt.value = choice.value;
       opt.textContent = choice.label;
       under.appendChild(opt);
     });
-    under.value = row.furniture_id || '';
+    under.value = row.dock_id || '';
     // ⚠️ A board configured before #203 has its width on the row and no
-    // furniture to point at. Say so rather than showing an innocent "Nothing
+    // dock to point at. Say so rather than showing an innocent "Nothing
     // underneath" over a floor that is still in force.
-    if (!row.furniture_id && row.min_column_inches) {
+    if (!row.dock_id && row.min_column_inches) {
       const legacy = document.createElement('option');
       legacy.value = '';
       legacy.textContent = `${row.min_column_inches}in \u2014 from before, add a dock to replace it`;
@@ -5353,7 +5353,7 @@ function renderScreenRows() {
       under.value = '';
     }
     under.addEventListener('change', () => {
-      screenRows[index].furniture_id = under.value;
+      screenRows[index].dock_id = under.value;
       refreshScreenProblem(index);
       updateScreenStatus();
     });
@@ -5400,19 +5400,19 @@ function updateScreenStatus(message) {
   if (status) status.textContent = message || '';
 }
 
-function refreshFurnitureProblem(index) {
-  const host = document.getElementById('furniture-list');
+function refreshDockProblem(index) {
+  const host = document.getElementById('dock-list');
   if (!host) return;
-  const note = host.children[index] && host.children[index].querySelector('.furniture-problem');
-  if (note) note.textContent = furnitureProblem(furnitureRows[index]) || '';
+  const note = host.children[index] && host.children[index].querySelector('.dock-problem');
+  if (note) note.textContent = dockProblem(dockRows[index]) || '';
 }
 
-function renderFurnitureRows() {
-  const host = document.getElementById('furniture-list');
+function renderDockRows() {
+  const host = document.getElementById('dock-list');
   if (!host) return;
   host.innerHTML = '';
 
-  if (!furnitureRows.length) {
+  if (!dockRows.length) {
     const empty = document.createElement('div');
     empty.className = 'small text-muted';
     empty.textContent = 'Nothing described. Screens will have no minimum column width.';
@@ -5420,7 +5420,7 @@ function renderFurnitureRows() {
     return;
   }
 
-  furnitureRows.forEach((row, index) => {
+  dockRows.forEach((row, index) => {
     const wrap = document.createElement('div');
     wrap.className = 'row g-2 align-items-end mb-2';
 
@@ -5435,11 +5435,11 @@ function renderFurnitureRows() {
       Object.entries(attrs).forEach(([k, v]) => input.setAttribute(k, v));
       input.value = row[key] === null || row[key] === undefined ? '' : row[key];
       input.addEventListener('input', () => {
-        furnitureRows[index][key] = input.value;
+        dockRows[index][key] = input.value;
         // ⛔ In place, never a re-render: the inputs would be rebuilt under the
         // cursor and the field being typed into would lose focus on every
         // keystroke. The same rule as the screen rows above.
-        refreshFurnitureProblem(index);
+        refreshDockProblem(index);
         renderScreenRows();
         updateScreenStatus();
       });
@@ -5457,15 +5457,15 @@ function renderFurnitureRows() {
     kindLab.textContent = 'Kind';
     const kind = document.createElement('select');
     kind.className = 'form-select form-select-sm';
-    FURNITURE_KINDS.forEach((value) => {
+    DOCK_KINDS.forEach((value) => {
       const opt = document.createElement('option');
       opt.value = value;
-      opt.textContent = FURNITURE_KIND_LABELS[value];
+      opt.textContent = DOCK_KIND_LABELS[value];
       kind.appendChild(opt);
     });
     kind.value = row.kind || 'dock';
     kind.addEventListener('change', () => {
-      furnitureRows[index].kind = kind.value;
+      dockRows[index].kind = kind.value;
       renderScreenRows();
       updateScreenStatus();
     });
@@ -5493,15 +5493,15 @@ function renderFurnitureRows() {
       // for.
       const used = screensUsing(row.id, screenRows);
       if (used.length) {
-        const note = wrap.querySelector('.furniture-problem');
+        const note = wrap.querySelector('.dock-problem');
         if (note) {
           note.textContent = `${used.join(', ')} ${used.length === 1 ? 'points' : 'point'} `
             + 'at this. Point them somewhere else first.';
         }
         return;
       }
-      furnitureRows.splice(index, 1);
-      renderFurnitureRows();
+      dockRows.splice(index, 1);
+      renderDockRows();
       renderScreenRows();
       updateScreenStatus();
     });
@@ -5509,8 +5509,8 @@ function renderFurnitureRows() {
     wrap.appendChild(removeCol);
 
     const note = document.createElement('div');
-    note.className = 'col-12 small text-warning furniture-problem';
-    note.textContent = furnitureProblem(row) || '';
+    note.className = 'col-12 small text-warning dock-problem';
+    note.textContent = dockProblem(row) || '';
     wrap.appendChild(note);
 
     host.appendChild(wrap);
@@ -5520,15 +5520,15 @@ function renderFurnitureRows() {
 function applyScreensToForm(cfg) {
   const list = (cfg && cfg.screens) || [];
   screenRows = Array.isArray(list) ? list.map((s) => ({ ...s })) : [];
-  const furniture = (cfg && cfg.furniture) || [];
-  furnitureRows = Array.isArray(furniture) ? furniture.map((f) => ({ ...f })) : [];
-  renderFurnitureRows();
+  const dock = (cfg && cfg.docks) || [];
+  dockRows = Array.isArray(dock) ? dock.map((f) => ({ ...f })) : [];
+  renderDockRows();
   renderScreenRows();
 }
 
 function saveScreens() {
   const payload = screensToPayload(screenRows);
-  const furniturePayload = furnitureToPayload(furnitureRows);
+  const dockPayload = docksToPayload(dockRows);
   // ⛔ Worked out from what was *submitted*, before the server's answer
   // replaces the rows. Computed afterwards it compares the saved list with
   // itself, so "1 incomplete row not saved" could never appear -- which is
@@ -5537,18 +5537,18 @@ function saveScreens() {
   // ⛔ Its own endpoint, not the configuration save: describing a screen
   // changes how a board lays itself out and nothing about the receivers, so it
   // must not drop every socket for two seconds (#116).
-  // ⛔ Both in one request (#203). A screen names the furniture beneath it, so
+  // ⛔ Both in one request (#203). A screen names the dock beneath it, so
   // two saves leave a window where a screen points at something that does not
   // exist yet -- and the board reads the pair on every layout pass.
-  postJSON('api/screens', { screens: payload, furniture: furniturePayload }, (resp) => {
+  postJSON('api/screens', { screens: payload, docks: dockPayload }, (resp) => {
     if (resp && resp.ok) {
       // ⛔ Merged, never replaced (#180). The response holds only what was
       // stored, so assigning it over the form deleted the row somebody was
       // still filling in -- in the same breath as telling them it had not been
       // saved, and with nothing left to correct.
       screenRows = mergeSaved(screenRows, resp.screens);
-      furnitureRows = furnitureMergeSaved(furnitureRows, resp.furniture);
-      renderFurnitureRows();
+      dockRows = dockMergeSaved(dockRows, resp.docks);
+      renderDockRows();
       renderScreenRows();
       updateScreenStatus(summary);
     } else {
@@ -5563,14 +5563,14 @@ export function bindScreenHandlers() {
     if (!t) return;
     if (t.id === 'screen-add') {
       e.preventDefault();
-      screenRows.push({ name: '', diagonal_inches: '', furniture_id: '' });
+      screenRows.push({ name: '', diagonal_inches: '', dock_id: '' });
       renderScreenRows();
-    } else if (t.id === 'furniture-add') {
+    } else if (t.id === 'dock-add') {
       e.preventDefault();
-      furnitureRows.push({
+      dockRows.push({
         name: '', kind: 'dock', position_inches: '', positions: '',
       });
-      renderFurnitureRows();
+      renderDockRows();
     } else if (t.id === 'screen-save') {
       e.preventDefault();
       saveScreens();

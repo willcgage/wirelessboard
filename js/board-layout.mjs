@@ -452,7 +452,7 @@ export function computeLayout({
   // ⭐ Which says what a column *is* on this board: a column points at a
   // physical position on the table below the screen -- a bay on a charging dock,
   // or a spot on a pickup pad where microphones are left without charging. The
-  // column count is the furniture's, not the channel count's, and a thirteenth
+  // column count is the dock's, not the channel count's, and a thirteenth
   // channel on twelve positions goes to a second page rather than a second row,
   // because there is no second row of furniture for it to point at.
   //

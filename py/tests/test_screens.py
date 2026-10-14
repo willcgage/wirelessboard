@@ -34,7 +34,7 @@ def tree(monkeypatch):
 
 class TestWhatIsKept:
     def test_a_described_screen_survives_intact(self):
-        # ⭐ `furniture_id` arrived with #203: a screen now names the dock or
+        # ⭐ `dock_id` arrived with #203: a screen now names the dock or
         # pad beneath it rather than restating its width. ⛔ `min_column_inches`
         # is still here on purpose — a board configured before #203 keeps its
         # floor until the screens are next saved, and dropping it on read would
@@ -42,7 +42,7 @@ class TestWhatIsKept:
         # against.
         assert config.normalize_screens([WALL]) == [{
             'id': 'wall', 'name': 'Auditorium wall',
-            'diagonal_inches': 55.0, 'furniture_id': None,
+            'diagonal_inches': 55.0, 'dock_id': None,
             'min_column_inches': 4.5,
         }]
 

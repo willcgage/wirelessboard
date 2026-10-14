@@ -1,5 +1,5 @@
 /**
- * Editing the furniture below the screens (#203).
+ * Editing the dock below the screens (#203).
  *
  * ⭐ The same shape as the screens editor beside it, and deliberately so: the
  * pairing, merge and summary all come from `editor-rows.mjs`, which is #180's
@@ -15,10 +15,10 @@ import {
   mergeSaved as rowsMergeSaved,
   saveSummary as rowsSaveSummary,
 } from './editor-rows.mjs';
-import { isFurnitureKind } from './furniture.mjs';
+import { isDockKind } from './docks.mjs';
 
 /** A stable id from a name: lowercase, hyphenated, nothing surprising. */
-export function furnitureId(name) {
+export function dockId(name) {
   return String(name || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -27,8 +27,8 @@ export function furnitureId(name) {
 }
 
 /** An id not already taken, so two docks named the same still both exist. */
-export function uniqueFurnitureId(name, existing = []) {
-  const base = furnitureId(name) || 'dock';
+export function uniqueDockId(name, existing = []) {
+  const base = dockId(name) || 'dock';
   const taken = new Set(existing.filter(Boolean));
   if (!taken.has(base)) return base;
   for (let n = 2; n < 100; n += 1) {
@@ -46,10 +46,10 @@ function positive(value) {
 /**
  * What is wrong with one row, or null.
  *
- * ⚠️ Per row, not per form. "Something is wrong with your furniture" is not
+ * ⚠️ Per row, not per form. "Something is wrong with your dock" is not
  * actionable on a Sunday morning — the same rule every editor here follows.
  */
-export function furnitureProblem(row) {
+export function dockProblem(row) {
   const name = String((row && row.name) || '').trim();
   if (!name) {
     return 'Give it a name — "Main dock", "Stage left pad".';
@@ -69,18 +69,18 @@ export function furnitureProblem(row) {
   return null;
 }
 
-export function furnitureHasProblems(rows) {
-  return (rows || []).some((row) => furnitureProblem(row) !== null);
+export function docksHaveProblems(rows) {
+  return (rows || []).some((row) => dockProblem(row) !== null);
 }
 
 const SPEC = {
-  problem: furnitureProblem,
+  problem: dockProblem,
   entry: (row, ids) => ({
-    id: row.id || uniqueFurnitureId(String(row.name).trim(), ids),
+    id: row.id || uniqueDockId(String(row.name).trim(), ids),
     name: String(row.name).trim(),
     // ⚠️ Anything unrecognised becomes a dock rather than failing the row. The
     // width is the part that matters and it is present by now.
-    kind: isFurnitureKind(row.kind) ? row.kind : 'dock',
+    kind: isDockKind(row.kind) ? row.kind : 'dock',
     position_inches: positive(row.position_inches),
     positions: positive(row.positions),
   }),
@@ -108,17 +108,17 @@ export function saveSummary(rows) {
 /**
  * What a screen would lose by pointing somewhere else, or null.
  *
- * ⛔ Removing furniture a screen names does not quietly widen that screen's
+ * ⛔ Removing dock a screen names does not quietly widen that screen's
  * columns — it is told first. Since #201 the position width decides the column
  * count on `Side by side`, so losing it changes what the wall shows, and a
  * board that changed shape with no explanation is the thing this project keeps
  * paying for.
  */
-export function screensUsing(furnitureEntryId, screens) {
-  const wanted = String(furnitureEntryId || '').trim();
+export function screensUsing(dockEntryId, screens) {
+  const wanted = String(dockEntryId || '').trim();
   if (!wanted) return [];
   return (screens || [])
-    .filter((s) => s && String(s.furniture_id || '').trim() === wanted)
+    .filter((s) => s && String(s.dock_id || '').trim() === wanted)
     .map((s) => String(s.name || s.id || '').trim())
     .filter(Boolean);
 }
