@@ -22,13 +22,13 @@
  */
 
 import {
-  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES, TOP_BAR_STATES,
+  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES,
   COLUMN_CHOICES, WASH_STYLES,
 } from './board-layout.mjs';
 import {
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY,
-  TOP_BAR_KEY, COLUMNS_KEY, WASH_KEY, LIVE_PLACEMENT_KEY, ROTATION_KEY,
-  VIEWER_LOCK_KEY,
+  COLUMNS_KEY, WASH_KEY, LIVE_PLACEMENT_KEY, ROTATION_KEY,
+  VIEWER_LOCK_KEY, STATUS_BAR_KEY, STATUS_BAR_PLACEMENTS,
 } from './view-prefs.mjs';
 import { PLACEMENTS, PLACEMENT_LABELS } from './live-strip.mjs';
 import { ROTATION_STATES, ROTATION_LABELS } from './rotation-states.mjs';
@@ -123,20 +123,27 @@ export const VIEW_CONTROLS = [
     optionLabels: { small: 'S', medium: 'M', large: 'L' },
   },
   {
-    id: 'topBar',
-    label: 'Wirelessboard bar',
+    // ⭐⭐ The strip the menu bar's retirement freed (#188). The maintainer's
+    // reason for asking: "This allows everything to shift up providing space
+    // Top or Bottom for the status bar."
+    //
+    // ⛔ Reserved whether or not the board is paging — see `STATUS_BAR_KEY` for
+    // why reserving it on demand would be a feedback loop.
+    id: 'statusBar',
+    label: 'Status bar',
     group: 'On screen',
-    storageKey: TOP_BAR_KEY,
-    options: TOP_BAR_STATES,
-    optionLabels: { shown: 'Shown', hidden: 'Hidden' },
-    // Two states read better as a switch than as two buttons.
-    switchOn: 'shown',
+    storageKey: STATUS_BAR_KEY,
+    options: STATUS_BAR_PLACEMENTS,
+    order: ['off', 'top', 'bottom'],
+    optionLabels: { bottom: 'Bottom', top: 'Top', off: 'Off' },
+    optionGlyphs: { bottom: '▁', top: '▔', off: '–' },
+    describe: () => 'Keeps a strip clear so a paging board never covers the last row.',
   },
   {
     // ⚠️ A state, not an action, which is why it belongs in this table at all:
     // a locked board stays locked across a reload, and something has to show
-    // that it is. It sits beside the bar switch because both are about what
-    // the board offers rather than how a card looks.
+    // that it is. It sits beside the status bar row because both are about what
+    // the board gives up its own height for, rather than how a card looks.
     id: 'viewerLock',
     label: 'Lock to display only',
     group: 'On screen',

@@ -26,7 +26,32 @@ export const CARD_SHAPE_KEY = 'wirelessboard.slotAspect';
 // New in this build, so unlike the two above it is free to be named for what it
 // holds and needs no value migration -- nothing has ever written it.
 export const TYPE_SIZE_KEY = 'wirelessboard.typeSize';
-export const TOP_BAR_KEY = 'wirelessboard.topBar';
+// ⭐⭐ Where the status bar sits, and the strip reserved for it (#188).
+//
+// The maintainer's reason for retiring the menu bar:
+//
+//   "This allows everything to shift up providing space Top or Bottom for the
+//    status bar."
+//
+// ⛔ The strip is reserved whenever it is not `off`, **not** only while the bar
+// is showing. Reserving it on demand sets up a feedback loop: the strip reduces
+// the height available, which reduces capacity, which can be what makes the
+// board page, which shows the bar, which reserves the strip. A fixed strip has
+// no such loop, cannot clip the bottom row, and does not reflow the board the
+// moment paging starts -- `off` is there for an operator who wants the pixels.
+//
+// ⭐ This is the real fix for the clipped bottom row photographed on the wall:
+// `.rotation-bar` was `position: fixed; bottom: 0` over a board laid out as
+// though the whole screen were available, so the bar sat on the last row.
+export const STATUS_BAR_KEY = 'wirelessboard.statusBar';
+export const STATUS_BAR_PLACEMENTS = ['bottom', 'top', 'off'];
+export function isStatusBarPlacement(value) {
+  return STATUS_BAR_PLACEMENTS.includes(value);
+}
+
+// ⛔ `TOP_BAR_KEY` was here. #188 retired the bar it hid, so nothing reads the
+// stored value any more. Boards still have it; it is left in storage rather
+// than migrated, because an unread key costs nothing.
 export const COLUMNS_KEY = 'wirelessboard.columns';
 export const WASH_KEY = 'wirelessboard.wash';
 // ⚠️ Where the Live strip sits is per device; *whether* to follow Live at all

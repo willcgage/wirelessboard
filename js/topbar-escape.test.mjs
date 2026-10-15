@@ -1,22 +1,25 @@
 /**
- * The board may hide its chrome, but never every way back (#110).
+ * The board has one control it may never lose (#110, #188).
  *
- * `H` hides the navbar, and the navbar is the only pointer route to anything.
- * On a board with no keyboard that left nothing on screen to press, and because
- * the preference is stored per device it survived a reload -- the only remedies
- * were editing the URL hash or clearing local storage.
+ * It began as the way back from a bar `H` had hidden: the bar was the only
+ * pointer route to anything, and on a keyboard-less board hiding it left
+ * nothing to press -- a preference stored per device, so it survived a reload,
+ * and the only remedies were editing the hash or clearing local storage.
  *
- * ⛔ The failure was pure CSS, so the guard has to be too: a test that only
- * checked the markup would have passed on the broken board. These assertions
- * are about which rules exist, which is the thing that went wrong.
+ * ⛔⛔ #188 made this guard matter more, not less. There is no bar any more.
+ * This gear is the *only* route to the view panel, to Help, to the scannable
+ * URL and to the administration page -- which is to say, to everything the
+ * board can be asked. A rule that hides it strands the board completely.
+ *
+ * ⛔ The original failure was pure CSS, so the guard has to be too: a test that
+ * only checked the markup would have passed on the broken board. These
+ * assertions are about which rules exist, which is the thing that went wrong.
  */
 
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-
-import { TOP_BAR_STATES, TOP_BAR_SHOWN } from './board-layout.mjs';
 
 const ROOT = path.join(import.meta.dirname, '..');
 
@@ -50,11 +53,29 @@ test('something listens to it', () => {
   assert.match(appjs, /toggleViewPanel\(\)/, 'the handler must open the view panel');
 });
 
-test('hiding the bar does not hide the way back', () => {
-  const hidesIt = /[^}]*topbar-hidden[^{]*\.topbar-restore[^{]*\{[^}]*display:\s*none/i;
+test('⛔ nothing hides the way back, under any class', () => {
+  // The original bug was one rule: `body.topbar-hidden .topbar-restore`. With
+  // the bar retired that class is gone, so the guard widens to the real rule --
+  // no selector anywhere may hide this control.
+  const rules = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)];
+  rules.forEach(([, selector, body]) => {
+    if (!/\.topbar-restore/.test(selector)) {
+      return;
+    }
+    assert.ok(
+      !/display\s*:\s*none|visibility\s*:\s*hidden/.test(body),
+      `a rule hides the only control on the board: ${selector.trim()}`,
+    );
+  });
+});
+
+test('⛔ and the bar it used to restore is really gone', () => {
+  // #188. Leaving the markup behind while the route moved would mean two menus,
+  // one of them unreachable and both of them maintained.
+  assert.ok(!/<nav\b/.test(markup), 'the menu bar is still in the markup');
   assert.ok(
-    !hidesIt.test(css),
-    'a rule hides the escape control while the bar is hidden -- that is the bug',
+    !/id="nav-menu-button"/.test(markup),
+    'the Menu dropdown is still in the markup',
   );
 });
 
@@ -83,10 +104,18 @@ test('it is reachable by keyboard as well as by touch', () => {
   );
 });
 
-test('the state that restores the bar is named, not spelled out', () => {
-  // A literal 'shown' in display.js would survive a rename of the states and
-  // quietly stop restoring anything.
-  assert.ok(TOP_BAR_STATES.includes(TOP_BAR_SHOWN));
-  assert.strictEqual(TOP_BAR_SHOWN, TOP_BAR_STATES[0], 'shown is the default state');
-  assert.notStrictEqual(TOP_BAR_SHOWN, 'hidden');
+test('⭐ and it reaches everything the bar used to hold', () => {
+  // ⛔ `TOP_BAR_STATES`/`TOP_BAR_SHOWN` were asserted here, for a preference
+  // that restored a bar. #188 retired both. What matters now is that the panel
+  // this control opens is where the routes went.
+  assert.match(markup, /id="go-hud"/, 'Help must be reachable from the panel');
+  assert.match(markup, /id="go-qr"/, 'and the scannable URL');
+  assert.match(markup, /id="admin-door"/, 'and the door to the administration page');
+
+  // All three inside the panel, which is what the gear opens.
+  const panelAt = markup.indexOf('<div id="view-panel"');
+  assert.ok(panelAt > 0);
+  ['id="go-hud"', 'id="go-qr"', 'id="admin-door"'].forEach((needle) => {
+    assert.ok(markup.indexOf(needle) > panelAt, `${needle} must be inside the view panel`);
+  });
 });

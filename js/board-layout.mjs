@@ -117,30 +117,22 @@ export function isWashStyle(value) {
 export const TYPE_SIZES = ['medium', 'small', 'large'];
 
 /**
- * Whether the Wirelessboard bar across the top of the page is shown.
+ * ⛔⛔ `TOP_BAR_STATES`, `TOP_BAR_SHOWN` and `isTopBarState` were here.
  *
- * ⛔ Not a TV-mode-only control, unlike the four above. The bar sits outside
- * `#container` -- it is a sibling of it, not a child -- so it is on screen in
- * both modes and eats the same strip of height in both.
+ * They described a preference that hid the Wirelessboard bar. #188 retired the
+ * bar itself -- it carried the only pointer route to every global setting while
+ * `body.topbar-hidden .navbar` removed it, which is how a board could be left
+ * with no way to reach any of them -- so there is nothing left to hide and the
+ * preference went with it. A control that cannot change anything is worse than
+ * no control.
  *
- * That sibling relationship is also why the stylesheet's own
- * `.tvmode .navbar { display: none }` never did anything: `tvmode` is a class on
- * `#container`, so a descendant selector cannot reach the bar. It read like
- * this feature already existed. It did not, and that rule is gone.
+ * ⚠️ Boards have `wirelessboard.topBar` in storage. Nothing reads it now, and
+ * it is left rather than migrated: an unread key costs nothing, and a migration
+ * that wrote storage for a removed control could only go wrong.
  *
- * `shown` is first: the default, and what every board does today.
+ * ⭐ The strip it used to occupy is not reclaimed by the board. It is reserved
+ * for the status bar, which is why retiring the bar was asked for.
  */
-export const TOP_BAR_STATES = ['shown', 'hidden'];
-
-/**
- * The state that puts the bar back.
- *
- * Named rather than written as a string wherever something needs to restore the
- * bar instead of cycling it: `H` toggles, but the escape control added for #110
- * only ever moves one way, and a literal 'shown' in another module is a rename
- * waiting to go unnoticed.
- */
-export const TOP_BAR_SHOWN = TOP_BAR_STATES[0];
 
 /**
  * 1.11.0 shipped the old names and boards have them stored. Map rather than
@@ -202,10 +194,6 @@ export function isCardShape(value) {
 
 export function isTypeSize(value) {
   return TYPE_SIZES.includes(value);
-}
-
-export function isTopBarState(value) {
-  return TOP_BAR_STATES.includes(value);
 }
 
 /**
@@ -416,6 +404,35 @@ export function columnsForShape({
   return best;
 }
 
+/**
+ * How many channels the layout is for.
+ *
+ * ⛔⛔ **Not the number of cards on the board.** `tv-layout.js` counted the
+ * rendered `.col-sm` elements, which is the same number right up until the
+ * board starts paging -- and then it is the size of the *page*. The next layout
+ * pass computes capacity for that smaller count, which lowers capacity, which
+ * makes the page smaller still. Measured on a development board: a twelve-slot
+ * board that began paging collapsed to **capacity 1, one card**, a channel at a
+ * time, with no way back.
+ *
+ * ⚠️ It is a feedback loop, not a one-off error, which is why it has to be cut
+ * at the source rather than clamped: the layout must be computed for what the
+ * board is *showing* (`displayList`), and paging then divides that into pages.
+ * Those are different questions and the DOM could only ever answer the second.
+ *
+ * ⭐ The drawn count is still the fallback, for a view where nothing has set a
+ * display list yet.
+ */
+export function layoutSlotCount({ shown, drawn } = {}) {
+  const showing = Array.isArray(shown)
+    ? shown.filter((n) => Number.isFinite(Number(n)) && Number(n) > 0).length
+    : 0;
+  if (showing > 0) {
+    return showing;
+  }
+  const rendered = Number(drawn);
+  return Number.isFinite(rendered) && rendered > 0 ? Math.floor(rendered) : 1;
+}
 export function computeLayout({
   slotCount, containerWidth, availableHeight, slotWidth = 420, gap = 0,
   arrangement = 'fit', shape = 'auto', columns: columnChoice = COLUMNS_AUTO,

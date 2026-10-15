@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
+  layoutSlotCount,
   ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES,
   columnsFor, rowHeightFor, computeLayout, nextOption,
-  TOP_BAR_STATES,
-  isArrangement, isCardShape, isTypeSize, isTopBarState,
+  isArrangement, isCardShape, isTypeSize,
   migrateArrangement, migrateCardShape,
   COLUMN_CHOICES, COLUMNS_AUTO, isColumnChoice, columnCeiling,
   WASH_STYLES, isWashStyle, gridTemplateFor,
@@ -268,16 +268,6 @@ test('every text size has a stylesheet rule to act on', () => {
       scss.includes(`&.type-${size} {`),
       `css/style.scss has no rule for type-${size}`,
     );
-  });
-});
-
-test('the top bar toggles, and starts shown', () => {
-  assert.equal(TOP_BAR_STATES[0], 'shown');
-  assert.equal(nextOption(TOP_BAR_STATES, 'shown'), 'hidden');
-  assert.equal(nextOption(TOP_BAR_STATES, 'hidden'), 'shown');
-  ['shown', 'hidden'].forEach((v) => assert.ok(isTopBarState(v), v));
-  ['visible', 'true', '', null, undefined].forEach((v) => {
-    assert.equal(isTopBarState(v), false, String(v));
   });
 });
 
@@ -570,4 +560,38 @@ test('⛔ both branches of the caller read this one function', () => {
     2,
     'both exits should set it: the TV one and the desk one',
   );
+});
+
+// ---------------------------------------------------------------------------
+// ⛔⛔ The layout is for what the board is showing, not what it has drawn
+//
+// `tv-layout.js` counted the rendered `.col-sm` elements. That is the same
+// number right up until the board pages — and then it is the size of the page,
+// so the next pass computes capacity for the previous page and the two spiral
+// down together. Measured on a development board: a twelve-slot board that
+// started paging collapsed to capacity 1, one channel at a time.
+// ---------------------------------------------------------------------------
+
+test('⛔⛔ a paging board is still laid out for every channel it shows', () => {
+  // The spiral: showing twelve, currently drawing one page of four.
+  assert.equal(layoutSlotCount({ shown: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], drawn: 4 }), 12);
+  // And it does not drift down a second time.
+  assert.equal(layoutSlotCount({ shown: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], drawn: 1 }), 12);
+});
+
+test('the drawn count is the fallback, for a view with no display list yet', () => {
+  assert.equal(layoutSlotCount({ shown: [], drawn: 8 }), 8);
+  assert.equal(layoutSlotCount({ shown: undefined, drawn: 8 }), 8);
+});
+
+test('⚠️ and never zero, because a zero would divide the screen by nothing', () => {
+  assert.equal(layoutSlotCount({}), 1);
+  assert.equal(layoutSlotCount({ shown: [], drawn: 0 }), 1);
+  assert.equal(layoutSlotCount({ shown: [0, 0], drawn: 0 }), 1);
+});
+
+test('blanks in the display list are not channels', () => {
+  // `renderDisplayList` draws a BLANK card for slot 0; it is not a channel and
+  // must not claim a column of its own in the arithmetic.
+  assert.equal(layoutSlotCount({ shown: [1, 0, 2, 0, 3], drawn: 5 }), 3);
 });

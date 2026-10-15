@@ -4,7 +4,7 @@ import { updateGIFBackgrounds } from './gif.js';
 import { renderGroup } from './channelview.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
-  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES, TOP_BAR_STATES,
+  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES,
   COLUMN_CHOICES, WASH_STYLES, nextOption,
 } from './board-layout.mjs';
 import { controlFor, isValidValue } from './view-controls.mjs';
@@ -16,7 +16,8 @@ import { showLockNote, hideLockNote } from './viewer-lock-view.js';
 import { startRotation, stopRotation } from './rotation-view.js';
 import {
   writePref, safeStorage,
-  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, COLUMNS_KEY,
+  STATUS_BAR_PLACEMENTS,
   WASH_KEY, DISPLAY_MODE_KEY, DISPLAY_MODES,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
@@ -121,21 +122,34 @@ function applyViewClasses() {
  * `.tvmode .navbar { display: none }` never hid anything in TV mode despite
  * looking like it would.
  */
-function applyTopBarClass() {
+/**
+ * The locked class, on <body>.
+ *
+ * ⛔ This was `applyTopBarClass`, and it also wrote `topbar-shown` /
+ * `topbar-hidden` for a preference that hid the menu bar. #188 retired the bar,
+ * so there was nothing left for that class to hide and the preference went with
+ * it -- a control that cannot change anything is worse than no control.
+ *
+ * ⚠️ The locked class stays, and stays on <body>, because rules outside
+ * `#container` read it (#116).
+ */
+function applyLockedClass() {
   const { body } = document;
   if (!body) {
     return;
   }
-  TOP_BAR_STATES.forEach((state) => body.classList.remove(`topbar-${state}`));
-  body.classList.add(`topbar-${micboard.topBar}`);
-  // ⛔ Also on <body>, and for the same reason: the menu it has to empty is in
-  // the navbar, which is a sibling of #container (#116).
   body.classList.toggle('viewer-locked', isLocked(micboard.viewerLock));
+  // ⭐ Where the status bar sits, so the stylesheet can reserve the strip at the
+  // right end (#188). On <body> for the same reason the locked class is: the
+  // bar is a sibling of `#container`, not a child, so a class on the container
+  // cannot reach it -- the mistake `.tvmode .navbar` made for two releases.
+  STATUS_BAR_PLACEMENTS.forEach((p) => body.classList.remove(`statusbar-${p}`));
+  body.classList.add(`statusbar-${micboard.statusBar || 'bottom'}`);
 }
 
 export function applyBoardLayout() {
   applyViewClasses();
-  applyTopBarClass();
+  applyLockedClass();
   requestTvLayoutUpdate();
 
   // So anything showing these values can follow along. The panel (#111) mirrors
@@ -273,15 +287,6 @@ export function cycleColumns() {
   applyBoardLayout();
   updateHash();
   return micboard.columns;
-}
-
-/** Two states, so cycling is a toggle -- same shape as the controls above. */
-export function cycleTopBar() {
-  micboard.topBar = nextOption(TOP_BAR_STATES, micboard.topBar);
-  writePref({ storage: safeStorage(), key: TOP_BAR_KEY, value: micboard.topBar });
-  applyBoardLayout();
-  updateHash();
-  return micboard.topBar;
 }
 
 /**

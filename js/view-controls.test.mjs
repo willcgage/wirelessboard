@@ -18,12 +18,13 @@ import {
   isSwitch, isValidValue,
 } from './view-controls.mjs';
 import {
-  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES, TOP_BAR_STATES,
+  ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES,
   COLUMN_CHOICES, WASH_STYLES,
 } from './board-layout.mjs';
 import { PLACEMENTS } from './live-strip.mjs';
 import { ROTATION_STATES } from './rotation-states.mjs';
 import { LOCK_STATES } from './viewer-lock.mjs';
+import { STATUS_BAR_PLACEMENTS } from './view-prefs.mjs';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const kbd = fs.readFileSync(path.join(ROOT, 'js', 'kbd.js'), 'utf8').replace(/\r\n/g, '\n');
@@ -33,7 +34,6 @@ test('every control names a vocabulary the board actually has', () => {
     arrangement: ARRANGEMENTS,
     cardShape: CARD_SHAPES,
     typeSize: TYPE_SIZES,
-    topBar: TOP_BAR_STATES,
     columns: COLUMN_CHOICES,
     wash: WASH_STYLES,
     // ⚠️ The only vocabulary not from board-layout: where the service strip
@@ -41,6 +41,8 @@ test('every control names a vocabulary the board actually has', () => {
     livePlacement: PLACEMENTS,
     rotation: ROTATION_STATES,
     viewerLock: LOCK_STATES,
+    // ⭐ Where the status bar sits (#188) — a property of the screen, not the grid.
+    statusBar: STATUS_BAR_PLACEMENTS,
   };
 
   VIEW_CONTROLS.forEach((control) => {
@@ -111,7 +113,9 @@ test('reading order may differ from cycling order, and loses nothing', () => {
 });
 
 test('a two-state control with an on value is a switch', () => {
-  assert.ok(isSwitch(controlFor('topBar')));
+  // ⚠️ Was `topBar`, which #188 retired with the bar it hid. `viewerLock` is
+  // the remaining two-state control that declares `switchOn`.
+  assert.ok(isSwitch(controlFor('viewerLock')));
   assert.ok(!isSwitch(controlFor('wash')), 'two states alone do not make a switch');
   assert.ok(!isSwitch(controlFor('arrangement')));
 });

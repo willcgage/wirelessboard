@@ -1,5 +1,5 @@
 import { micboard } from './app.js';
-import { computeLayout, gridTemplateFor } from './board-layout.mjs';
+import { computeLayout, gridTemplateFor, layoutSlotCount } from './board-layout.mjs';
 import { minColumnPixelsForScreen } from './display-geometry.mjs';
 
 let tvResizeObserver;
@@ -73,17 +73,53 @@ export function updateTvLayoutMetrics() {
     return;
   }
 
-  const slotCount = countVisibleSlots(board) || 1;
+  // ⛔⛔ What the board is SHOWING, not what it has drawn. See
+  // `layoutSlotCount`: counting the rendered cards made capacity decay to 1 on
+  // any board that paged, because each pass measured the previous page.
+  const slotCount = layoutSlotCount({
+    shown: micboard.displayList,
+    drawn: countVisibleSlots(board),
+  });
   const containerStyle = window.getComputedStyle(container);
   const slotWidth = readNumeric(containerStyle.getPropertyValue('--tvmode-slot-width'), 420);
   const gap = readNumeric(containerStyle.getPropertyValue('--tvmode-grid-gap'), 6);
   const paddingLeft = readNumeric(containerStyle.paddingLeft, 0);
   const paddingRight = readNumeric(containerStyle.paddingRight, 0);
-  const containerWidth = Math.max(0, container.clientWidth - paddingLeft - paddingRight);
+  // ⛔⛔ The BOARD's padding too, not just the container's. The grid is laid
+  // out inside `.wirelessboard-board`, which carries `padding-left` and
+  // `padding-right` of one grid gap -- so measuring the container alone makes
+  // the arithmetic 12px optimistic, and 12px is exactly the difference between
+  // four columns and three at some widths.
+  //
+  // ⭐ Measured on a development board: a 1707px container computed
+  // `--tvmode-columns: 4` while the grid laid out three, so `rows` was 3 where
+  // the board needed 4 -- and the fourth row went below the fold. That is the
+  // clipped bottom row photographed on the wall (#171): not the status bar
+  // covering it, but the layout believing the board was one column wider than
+  // it is.
+  const boardStyle = window.getComputedStyle(board);
+  const boardPadding = readNumeric(boardStyle.paddingLeft, 0) + readNumeric(boardStyle.paddingRight, 0);
+  const containerWidth = Math.max(
+    0,
+    container.clientWidth - paddingLeft - paddingRight - boardPadding,
+  );
 
   const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || container.clientHeight || 1080;
   const containerRect = container.getBoundingClientRect();
-  const availableHeight = Math.max(240, viewportHeight - containerRect.top);
+  // ⭐⭐ The strip reserved for the status bar comes off the top (#188). This is
+  // the real fix for the bottom row photographed clipped on the wall:
+  // `.rotation-bar` is `position: fixed` at one end of the screen, over a board
+  // laid out as though the whole height were available, so it sat on the last
+  // row. The board now stops short of it.
+  //
+  // ⛔ Taken whether or not the board is paging. Reserving it only while the bar
+  // is up would be a feedback loop: the strip lowers `availableHeight`, which
+  // lowers `capacity`, which can be what makes the board page, which puts the
+  // bar up. `off` is there for an operator who wants the pixels back.
+  const statusStrip = micboard.statusBar === 'off'
+    ? 0
+    : readNumeric(containerStyle.getPropertyValue('--statusbar-height'), 0);
+  const availableHeight = Math.max(240, viewportHeight - containerRect.top - statusStrip);
 
   // ⛔ The physical floor, where the screen has been described (#170). The
   // television hangs above the charging dock, so a column has to be wide

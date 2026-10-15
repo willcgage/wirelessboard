@@ -2928,8 +2928,6 @@ function closePCOView() {
   if (mb) mb.style.display = '';
   micboard.settingsMode = 'CONFIG';
   micboard.url.background = undefined;
-  const pcoNavBtn = document.getElementById('go-pco');
-  if (pcoNavBtn) pcoNavBtn.setAttribute('aria-expanded', 'false');
   invokeUpdateHash();
   try { initConfigEditor(true); } catch (_) {}
 }
@@ -3624,15 +3622,18 @@ function populatePCOFormFromServer() {
 
 // (duplicate showPCOView removed)
 
-// Navbar link
+/**
+ * How Planning Center gets opened.
+ *
+ * ⛔ The delegated click on `#go-pco` is gone with the menu bar (#188). The
+ * administration page's route dispatches `wirelessboard:open-pco`, so the event
+ * is now the only way in -- and `showPCOView` guards the display-only lock
+ * itself, which is what makes that safe.
+ *
+ * ⚠️ `micboard:open-pco` is kept: it is the pre-fork name and something outside
+ * this repository may still fire it.
+ */
 export function bindPcoNav() {
-  document.addEventListener('click', (e) => {
-    const t = e.target;
-    if (t && t.id === 'go-pco') {
-      e.preventDefault();
-      showPCOView();
-    }
-  });
   window.addEventListener('micboard:open-pco', showPCOView);
   window.addEventListener('wirelessboard:open-pco', showPCOView);
 }
@@ -4048,10 +4049,6 @@ function showPCOView() {
   stopLogAutoRefresh(true);
   micboard.settingsMode = 'PCO';
   micboard.url.background = undefined;
-  const bgNavBtn = document.getElementById('go-background');
-  if (bgNavBtn) bgNavBtn.setAttribute('aria-expanded', 'false');
-  const pcoNavBtn = document.getElementById('go-pco');
-  if (pcoNavBtn) pcoNavBtn.setAttribute('aria-expanded', 'true');
   invokeUpdateHash();
   const mb = document.getElementById('micboard');
   if (mb) mb.style.display = 'none';
