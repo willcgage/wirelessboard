@@ -1,4 +1,4 @@
-import { micboard } from './app.js';
+import { micboard, updateHash } from './app.js';
 import { postJSON } from './data.js';
 import { renderGroup } from './channelview.js';
 import { setDisplayMode, setBackground } from './display.js';
@@ -141,14 +141,94 @@ function initSlotEdit() {
   });
 }
 
+// ⛔⛔ What the board was showing before the editor took it over (#216).
+//
+// The editor is a desk-mode view on purpose -- two text fields per card are not
+// something to type into from across a room -- and it says so by switching the
+// board to desk mode. What it never did was switch back, and the consequences
+// compound on a wall:
+//
+//   1. `setDisplayMode('deskmode')` runs, so the television is now showing the
+//      desk layout: a card a third of the width, at desk proportions.
+//   2. `updateHash()` then writes a hash with no `tvmode` in it, because the
+//      board is no longer in TV mode. The hash is the only thing that restores
+//      TV mode on a load -- `displayMode` is the one view preference that is
+//      never persisted (app.js:56) -- so the way back out is now gone too.
+//   3. Escape, the only exit, does `window.location.reload()`. The board comes
+//      back up from that hash, in desk mode.
+//
+// So editing slot names on the wall left the wall in desk mode, and nothing an
+// operator could do from the board would put it back short of finding the
+// display-mode control again.
+//
+// ⚠️ The group goes the same way: entry does `renderGroup(0)`, which *sets*
+// `micboard.group = 0`, so a board showing one group came back showing all
+// channels. Both are remembered here and both are restored.
+let boardBeforeEdit = null;
+
+/**
+ * Open the slot-name editor, or close it if it is already open.
+ *
+ * ⛔ It is a toggle now, and it was not. `slotEditToggle` did its work inside
+ * `if (micboard.settingsMode !== 'EXTENDED')`, so a second press of the same
+ * control fell through the guard having already called `renderGroup(0)` --
+ * which rebuilt the cards without the editor on them. That left the board in
+ * the worst of the three states: desk mode, no editor, and `settingsMode` still
+ * `'EXTENDED'`, which made the guard refuse to open it ever again. Measured on
+ * a development board in TV mode: card 420x191 -> 310x126, fields gone, control
+ * dead.
+ */
 export function slotEditToggle() {
+  if (micboard.settingsMode === 'EXTENDED') {
+    slotEditClose();
+    return;
+  }
+
+  boardBeforeEdit = {
+    displayMode: micboard.displayMode,
+    group: micboard.group || 0,
+  };
+
   renderGroup(0);
   setBackground('NONE');
-  if (micboard.settingsMode !== 'EXTENDED') {
-    if (micboard.displayMode === 'tvmode') {
-      setDisplayMode('deskmode');
-    }
-    micboard.settingsMode = 'EXTENDED';
-    initSlotEdit();
+  if (micboard.displayMode === 'tvmode') {
+    setDisplayMode('deskmode');
   }
+  micboard.settingsMode = 'EXTENDED';
+  initSlotEdit();
+}
+
+/**
+ * Leave the editor and give the board back.
+ *
+ * ⚠️ `settingsMode` is cleared **first**. `channelview` asks whether it is
+ * `'EXTENDED'` while rendering, so re-rendering before clearing it would draw
+ * the cards as though the editor were still open.
+ */
+export function slotEditClose() {
+  if (micboard.settingsMode !== 'EXTENDED') {
+    return;
+  }
+  micboard.settingsMode = 'NONE';
+
+  // Leaving it would put a second copy in the document the next time the
+  // editor opens, which is the duplicate-id fault the slot-edit-* names exist
+  // to avoid.
+  const box = document.getElementById('save-box');
+  if (box) {
+    box.remove();
+  }
+
+  const before = boardBeforeEdit;
+  boardBeforeEdit = null;
+  if (before && before.displayMode && before.displayMode !== micboard.displayMode) {
+    setDisplayMode(before.displayMode);
+  }
+  // ⭐ Re-renders from the template, so the editor's own styling -- the hidden
+  // chart zone, the shown error zone, the input boxes -- goes with it rather
+  // than being undone field by field.
+  renderGroup(before ? before.group : (micboard.group || 0));
+  // ⛔ After the mode is back, so `tvmode` is in the hash again and a reload
+  // returns to the wall layout rather than the desk one.
+  updateHash();
 }
