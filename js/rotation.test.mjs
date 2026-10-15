@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   DEFAULT_DWELL_SECONDS,
+  ALL_CHANNELS_TITLE,
   pagingReason,
+  pagesForBoard,
   rotates,
   dwellFor,
   buildPages,
@@ -256,4 +258,148 @@ test('⭐ a board with no groups can still be paged', () => {
   assert.equal(pages.length, 2);
   assert.deepEqual(pages.flatMap((p) => p.slots), [4, 5, 6, 7]);
   assert.equal(pages[0].parts, 2, 'and it still reports which part of how many');
+});
+
+// --------------------------------------------------------------------------
+// What a forced board pages through (#215)
+//
+// ⛔ The fault: every page was built from `config.groups` whatever the board
+// was showing, so a wall set to *All channels* that ran out of room was handed
+// Group 1's slots in Group 1's order. The maintainer's rule is "all channels in
+// slot order unless the group has been specified".
+// --------------------------------------------------------------------------
+
+// Deliberately not in slot order, and not covering every slot. A group that
+// matched the board's own order could not tell the two page sources apart --
+// which is exactly why the original fault survived.
+const SCRAMBLED = [
+  { group: 1, title: 'Worship', slots: [1, 3, 2, 4] },
+  { group: 2, title: 'Teaching', slots: [5, 6] },
+];
+const ALL_TWELVE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+test('⛔ showing All channels and forced to page: all channels, in slot order', () => {
+  const { pages, why } = pagesForBoard({
+    capacity: 4, shown: ALL_TWELVE, group: 0, groups: SCRAMBLED, rotationPref: 'off',
+  });
+
+  assert.equal(why, 'required');
+  assert.deepEqual(
+    pages.map((p) => p.slots),
+    [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]],
+    'every channel appears exactly once, in slot order',
+  );
+  // ⭐ The regression itself: Group 1's order is 1,3,2,4 and must not be what
+  // a board showing everything receives.
+  assert.notDeepEqual(pages[0].slots, [1, 3, 2, 4]);
+});
+
+test('⛔ the board does not lose a channel to paging', () => {
+  const { pages } = pagesForBoard({
+    capacity: 5, shown: ALL_TWELVE, group: 0, groups: SCRAMBLED, rotationPref: 'off',
+  });
+  const seen = pages.flatMap((p) => p.slots);
+  assert.deepEqual([...seen].sort((a, b) => a - b), ALL_TWELVE);
+  assert.equal(new Set(seen).size, seen.length, 'and shows none of them twice');
+});
+
+test('⭐ showing a group and forced to page: that group, in its own order', () => {
+  const { pages, why } = pagesForBoard({
+    capacity: 2, shown: [1, 3, 2, 4], group: 1, groups: SCRAMBLED, rotationPref: 'off',
+  });
+
+  assert.equal(why, 'required');
+  assert.deepEqual(pages.map((p) => p.slots), [[1, 3], [2, 4]]);
+  assert.equal(pages[0].title, 'Worship', 'and it keeps the group name it was given');
+});
+
+test('⚠️ a forced page never reads "Group 0"', () => {
+  // `rotationLabel` falls back to `Group ${page.group}`, so the implicit
+  // whole-board page used to be named after an internal sentinel.
+  const { pages } = pagesForBoard({
+    capacity: 4, shown: ALL_TWELVE, group: 0, groups: [], rotationPref: 'off',
+  });
+  assert.equal(pages[0].title, ALL_CHANNELS_TITLE);
+  assert.match(rotationLabel(pages, 0), /^All channels/);
+  assert.doesNotMatch(rotationLabel(pages, 0), /Group 0/);
+});
+
+test('⛔ a group with rotate:false still pages when the board must', () => {
+  // `rotate` takes a group out of the *group cycle*. It may never cost the
+  // operator a channel on a board that is being asked to show it.
+  const quiet = [{
+    group: 1, title: 'Worship', slots: [1, 2, 3, 4], rotate: false,
+  }];
+  const { pages, why } = pagesForBoard({
+    capacity: 2, shown: [1, 2, 3, 4], group: 1, groups: quiet, rotationPref: 'off',
+  });
+  assert.equal(why, 'required');
+  assert.deepEqual(pages.map((p) => p.slots), [[1, 2], [3, 4]]);
+});
+
+test('⭐ the dwell of a selected group still applies on the forced path', () => {
+  const slow = [{
+    group: 1, title: 'Worship', slots: [1, 2, 3, 4], dwell: 45,
+  }];
+  const { pages } = pagesForBoard({
+    capacity: 2, shown: [1, 2, 3, 4], group: 1, groups: slow, rotationPref: 'off',
+  });
+  assert.deepEqual(pages.map((p) => p.dwell), [45, 45]);
+});
+
+test('⭐ the switch being on still cycles the configured groups', () => {
+  // Everything fits, so nothing is forced: this is the rotation #113 built, and
+  // #215 must not have taken it away.
+  const { pages, why } = pagesForBoard({
+    capacity: 12, shown: ALL_TWELVE, group: 0, groups: SCRAMBLED, rotationPref: 'on',
+  });
+  assert.equal(why, 'requested');
+  assert.deepEqual(pages.map((p) => p.title), ['Worship', 'Teaching']);
+  assert.deepEqual(pages[0].slots, [1, 3, 2, 4], 'in the order the operator configured');
+});
+
+test('⛔ required outranks requested, and takes the shown content with it', () => {
+  const { pages, why } = pagesForBoard({
+    capacity: 4, shown: ALL_TWELVE, group: 0, groups: SCRAMBLED, rotationPref: 'on',
+  });
+  assert.equal(why, 'required');
+  assert.deepEqual(pages[0].slots, [1, 2, 3, 4]);
+});
+
+test('a board where everything fits and the switch is off has no pages', () => {
+  assert.deepEqual(
+    pagesForBoard({
+      capacity: 12, shown: ALL_TWELVE, group: 0, groups: SCRAMBLED, rotationPref: 'off',
+    }),
+    { pages: [], why: null },
+  );
+});
+
+test('⚠️ a board with no groups configured still pages through everything', () => {
+  // The old implicit-group fallback only ran when there were no groups at all,
+  // so this case worked and the one above it did not. Both must now.
+  const { pages, why } = pagesForBoard({
+    capacity: 4, shown: ALL_TWELVE, group: 0, groups: [], rotationPref: 'off',
+  });
+  assert.equal(why, 'required');
+  assert.equal(pages.length, 3);
+});
+
+test('an unmeasured board does not page', () => {
+  // `boardCapacity` is Infinity until `updateTvLayoutMetrics` has run. Paging
+  // on that would page a board nobody has measured.
+  assert.equal(pagesForBoard({
+    capacity: Infinity, shown: ALL_TWELVE, group: 0, groups: [], rotationPref: 'off',
+  }).why, null);
+});
+
+test('blanks and junk in the display list are not channels', () => {
+  const { pages } = pagesForBoard({
+    capacity: 2,
+    shown: [1, 0, 2, null, 3, undefined, 4, 'x'],
+    group: 0,
+    groups: [],
+    rotationPref: 'off',
+  });
+  assert.deepEqual(pages.flatMap((p) => p.slots), [1, 2, 3, 4]);
 });

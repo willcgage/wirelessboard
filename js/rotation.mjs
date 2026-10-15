@@ -131,6 +131,98 @@ export function buildPages(groups, { perPage } = {}) {
 }
 
 /**
+ * What a board showing *All channels* calls its own rotation.
+ *
+ * ⚠️ `rotationLabel` falls back to `Group ${page.group}`, so an implicit page
+ * built for the whole board used to read **"Group 0"** -- a group that does not
+ * exist, named after an internal sentinel.
+ */
+export const ALL_CHANNELS_TITLE = 'All channels';
+
+/** The heading for the thing the board is showing. */
+function shownTitle(group, groups) {
+  const selected = Number(group);
+  if (!Number.isFinite(selected) || selected <= 0) {
+    return ALL_CHANNELS_TITLE;
+  }
+  const match = (Array.isArray(groups) ? groups : [])
+    .find((g) => Number(g && g.group) === selected);
+  return String((match && match.title) || '').trim() || `Group ${selected}`;
+}
+
+/**
+ * The pages this board should be showing, and why (#215).
+ *
+ * ⛔⛔ **The two reasons page through different things, and that is the whole
+ * point.** The fault this replaces built every page from `config.groups`
+ * whatever the board was showing, so a wall set to *All channels* that ran out
+ * of room was handed Group 1's slots in Group 1's order -- the operator asked
+ * for everything and got somebody else's subset, renamed.
+ *
+ * The maintainer's rule, 2026-10-14:
+ *
+ *   "all channels in slot order unless the group has been specified"
+ *
+ *   required   channels would be lost, so page through **what is on display**:
+ *              `shown` in its own order, which `renderGroup` has already made
+ *              slot order for *All channels* and the group's order for a group.
+ *
+ *   requested  everything fits and the operator turned the switch on, so cycle
+ *              **the configured groups** -- which is what *Page through groups*
+ *              says on the tin, and what per-group `rotate` and `dwell` are for.
+ *
+ * ⭐ Pure, and it returns both answers together. Deriving `why` and the pages
+ * separately is how they came to disagree: `pagingReason` needs a page count,
+ * and the page count now depends on the reason, so one function settles both or
+ * the circularity gets resolved differently in two places.
+ *
+ * ⚠️ A selected group's own `dwell` still applies on the forced path -- the
+ * operator chose how long that group holds -- but its `rotate` flag does not.
+ * `rotate: false` takes a group out of the group cycle; it may never cost the
+ * board a channel it is being asked to show.
+ */
+export function pagesForBoard({
+  capacity, shown = [], group = 0, groups = [], rotationPref,
+} = {}) {
+  const slots = (Array.isArray(shown) ? shown : [])
+    .map((n) => Number(n))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  const asked = Number(capacity);
+  const size = Number.isFinite(asked) && asked >= 1 ? Math.floor(asked) : Infinity;
+  const overflows = slots.length > size;
+
+  const list = Array.isArray(groups) ? groups : [];
+  const selected = Number(group) > 0 ? Number(group) : 0;
+  const match = list.find((g) => Number(g && g.group) === selected);
+
+  // ⛔ No `rotate` key on the descriptor, deliberately. `rotates()` reads
+  // absent as yes, which is the behaviour this path needs: a board that must
+  // page has no alternative that keeps every channel visible.
+  const forced = overflows
+    ? buildPages([{
+      group: selected,
+      title: shownTitle(selected, list),
+      slots,
+      dwell: match && match.dwell,
+    }], { perPage: size })
+    : [];
+
+  const requested = buildPages(list, { perPage: size });
+
+  const why = pagingReason({
+    rotationPref,
+    overflows,
+    pageCount: overflows ? forced.length : requested.length,
+  });
+
+  if (!why) {
+    return { pages: [], why: null };
+  }
+  return { pages: why === 'required' ? forced : requested, why };
+}
+
+/**
  * The page a channel in trouble is on, or null.
  *
  * ⛔ The failure this whole feature could cause is a channel going critical on
