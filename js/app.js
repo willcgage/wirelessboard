@@ -22,6 +22,7 @@ import { setTimeMode } from './signal-view.js';
 import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, bindScreenHandlers,
   configureConfigModule, scheduleBackgroundFilenameGuide, refreshScreensEditor,
+  showLogsSection, hideLogsSection,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
@@ -374,7 +375,6 @@ function mapGroups() {
   // missing one, and harder to notice.
   registerAdminRoute('receivers', () => openConfigPane('devices'));
   registerAdminRoute('screens', () => openConfigPane('devices'));
-  registerAdminRoute('logs', () => openConfigPane('logs'));
   registerAdminRoute('slots', openSlotNames);
   registerAdminRoute('group', openGroupEdit);
   registerAdminRoute('backgrounds', openBackground);
@@ -619,8 +619,12 @@ function readURLParameters() {
     fallback: DEFAULT_PLACEMENT,
   });
 
+  // ⚠️ `#settings=logs` is an existing link and the tab it named is gone (#222).
+  // Left alone it would open the configuration page showing nothing, so it is
+  // answered where the logs actually are now.
   if (micboard.url.settings === 'logs') {
-    micboard.configTab = 'logs';
+    micboard.url.settings = undefined;
+    micboard.openLogsOnLoad = true;
   }
 
   if (window.location.pathname.includes('demo')) {
@@ -837,6 +841,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // on screen; `config.js` knows what goes in it.
       fillSection: (id) => {
         if (id === 'screens') refreshScreensEditor();
+        if (id === 'logs') showLogsSection();
+      },
+      // ⛔ The other edge, and the reason it exists: the log viewer follows the
+      // file on a timer. A section that is hidden, or a page that is closed,
+      // must stop whatever it had running.
+      releaseSection: (id) => {
+        if (id === 'logs') hideLogsSection();
       },
       getLockState: () => micboard.viewerLock,
       getViewers: () => micboard.viewers,
@@ -854,6 +865,13 @@ document.addEventListener('DOMContentLoaded', () => {
         videos: micboard.mp4_list,
       }),
     });
+
+    // ⚠️ `#settings=logs` resolved here. The link named a configuration tab
+    // that no longer exists (#222); it now opens the page where the logs are.
+    if (micboard.openLogsOnLoad) {
+      micboard.openLogsOnLoad = false;
+      openAdminPage('logs');
+    }
   } catch (_) {}
   try { applyBoardLayout(); } catch (_) {}
   try { startTvLayoutWatchers(); } catch (_) {}

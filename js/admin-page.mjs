@@ -366,7 +366,7 @@ export function resetAdminRoutes() {
  * at a time; conflating it with the lock's list would mean each move silently
  * unguarded a section.
  */
-export const IN_PAGE_ITEMS = ['about', 'screens'];
+export const IN_PAGE_ITEMS = ['about', 'screens', 'logs'];
 
 /**
  * Whether opening `view` should refill the moved section `id`.
@@ -389,6 +389,24 @@ export const IN_PAGE_ITEMS = ['about', 'screens'];
  */
 export function shouldFillSection({ view, shown, id }) {
   return view === id && shown !== id;
+}
+
+/**
+ * Whether leaving `view` should release the moved section `id`.
+ *
+ * ⛔⛔ Logs is why this exists. The viewer follows the file on a timer, and the
+ * configuration page only ever stopped it by switching to another tab. Moved
+ * into a page that shows and hides sections, nothing was stopping it -- a wall
+ * tablet polling the server about a page nobody is looking at, for as long as
+ * the board is up.
+ *
+ * ⚠️ Released only if it was the one being shown. Calling this for a section
+ * that was never opened would stop a timer that was never started, which is
+ * harmless today and exactly the kind of "harmless" that stops being so when
+ * the next section's release does something real.
+ */
+export function shouldReleaseSection({ view, shown, id }) {
+  return shown === id && view !== id;
 }
 
 export function unroutedItems() {

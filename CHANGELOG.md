@@ -28,6 +28,12 @@
 - **A red "no route registered for: about" warning appeared under the rail on every open**, because
   Help is drawn in the page rather than opening an editor and so registers no route. It also told
   people to "use the Menu instead" — a bar retired in 2.0.0-beta.5.
+- **Screens & docks, and Logs, open inside Administration** instead of handing over to the old
+  configuration page (#222, the first two of six panes). The editors moved with their logic intact;
+  only the frame and the controls changed. The configuration page's two-tab strip is gone with the
+  Logs tab, and `#settings=logs` — a link that named that tab — now opens Administration on Logs.
+- **The log viewer kept following the file after you stopped looking at it.** It polls while its
+  section is open and stops when the section is left or the page is closed.
 
 ## [2.0.0-beta.5] - 2026-10-14
 

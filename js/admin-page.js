@@ -23,7 +23,7 @@
 
 import {
   sectionsFor, stateLine, runAdminRoute, unroutedItems, refusedSummary,
-  IN_PAGE_ITEMS, shouldFillSection,
+  IN_PAGE_ITEMS, shouldFillSection, shouldReleaseSection,
   DOOR_LABEL, DOOR_DETAIL, DOOR_SCOPE,
 } from './admin-page.mjs';
 import { scopeNote, presenceLabel } from './viewer-scope.mjs';
@@ -344,6 +344,14 @@ export function renderAdminPage() {
   // `[hidden]{display:none!important}` is the one rule that cannot be lost to
   // specificity, and a half-hidden editor that still takes clicks is worse
   // than a visible one.
+  // ⛔ Read ONCE, before anything changes it. `shown` used to be updated inside
+  // this loop, so a section considered later saw the value a section
+  // considered earlier had just written -- and leaving Logs for Screens left
+  // the log viewer's timer running, because by then `shown` already said
+  // `screens`. Whether a timer stopped depended on the order of this array.
+  const previous = shown;
+  let next = null;
+
   MOVED_SECTIONS.forEach((id) => {
     const section = document.getElementById(`admin-section-${id}`);
     if (!section) {
@@ -364,16 +372,27 @@ export function renderAdminPage() {
     // saves shows the older list until it is reopened. That is the same trade
     // #180 settled, and it is the right way round -- losing somebody's typing
     // is worse than showing them a list that is a minute old.
-    if (shouldFillSection({ view, shown, id })
+    if (shouldFillSection({ view, shown: previous, id })
         && deps && typeof deps.fillSection === 'function') {
       deps.fillSection(id);
     }
+
+    // ⛔ And the other edge. A section can hold something that keeps running --
+    // the log viewer follows the file on a timer -- and nothing told the host
+    // when a section stopped being looked at, because until Logs moved no
+    // section had anything to stop. A hidden pane still polling is a wall
+    // tablet talking to the server about a page nobody can see.
+    if (shouldReleaseSection({ view, shown: previous, id })
+        && deps && typeof deps.releaseSection === 'function') {
+      deps.releaseSection(id);
+    }
+
     if (showing) {
-      shown = id;
-    } else if (shown === id) {
-      shown = null;
+      next = id;
     }
   });
+
+  shown = next;
 
   // The welcome text and a moved section must never both be on screen.
   if (content) {
@@ -381,13 +400,22 @@ export function renderAdminPage() {
   }
 }
 
-export function openAdminPage() {
+/**
+ * @param {string} [section] open straight onto an in-page section.
+ *
+ * ⚠️ Only an in-page section, and silently the rail otherwise. The argument
+ * exists for `#settings=logs`, a link that predates this page and named a tab
+ * that no longer exists; a deep link that lands somewhere plausible is better
+ * than one that opens an empty configuration page, which is what it did for
+ * the few minutes between the markup moving and this being written.
+ */
+export function openAdminPage(section) {
   const page = document.getElementById(PAGE_ID);
   if (!page) {
     return;
   }
   lastFocus = document.activeElement;
-  view = 'rail';
+  view = IN_PAGE_ITEMS.includes(section) ? section : 'rail';
   renderAdminPage();
   page.classList.add('is-open');
   // So the board behind cannot be scrolled out from under the overlay.
@@ -399,6 +427,14 @@ export function openAdminPage() {
 }
 
 export function closeAdminPage() {
+  // ⛔ Closing the page is leaving every section in it. Without this the log
+  // viewer kept following the file after the page was dismissed, which is the
+  // same fault as a hidden section polling -- just harder to notice.
+  if (shown && deps && typeof deps.releaseSection === 'function') {
+    deps.releaseSection(shown);
+  }
+  shown = null;
+
   const page = document.getElementById(PAGE_ID);
   if (page) {
     page.classList.remove('is-open');

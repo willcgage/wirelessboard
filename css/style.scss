@@ -3147,6 +3147,73 @@ body.live-strip-bottom .rotation-bar {
   color: var(--color-white);
 }
 
+// ⛔ Purge cannot be undone, and the status palette is reserved for exactly
+// that kind of meaning. It is the only coloured control on this page.
+.admin-btn--danger {
+  background: rgba(220, 73, 58, 0.25);
+  border-color: rgba(220, 73, 58, 0.55);
+}
+
+.admin-btn--danger:hover:not(:disabled) {
+  background: rgba(220, 73, 58, 0.45);
+}
+
+// ---------------------------------------------------------------------------
+// The log viewer, inside the administration page (#222)
+// ---------------------------------------------------------------------------
+
+// Was `p-3 border rounded`: a card inside a section that is already a card's
+// worth of framing.
+.admin-section--moved .log-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-section--moved .log-toolbar {
+  gap: 8px;
+}
+
+// ⚠️ The table ships `table-dark` already, but on Bootstrap's own ground, not
+// this one -- so the header read as a lighter band across the section.
+.admin-section--moved table {
+  width: 100%;
+  font-size: 0.78rem;
+  border-collapse: collapse;
+}
+
+.admin-section--moved table th {
+  position: sticky;
+  top: 0;
+  background: #1E1E1E;
+  border-bottom: 1px solid rgba(215, 215, 215, 0.18);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(215, 215, 215, 0.65);
+  font-weight: 600;
+  text-align: left;
+  padding: 7px 9px;
+}
+
+.admin-section--moved table td {
+  border-top: 1px solid rgba(215, 215, 215, 0.09);
+  padding: 7px 9px;
+  vertical-align: top;
+}
+
+// ⚠️ A multi-select is the one control here that cannot be a `vp-seg`: the
+// sources are discovered, so the list is not known when the page is written.
+.admin-section--moved select[multiple] {
+  min-height: 92px;
+  padding: 4px;
+}
+
+.admin-section--moved .form-text {
+  font-size: 0.72rem;
+  color: rgba(215, 215, 215, 0.6);
+}
+
 // ⚠️ The empty-list line was `small text-muted`, which on this ground is about
 // 2.5:1 -- readable as an absence rather than as a sentence.
 .admin-section--moved .text-muted {
