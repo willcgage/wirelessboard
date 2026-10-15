@@ -719,19 +719,11 @@ function updateSlotID() {
   });
 }
 
-// Ensure HUD is not blocking when entering settings/PCO
-function hideHUDOverlay() {
-  try {
-    const hud = document.getElementById('hud');
-    if (!hud) return;
-    Collapse.getOrCreateInstance(hud, { toggle: false }).hide();
-    hud.classList.remove('show');
-  } catch (_) {}
-  try {
-    const trigger = document.getElementById('go-hud');
-    if (trigger) trigger.setAttribute('aria-expanded', 'false');
-  } catch (_) {}
-}
+// ⛔ `hideHUDOverlay` was here: it dismissed the Help overlay before opening
+// settings or Planning Center, because the overlay would otherwise sit on top
+// of them. #225 retired that overlay -- nothing on it closed it, and its text
+// pointed at a Menu #188 had removed -- so there is nothing left to get in the
+// way. Help is a section of the administration page now, which closes itself.
 
 function ensurePcoCredentialStatusElement() {
   let el = document.getElementById('pco-credential-status');
@@ -3169,7 +3161,6 @@ export function initConfigEditor(force = false) {
     return;
   }
 
-  hideHUDOverlay();
   micboard.settingsMode = 'CONFIG';
   micboard.url.background = undefined;
   invokeUpdateHash();
@@ -4045,7 +4036,6 @@ function showPCOView() {
     showLockRefusal('pco');
     return;
   }
-  hideHUDOverlay();
   stopLogAutoRefresh(true);
   micboard.settingsMode = 'PCO';
   micboard.url.background = undefined;

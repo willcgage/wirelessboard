@@ -86,15 +86,14 @@
            decides does not exist, which is the fault being fixed rather than a
            new one to introduce. -->
       <div class="view-panel-pinned">
-        <!-- ⛔ Not on the administration page, deliberately. That page is refused
-             when the board is locked to display only, and Help is the one screen
-             somebody reads when they do not yet know how the board works (#187).
-             Neither of these is in the lock's guarded set, so neither belongs
-             behind it. -->
-        <div class="view-panel-links">
-          <button type="button" class="vp-link" id="go-hud" aria-controls="hud" aria-expanded="false">Help</button>
-          <button type="button" class="vp-link" id="go-qr">Scannable URL</button>
-        </div>
+        <!-- ⛔⛔ Help and the scannable URL were here, in the panel, and have moved
+             to the administration page (maintainer, 2026-10-14).
+
+             They were put here because the page was refused outright on a locked
+             board, and Help is the one screen somebody reads when they do not yet
+             know how the board works (#187). The gating moved instead of the
+             guarantee: the door opens on a locked board now, and the six guarded
+             items refuse themselves. -->
         <!-- ⛔ "press ? for every key" used to be here. #160 retired the
              bindings; `kbd.js` is Escape only. The line now says what the panel
              above it actually is, which is the first of the three places the
@@ -131,38 +130,23 @@
       </div>
     </div>
 
-  <div id="hud" class="container collapse">
-        <div class="row hud-version" data-role="hud-version">
-          <div class="col">
-            <p id="hud-version-text" class="text-muted small mb-3">Wirelessboard version loading…</p>
-          </div>
-        </div>
-        <div class="hud-pane active" data-hud-pane="help" id="hud-pane-help" role="region" aria-hidden="false" tabindex="0">
-          <div class="row g-4">
-            <!-- ⛔ The Keyboard Shortcuts card that sat beside this one is gone
-                 with the bindings themselves (#160). Everything it listed is a
-                 control now: the gear for this screen, the Menu for the board. -->
-            <div class="col-12">
-              <div class="hud-card p-3 border rounded h-100">
-                <h5 class="h6 text-muted text-uppercase">Quick Start</h5>
-                <ul class="hud-list small mb-0">
-                  <li><span class="hud-key">Gear, bottom right</span> Layout, card, backgrounds, which group is showing, and the display-only lock &mdash; all for this screen only.</li>
-                  <li><span class="hud-key">Menu -> Config</span> Edit slots, discovery, and logging settings.</li>
-                  <li><span class="hud-key">Menu -> Planning Center</span> Authorize PCO and sync assignments.</li>
-                  <li><span class="hud-key">Menu -> Help</span> Return to this guide any time.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="col-12">
-              <div class="hud-card p-3 border rounded">
-                <h5 class="h6 text-muted text-uppercase">Need More Help?</h5>
-                <p class="small mb-2">Check the in-repo <strong>docs/</strong> directory for deployment, discovery, and automation guides, or open an issue from the <a href="https://github.com/willcgage/wirelessboard" target="_blank" rel="noopener">project home</a>.</p>
-                <p class="small mb-0">Keep another tab on the Config view during events so adjustments never interrupt the board.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-  </div>
+  <!-- ⛔⛔ The Help overlay was here, and it had two faults at once.
+
+       It had **no way to close it**. There was no control on it, Escape reloads
+       the whole page, and the only toggle was the Help item in the view panel --
+       which the panel then closed behind itself. A full-width overlay you cannot
+       dismiss is what the maintainer found during testing.
+
+       And its content was stale in the worst way: three of its four Quick Start
+       items pointed at a `Menu` that #188 retired, and the last line said to
+       "keep another tab on the Config view during events" -- when a configuration
+       save tears down every receiver socket for about two seconds, which is the
+       one thing that blanks a wall mid-service.
+
+       Help is now a section of the administration page, rendered inside the
+       overlay, with a Back control and the overlay’s own close. Its text lives in
+       `js/help-content.mjs`, as data, so `help-content.test.mjs` can fail if it
+       ever mentions a Menu, a key, or a second tab on Config again. -->
   <div class="container" id="background-settings">
     <div class="row">
       <div class="col-xl-12">

@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  SECTIONS, allItems, offeredActions, sectionsFor, pageRefused, stateLine,
+  SECTIONS, allItems, offeredActions, sectionsFor, refusedCount, refusedSummary, stateLine,
+  UNGUARDED_ITEMS,
   DOOR_DETAIL, DOOR_SCOPE,
   registerAdminRoute, runAdminRoute, resetAdminRoutes, unroutedItems, adminRouteIds,
 } from './admin-page.mjs';
@@ -29,7 +30,18 @@ test('⭐⭐ every guarded action has a route on the page', () => {
 test('⛔ nothing on the page is outside the lock\'s scope', () => {
   // The other direction, and the sharper one: an item here that the lock does
   // not guard is a global setting a locked wall tablet could still change.
+  //
+  // ⚠️ `UNGUARDED_ITEMS` is the allowlist. Help carries no action on purpose --
+  // it has to be readable on a locked board (#187) -- and naming the exceptions
+  // is what stops a *second* one arriving without anybody deciding to.
   allItems().forEach((item) => {
+    if (item.action === null) {
+      assert.ok(
+        UNGUARDED_ITEMS.includes(item.id),
+        `${item.id} has no guarded action and is not in UNGUARDED_ITEMS`,
+      );
+      return;
+    }
     assert.ok(
       Object.prototype.hasOwnProperty.call(GUARDED_ACTIONS, item.action),
       `${item.id} declares action "${item.action}", which the lock does not guard`,
@@ -37,15 +49,18 @@ test('⛔ nothing on the page is outside the lock\'s scope', () => {
   });
 });
 
-test('⛔ Help is not on the page, so a locked board can still reach it', () => {
-  // The design folded Help into an "About & help" section here. The page is
-  // refused when the lock is on, so that would have made Help unreachable on a
-  // locked wall tablet -- the one screen somebody reads when they do not yet
-  // know how the board works (#187). Help is not guarded and must not become so.
-  const ids = allItems().map((i) => i.id);
-  assert.ok(!ids.includes('help'), 'Help belongs in the view panel, not behind the lock');
-  assert.ok(!ids.includes('qr'), 'and so does the scannable URL');
-  assert.ok(!Object.prototype.hasOwnProperty.call(GUARDED_ACTIONS, 'help'));
+test('⛔⛔ Help is on the page, and the lock does not refuse it', () => {
+  // The maintainer asked for Help here (2026-10-14). It only works because the
+  // door stopped gating the page: Help is the one screen somebody reads when
+  // they do not know how the board works, and a locked wall tablet is exactly
+  // the board most likely to be read by somebody lost (#187).
+  const about = allItems().find((i) => i.id === 'about');
+  assert.ok(about, 'Help must be an item on the page');
+  assert.equal(about.action, null, 'Help must carry no guarded action');
+
+  const drawn = sectionsFor({ lockState: 'on' }).flatMap((sec) => sec.items);
+  const aboutDrawn = drawn.find((i) => i.id === 'about');
+  assert.equal(aboutDrawn.refused, false, 'Help must be readable on a locked board');
 });
 
 test('every item declares an id and a label, and no id twice', () => {
@@ -65,11 +80,14 @@ test('the sections are the three the design named, in order', () => {
 // The lock
 // ---------------------------------------------------------------------------
 
-test('⛔ display only refuses every item, and still lists them', () => {
+test('⛔ display only refuses every guarded item, and still lists them', () => {
   const drawn = sectionsFor({ lockState: 'on' });
   const items = drawn.flatMap((s) => s.items);
   assert.ok(items.length > 0);
-  items.forEach((item) => assert.equal(item.refused, true, `${item.id} must be refused`));
+  items.forEach((item) => {
+    const expected = item.action !== null;
+    assert.equal(item.refused, expected, `${item.id} refused should be ${expected}`);
+  });
   // Listed, not omitted: a board missing features reads as broken, and
   // somebody goes looking for the fault mid-service.
   assert.equal(items.length, allItems().length);
@@ -80,12 +98,20 @@ test('an unlocked board refuses nothing', () => {
     .forEach((item) => assert.equal(item.refused, false));
 });
 
-test('pageRefused answers for the whole door', () => {
-  assert.equal(pageRefused('on'), true);
-  assert.equal(pageRefused('off'), false);
+test('⛔ the count of what a locked board refuses, and the line that says so', () => {
+  // ⛔⛔ This replaced `pageRefused`, which gated the door. The door opens now;
+  // the lock refuses items, and the page says so once at the top.
+  const guarded = allItems().filter((i) => i.action !== null).length;
+  assert.equal(refusedCount('on'), guarded);
+  assert.equal(refusedCount('off'), 0);
   // ⚠️ An unset lock is not a locked lock. A board whose preference failed to
   // read must not be mistaken for one deliberately locked down.
-  assert.equal(pageRefused(undefined), false);
+  assert.equal(refusedCount(undefined), 0);
+
+  assert.equal(refusedSummary('off'), null, 'nothing to say when nothing is refused');
+  const note = refusedSummary('on');
+  assert.match(note, /display only/i);
+  assert.match(note, /gear/i, 'and it must say where to undo it');
 });
 
 test('the door states the boundary on itself', () => {
@@ -233,7 +259,9 @@ test('⛔⛔ there is no bar for the door to be trapped inside', () => {
   // The door is where the gear can reach it: inside the view panel.
   const panelAt = html.indexOf('<div id="view-panel"');
   const doorAt = html.indexOf('id="admin-door"');
-  const hudAt = html.indexOf('<div id="hud"');
+  // ⚠️ Was `<div id="hud"`, the Help overlay that followed the panel in the
+  // markup. #225 retired it, so the next element is the administration overlay.
+  const hudAt = html.indexOf('<div id="admin-page"');
   assert.ok(panelAt > 0 && doorAt > panelAt, 'the door belongs inside the view panel');
   assert.ok(doorAt < hudAt, 'and before the panel ends');
 });
