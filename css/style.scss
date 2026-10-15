@@ -993,10 +993,11 @@ p.device-name {
   }
 
   // ⛔ There was a `.navbar { display: none }` here, which read as "TV mode
-  // hides the top bar". It never did: `tvmode` is a class on #container and the
-  // bar is a *sibling* of that, so the descendant selector could not reach it.
-  // Hiding the bar is now an explicit choice on H -- see `body.topbar-hidden`
-  // near the end of this file, which is on <body> for exactly that reason.
+  // hides the top bar". It never did: `tvmode` was a class on #container and the
+  // bar was a *sibling* of that, so the descendant selector could not reach it.
+  // #188 then retired the bar outright, so there is nothing to hide in either
+  // mode. Kept as a note because the shape recurs: a descendant selector cannot
+  // reach a sibling of the element carrying the class.
 }
 
 /* browser mode */
@@ -1651,39 +1652,21 @@ p.device-name {
   padding-top: .75rem;
 }
 
-.navbar-toggler {
-  border: none;
-}
+/* ⛔⛔ The menu bar's rules were here, along with `body.topbar-hidden .navbar`,
+   which hid it.
 
-.navbar {
-  padding-left: 0px;
-  padding-right: 0px;
-}
+   #188 retired the bar. Between them, that rule and the comment above it
+   described a trap: the bar carried the only pointer route to every global
+   setting, this rule removed it, and the comment said the keyboard was the way
+   back -- which #160 had already taken away. A board with the bar hidden could
+   reach no global setting without first putting back a bar it had deliberately
+   hidden, and every one of the first sixteen beta.4 venue photographs is in
+   that state.
 
-/* The top bar, hidden from the view panel.
-
-   ⛔ On <body> on purpose. The bar is a sibling of #container, so the class the
-   other view controls use -- which lives on #container -- cannot reach it. A
-   `.tvmode .navbar` rule used to sit in the TV block looking like it hid this;
-   it could never have worked, and it is gone.
-
-   ⛔ This comment used to end: "The bar carries the only pointer route to the
-   settings panes, so hiding it leaves the keyboard as the way in: S for config,
-   ? for the shortcut list."
-
-   Both halves went stale and the pair of them described a trap. #160 retired
-   the bindings -- `kbd.js` is Escape only -- so there was no `S` and no `?`,
-   and this rule removed the only pointer route there was. A board with the bar
-   hidden could reach no global setting except by first putting back a bar it
-   had deliberately hidden, and every one of the first sixteen beta.4 venue
-   photographs is in that state.
-
-   ⭐ Fixed by giving the gear a route of its own: the administration door at
-   the foot of the view panel (#188). Hiding this bar now costs nothing, which
-   is also what frees the strip for the status bar. */
-body.topbar-hidden .navbar {
-  display: none;
-}
+   ⭐ Everything the bar held is now behind the gear: the six guarded surfaces
+   on the administration page, and Help and the scannable URL in the view panel.
+   The strip it occupied is not given back to the board -- it is reserved for
+   the status bar, which is why retiring the bar was asked for. */
 
 /* ⛔ The way back, and the one piece of chrome `H` must never hide (#110).
 
@@ -1696,6 +1679,9 @@ body.topbar-hidden .navbar {
    bar *is* the way in, and a wall display should carry no more chrome than it
    has to. Quiet at rest, legible on hover, focus or touch. */
 .topbar-restore {
+  /* ⭐ Unconditional since #188: with no bar to bring back, this is always the
+     only control on screen. */
+  opacity: 0.55;
   position: fixed;
   right: calc(12px + env(safe-area-inset-right, 0px));
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
@@ -1724,11 +1710,9 @@ body.topbar-hidden .navbar {
   outline-offset: 2px;
 }
 
-/* With the bar gone this is the only control on screen, so it stops being
-   quite so quiet about it. */
-body.topbar-hidden .topbar-restore {
-  opacity: 0.55;
-}
+/* ⛔ `body.topbar-hidden .topbar-restore { opacity: .55 }` was here, for the
+   case where this was the only control on screen. It always is now (#188), so
+   the dimming is unconditional and lives on `.topbar-restore` itself. */
 
 @media (prefers-reduced-motion: reduce) {
   .topbar-restore {
@@ -2089,9 +2073,10 @@ a:link, a:visited, a:hover, a:active {
 }
 
 // ⛔⛔ The route that did not exist (#188). The menu bar carried the only
-// pointer route to every global setting, `body.topbar-hidden .navbar` removes
-// it, and #160 retired the keyboard -- so a board with the bar hidden had no
-// way to reach any global setting but to put the bar back.
+// pointer route to every global setting, `body.topbar-hidden .navbar` removed
+// it, and #160 had retired the keyboard -- so a board with the bar hidden had
+// no way to reach any global setting but to put the bar back. The bar is now
+// gone entirely and this is the route.
 //
 // ⚠️ Three lines, deliberately: what it is, what is behind it, and whose
 // board it changes. #116 exists because the per-device / global split was
@@ -2694,26 +2679,20 @@ body.live-strip-bottom .rotation-bar {
    ⛔ Hiding the menu items is the *presentation* half only. Every one of these
    routes is also refused in JavaScript, because a stale menu, a keyboard, or a
    `#settings=true` link would otherwise walk straight past a display rule. */
-[data-wb-locked-note] {
-  display: none;
-}
+/* ⛔⛔ `[data-wb-global]`, `[data-wb-locked-note]` and `.wb-locked-note` were
+   here. They emptied the Menu on a locked board and left a line saying why, so
+   a short menu did not read as a fault. #188 retired the menu, and nothing
+   carries those attributes any more.
 
-body.viewer-locked {
-  [data-wb-global] {
-    display: none;
-  }
+   ⛔ The refusal did not go with them -- it moved onto the administration door,
+   which is drawn refused with the reason and where to undo it. That is the same
+   idea on a smaller surface, and `admin-page.test.mjs` fails if the door ever
+   carries `data-wb-global` again: the rule above would have hidden it outright,
+   which is the one thing a refusal must not do.
 
-  [data-wb-locked-note] {
-    display: list-item;
-  }
-}
-
-.wb-locked-note {
-  font-size: 0.85rem;
-  opacity: 0.75;
-  white-space: normal;
-  max-width: 16rem;
-}
+   ⚠️ Hiding was only ever the presentation half. Every guarded route is also
+   refused in JavaScript, because a keyboard or a `#settings=true` link would
+   walk straight past a display rule. That half is untouched. */
 
 /* Why a locked board ignored you.
 
@@ -3054,4 +3033,86 @@ body.admin-open {
   margin-top: 2px;
   font-size: 0.68rem;
   opacity: 0.75;
+}
+
+/* Help and the scannable URL, in the view panel's pinned foot (#188).
+
+   ⛔ Not on the administration page. That page is refused when the board is
+   locked to display only, and Help is the one screen somebody reads when they
+   do not yet know how the board works (#187). Neither is in the lock's guarded
+   set, so neither belongs behind it. */
+.view-panel-links {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.vp-link {
+  flex: 1 1 auto;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid rgba(215, 215, 215, 0.22);
+  border-radius: 6px;
+  color: var(--color-white);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.vp-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ⭐⭐ The strip the retired menu bar freed, reserved for the status bar (#188).
+
+   The maintainer's reason for retiring the bar: "This allows everything to
+   shift up providing space Top or Bottom for the status bar."
+
+   ⛔ This is the real fix for the bottom row photographed clipped on the wall.
+   `.rotation-bar` is `position: fixed` at one end of the screen, and the board
+   was laid out as though the whole height were available — so the bar sat on
+   the last row. `tv-layout.js` now takes this height off `availableHeight`, and
+   the board stops short of it.
+
+   ⛔ Reserved whether or not the board is paging. Reserving it on demand would
+   be a feedback loop: the strip lowers the height available, which lowers
+   capacity, which can be what makes the board page, which puts the bar up. */
+:root {
+  --statusbar-height: 28px;
+}
+
+body.statusbar-off {
+  --statusbar-height: 0px;
+}
+
+/* The board's own padding, so nothing is drawn into the strip even in desk
+   mode, where the layout arithmetic above does not run. */
+body.statusbar-bottom #container {
+  padding-bottom: var(--statusbar-height);
+}
+
+body.statusbar-top #container {
+  padding-top: var(--statusbar-height);
+}
+
+/* The bar fills the strip rather than floating over a corner of the board. It
+   was `bottom: 0` with a rounded corner, which is what sat on the last row. */
+body.statusbar-bottom .rotation-bar,
+body.statusbar-top .rotation-bar {
+  left: 0;
+  right: 0;
+  min-height: var(--statusbar-height);
+  border-top-right-radius: 0;
+  justify-content: center;
+}
+
+body.statusbar-top .rotation-bar {
+  bottom: auto;
+  top: calc(env(safe-area-inset-top, 0px));
+}
+
+/* ⚠️ With the strip off, the bar has nowhere reserved to go, so it goes back to
+   floating — and may cover the last row. That is the operator's choice, stated
+   on the control. */
+body.statusbar-off .rotation-bar {
+  border-top-right-radius: 4px;
 }

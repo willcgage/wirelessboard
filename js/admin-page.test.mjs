@@ -216,54 +216,40 @@ test('junk registrations are ignored rather than stored', () => {
 const ROOT = path.join(import.meta.dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g, '\n');
 
-/**
- * The markup of the one element whose tag appears exactly once.
- *
- * ⛔ Asserts the "exactly once" rather than assuming it. An earlier version of
- * this helper did generic tag-depth matching and returned the rest of the
- * document when its bookkeeping slipped -- which made the guard claim the door
- * *was* inside the navbar. A guard that can be wrong in the direction of
- * failing loudly is tolerable; one that can be wrong quietly is not, and the
- * simple version cannot be wrong at all while this assertion holds.
- *
- * ⛔⛔ Built by concatenation, not a template literal. `` `<${tag}` `` puts a
- * **backspace character** in the pattern -- a template literal consumes the
- * escape before `new RegExp` ever sees it -- so the regex matched nothing and
- * `soleElement` found zero navs. That is the same trap recorded in the
- * project's notes after two earlier guards passed on everything, and it was
- * caught here only because the count is asserted rather than assumed.
- */
-function soleElement(html, tag) {
-  // ⛔ prefer-template is disabled here on purpose, and it is the whole point:
-  // a template literal consumes `\b` and `\s` as escapes before `new RegExp`
-  // ever sees them, which is what made the first version of this match nothing.
-  /* eslint-disable prefer-template */
-  const opens = [...html.matchAll(new RegExp('<' + tag + '\\b', 'g'))];
-  const closes = [...html.matchAll(new RegExp('</' + tag + '\\s*>', 'g'))];
-  /* eslint-enable prefer-template */
-  assert.equal(opens.length, 1, `expected exactly one <${tag}> in the markup`);
-  assert.equal(closes.length, 1, `expected exactly one </${tag}> in the markup`);
-  return html.slice(opens[0].index, closes[0].index + closes[0][0].length);
-}
-
-test('⛔⛔ the administration door does not live inside the bar that gets hidden', () => {
+test('⛔⛔ there is no bar for the door to be trapped inside', () => {
   const html = read('demo.html');
-  const navbar = soleElement(html, 'nav');
-  assert.ok(
-    !navbar.includes('id="admin-door"'),
-    'the door is inside the navbar, which body.topbar-hidden removes',
-  );
-  assert.ok(
-    !navbar.includes('id="admin-page"'),
-    'the administration page is inside the navbar',
-  );
-  // And it is where the gear can reach it: between the panel's opening tag and
-  // the panel's own pinned foot, which is the last thing in it.
+  // #221 put the door in the view panel while the menu bar was still there, and
+  // this guard checked the door was not inside the bar. #188's second half
+  // retired the bar outright, so the stronger statement is available.
+  //
+  // ⚠️ A substring test, not a regex. The helper this replaces built its pattern
+  // with a template literal, which swallows the escape before the regex is
+  // compiled, so it matched nothing. It failed loudly only because it asserted
+  // how many tags it had found rather than assuming one. The project's notes
+  // record the same trap from two earlier guards; the cheapest way not to meet
+  // it a fourth time is not to write the regex.
+  assert.ok(!html.includes('<nav'), 'the menu bar is back; the door must not be inside it');
+
+  // The door is where the gear can reach it: inside the view panel.
   const panelAt = html.indexOf('<div id="view-panel"');
   const doorAt = html.indexOf('id="admin-door"');
   const hudAt = html.indexOf('<div id="hud"');
   assert.ok(panelAt > 0 && doorAt > panelAt, 'the door belongs inside the view panel');
   assert.ok(doorAt < hudAt, 'and before the panel ends');
+});
+
+test('⛔ and the door is not hidden by the locked-menu rule', () => {
+  // ⛔⛔ The bug this exists for: #221 gave the door `data-wb-global`, which
+  // `body.viewer-locked [data-wb-global] { display: none }` hides outright --
+  // when the whole design is that it is drawn *refused*, with the reason and
+  // where to undo it. A door that vanishes teaches nobody that the lock is on.
+  const html = read('demo.html');
+  const doorTag = html.match(/<button[^>]*id="admin-door"[^>]*>/);
+  assert.ok(doorTag, 'expected the door button in the markup');
+  assert.ok(
+    !/data-wb-global/.test(doorTag[0]),
+    'the door carries data-wb-global, so a locked board hides it instead of refusing it',
+  );
 });
 
 test('⛔ nothing hides the route when the bar is hidden', () => {

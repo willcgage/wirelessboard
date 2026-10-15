@@ -14,7 +14,7 @@ import {
   isFullscreen, setFullscreen,
 } from './display.js';
 import { drawerBits, drawerModeWith, DRAWER_MODES } from './panel-controls.mjs';
-import { registerAdminRoute } from './admin-page.mjs';
+import { registerAdminRoute, runAdminRoute } from './admin-page.mjs';
 import { initAdminPage, openAdminPage } from './admin-page.js';
 import { initViewPanel, toggleViewPanel } from './view-panel.js';
 import { setTimeMode } from './signal-view.js';
@@ -24,18 +24,19 @@ import {
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
-  isArrangement, isCardShape, isTypeSize, isTopBarState, isColumnChoice,
+  isArrangement, isCardShape, isTypeSize, isColumnChoice,
   isWashStyle, migrateArrangement, migrateCardShape,
 } from './board-layout.mjs';
 import {
   resolvePref, readPref, writePref, safeStorage,
-  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
+  ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, COLUMNS_KEY,
   WASH_KEY,
   DISPLAY_MODE_KEY, isDisplayMode,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
   VIEWER_LOCK_KEY,
   SCREEN_KEY,
+  STATUS_BAR_KEY, isStatusBarPlacement,
 } from './view-prefs.mjs';
 import { PLACEMENTS, DEFAULT_PLACEMENT } from './live-strip.mjs';
 import { ROTATION_STATES } from './rotation-states.mjs';
@@ -62,7 +63,6 @@ micboard.displayMode = 'deskmode';
 micboard.arrangement = 'fit';
 micboard.cardShape = 'auto';
 micboard.typeSize = 'medium';
-micboard.topBar = 'shown';
 micboard.columns = 'auto';
 micboard.wash = 'band';
 micboard.livePlacement = 'bottom';
@@ -186,11 +186,11 @@ export function syncHudPane(target) {
     button.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
   hud.dataset.activePane = desired;
+  // ⚠️ Only Help has a control left to describe. The background library's
+  // `aria-expanded` lived on a menu item #188 retired.
   const goHudBtn = document.getElementById('go-hud');
-  const goBackgroundBtn = document.getElementById('go-background');
   const visible = hud.classList.contains('show');
   if (goHudBtn) goHudBtn.setAttribute('aria-expanded', visible && desired === 'help' ? 'true' : 'false');
-  if (goBackgroundBtn) goBackgroundBtn.setAttribute('aria-expanded', visible && desired === 'background' ? 'true' : 'false');
   return desired;
 }
 
@@ -283,7 +283,6 @@ function refuseWhenLocked(action) {
 function mapGroups() {
   const help = document.getElementById('hud');
   const goHud = document.getElementById('go-hud');
-  const goBackground = document.getElementById('go-background');
   const hudCollapse = help ? Collapse.getOrCreateInstance(help, { toggle: false }) : null;
   const inlineCloseBtn = document.getElementById('close-settings-inline');
 
@@ -317,7 +316,6 @@ function mapGroups() {
     micboard.url.background = 'true';
     updateHash();
     hideHud();
-    if (goBackground) goBackground.setAttribute('aria-expanded', 'true');
     if (goHud) goHud.setAttribute('aria-expanded', 'false');
     resetViews();
     try {
@@ -367,13 +365,6 @@ function mapGroups() {
     });
   }
 
-  if (goBackground) {
-    goBackground.addEventListener('click', (event) => {
-      event.preventDefault();
-      openBackground();
-    });
-  }
-
   if (inlineCloseBtn) {
     inlineCloseBtn.addEventListener('click', (event) => {
       event.preventDefault();
@@ -394,16 +385,10 @@ function mapGroups() {
       if (pcoView) pcoView.style.display = 'none';
       if (backgroundView) backgroundView.style.display = 'none';
       hideHud();
-      if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
       resetViews();
     });
   }
   // Removed explicit HUD close handler; handled centrally via hideHud()
-
-  const goExtended = document.getElementById('go-extended');
-  if (goExtended) {
-    goExtended.addEventListener('click', openSlotNames);
-  }
 
   /**
    * The configuration pane, on a given tab.
@@ -421,7 +406,6 @@ function mapGroups() {
     initConfigEditor();
     micboard.url.background = undefined;
     hideHud();
-    if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
     resetViews();
   }
 
@@ -464,11 +448,6 @@ function mapGroups() {
   registerAdminRoute('pco', () => {
     window.dispatchEvent(new Event('wirelessboard:open-pco'));
   });
-
-  const goConfig = document.getElementById('go-config');
-  if (goConfig) {
-    goConfig.addEventListener('click', () => openConfigPane('devices'));
-  }
 
   // ⛔ The one control a board can always reach (#110, #111). It opens the view
   // panel, which carries the switch for the bar itself -- so hiding the bar can
@@ -539,20 +518,6 @@ function mapGroups() {
     goQr.dataset.bound = 'true';
   }
 
-  const goDemo = document.getElementById('go-demo');
-  if (goDemo && !goDemo.dataset.bound) {
-    goDemo.addEventListener('click', (event) => {
-      event.preventDefault();
-      toggleDemoMode();
-    });
-    goDemo.dataset.bound = 'true';
-  }
-
-  const goGroupEdit = document.getElementById('go-groupedit');
-  if (goGroupEdit) {
-    goGroupEdit.addEventListener('click', openGroupEdit);
-  }
-
   const backgroundClose = document.getElementById('background-close');
   if (backgroundClose) {
     backgroundClose.addEventListener('click', (event) => {
@@ -560,7 +525,6 @@ function mapGroups() {
       micboard.settingsMode = 'NONE';
       micboard.url.background = undefined;
       updateHash();
-      if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
       resetViews();
     });
   }
@@ -618,8 +582,8 @@ function readURLParameters() {
   micboard.url.aspect = getUrlParameter('aspect');
   micboard.url.text = getUrlParameter('text');
   micboard.url.type = getUrlParameter('type');
-  micboard.url.topbar = getUrlParameter('topbar');
   micboard.url.columns = getUrlParameter('columns');
+  micboard.url.statusbar = getUrlParameter('statusbar');
   micboard.url.wash = getUrlParameter('wash');
 
   // hash beats what the device remembers, which beats the default. A wall
@@ -651,13 +615,6 @@ function readURLParameters() {
     key: TYPE_SIZE_KEY,
     isValid: isTypeSize,
     fallback: 'medium',
-  });
-  micboard.topBar = resolvePref({
-    hashValue: micboard.url.topbar,
-    storage,
-    key: TOP_BAR_KEY,
-    isValid: isTopBarState,
-    fallback: 'shown',
   });
   micboard.columns = resolvePref({
     hashValue: micboard.url.columns,
@@ -717,6 +674,15 @@ function readURLParameters() {
     isValid: (v) => typeof v === 'string',
     fallback: '',
   });
+  // ⭐ The strip the retired menu bar freed (#188). Per device, like the rest:
+  // the wall wants it, the laptop at front of house may not.
+  micboard.statusBar = resolvePref({
+    hashValue: micboard.url.statusbar,
+    storage,
+    key: STATUS_BAR_KEY,
+    isValid: isStatusBarPlacement,
+    fallback: 'bottom',
+  });
   micboard.livePlacement = resolvePref({
     hashValue: micboard.url.live,
     storage,
@@ -761,11 +727,11 @@ export function updateHash() {
   if (micboard.wash && micboard.wash !== 'band') {
     hash += `&wash=${micboard.wash}`;
   }
+  if (micboard.statusBar && micboard.statusBar !== 'bottom') {
+    hash += `&statusbar=${micboard.statusBar}`;
+  }
   if (micboard.columns && micboard.columns !== 'auto') {
     hash += `&columns=${micboard.columns}`;
-  }
-  if (micboard.topBar && micboard.topBar !== 'shown') {
-    hash += `&topbar=${micboard.topBar}`;
   }
   if (micboard.settingsMode === 'CONFIG') {
     if (micboard.configTab === 'logs') {
@@ -1035,26 +1001,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (micboard.url.pco === 'true' && !isLocked(micboard.viewerLock)) {
     setTimeout(() => {
-      // Use the PCO nav binding; clicking will also hide HUD via config.js
-      const pcoNav = document.getElementById('go-pco');
-      if (pcoNav) {
-        try { pcoNav.click(); } catch (e) {}
-      } else {
-        const ev = new Event('micboard:open-pco');
-        window.dispatchEvent(ev);
-        const newEv = new Event('wirelessboard:open-pco');
-        window.dispatchEvent(newEv);
+      // ⛔ The registered route, not a click on a menu item -- #188 retired
+      // the bar, and `showPCOView` guards the lock itself.
+      if (!runAdminRoute('pco')) {
+        window.dispatchEvent(new Event('wirelessboard:open-pco'));
       }
     }, 100);
   }
   if (micboard.url.background === 'true') {
     setTimeout(() => {
-      const bgNav = document.getElementById('go-background');
-      if (bgNav) {
-        try { bgNav.click(); } catch (e) {}
-      } else {
-        const bgEv = new Event('wirelessboard:open-background');
-        window.dispatchEvent(bgEv);
+      if (!runAdminRoute('backgrounds')) {
+        window.dispatchEvent(new Event('wirelessboard:open-background'));
       }
     }, 100);
   }

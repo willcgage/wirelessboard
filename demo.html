@@ -37,47 +37,31 @@
     </style>
   </head>
   <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-3">
-      <div class="container-fluid">
-	<a class="navbar-brand" href="#">Wirelessboard</a>
-        <div class="ms-auto">
-          <div class="btn-group">
-            <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" id="nav-menu-button" data-bs-toggle="dropdown" aria-expanded="false">
-              Menu
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-menu-button">
-              <li><h6 class="dropdown-header">Views</h6></li>
-              <li><a class="dropdown-item" href="#" id="go-hud" aria-controls="hud" aria-expanded="false">Help</a></li>
-              <li><a class="dropdown-item" href="#" id="go-qr">Scannable URL</a></li>
-              <!-- data-wb-global marks everything a locked device hides (#116).
-                   The attribute is on the <li>, not the link, so the headers and
-                   dividers go with the items they introduce -- otherwise a locked
-                   menu keeps a "Configuration" heading over nothing. -->
-              <li data-wb-global><hr class="dropdown-divider"></li>
-              <li data-wb-global><a class="dropdown-item" href="#" id="go-extended">Edit Slot Names</a></li>
-              <li data-wb-global><a class="dropdown-item" href="#" id="go-groupedit">Edit This Group</a></li>
-              <li data-wb-global><hr class="dropdown-divider"></li>
-              <li data-wb-global><h6 class="dropdown-header">Configuration</h6></li>
-              <li data-wb-global><a class="dropdown-item" href="#" id="go-config">Config</a></li>
-              <li data-wb-global><a class="dropdown-item" href="#" id="go-background" aria-controls="background-settings" aria-expanded="false">Background Library</a></li>
-              <li data-wb-global><a class="dropdown-item" href="#" id="go-pco" aria-controls="pco-settings" aria-expanded="false">Planning Center (PCO)</a></li>
-              <li data-wb-global><a class="dropdown-item" href="#" id="go-demo">Demo mode</a></li>
-              <!-- Shown in their place, so a short menu does not read as a fault. -->
-              <li data-wb-locked-note><hr class="dropdown-divider"></li>
-              <li data-wb-locked-note><span class="dropdown-item-text wb-locked-note">Locked to display only &mdash; unlock in view settings.</span></li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </nav>
+    <!-- ⛔⛔ The menu bar is gone (#188). It carried the only pointer route to
+         every global setting while `body.topbar-hidden .navbar` removed it and
+         #160 had retired the keyboard -- so a board with the bar hidden could
+         reach no global setting without first putting back a bar it had
+         deliberately hidden. Every one of the first sixteen beta.4 venue
+         photographs is in that state.
 
-    <!-- The way back from a hidden bar (#110).
+         Everything it held now lives behind the gear: the six guarded surfaces
+         on the administration page (#221), and Help and the scannable URL in
+         the view panel, which the display-only lock does not reach.
 
-         H hides the navbar, and the navbar is the only pointer route to
-         anything. On a board with no keyboard — a tablet on a wall, a phone —
-         that left nothing on screen to press, and the choice persists per
-         device, so it survived a reload. This button appears exactly when the
-         bar is hidden and only ever brings it back. -->
+         ⭐ Retiring it is also what frees the strip the status bar needs --
+         the maintainer's reason for asking. -->
+
+    <!-- ⭐⭐ The one control a board always has (#110, #188).
+
+         It began as the way back from a bar `H` had hidden: the bar was the only
+         pointer route to anything, and on a keyboard-less board — a tablet on a
+         wall, a phone — hiding it left nothing to press.
+
+         There is no bar to bring back any more. This is now simply the way in:
+         it opens the view panel, which carries this screen's settings, Help, the
+         scannable URL, and the door to the administration page. Everything the
+         board can be asked is behind it, which is why nothing may ever hide
+         it — `topbar-escape.test.mjs` fails if a rule does. -->
     <button type="button" id="topbar-restore" class="topbar-restore"
             aria-label="Open the view panel" title="View panel">
       <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
@@ -102,12 +86,21 @@
            decides does not exist, which is the fault being fixed rather than a
            new one to introduce. -->
       <div class="view-panel-pinned">
+        <!-- ⛔ Not on the administration page, deliberately. That page is refused
+             when the board is locked to display only, and Help is the one screen
+             somebody reads when they do not yet know how the board works (#187).
+             Neither of these is in the lock's guarded set, so neither belongs
+             behind it. -->
+        <div class="view-panel-links">
+          <button type="button" class="vp-link" id="go-hud" aria-controls="hud" aria-expanded="false">Help</button>
+          <button type="button" class="vp-link" id="go-qr">Scannable URL</button>
+        </div>
         <!-- ⛔ "press ? for every key" used to be here. #160 retired the
              bindings; `kbd.js` is Escape only. The line now says what the panel
              above it actually is, which is the first of the three places the
              per-device / global boundary is stated (#116, #188). -->
         <p class="view-panel-foot" id="view-panel-scope"></p>
-        <button type="button" id="admin-door" class="admin-door" data-wb-global>
+        <button type="button" id="admin-door" class="admin-door">
           <span class="admin-door__label">Administration</span>
           <span class="admin-door__detail"></span>
           <span class="admin-door__scope"></span>
