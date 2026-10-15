@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   SECTIONS, allItems, offeredActions, sectionsFor, refusedCount, refusedSummary, stateLine,
   UNGUARDED_ITEMS,
+  IN_PAGE_ITEMS,
   DOOR_DETAIL, DOOR_SCOPE,
   registerAdminRoute, runAdminRoute, resetAdminRoutes, unroutedItems, adminRouteIds,
 } from './admin-page.mjs';
@@ -61,6 +62,30 @@ test('⛔⛔ Help is on the page, and the lock does not refuse it', () => {
   const drawn = sectionsFor({ lockState: 'on' }).flatMap((sec) => sec.items);
   const aboutDrawn = drawn.find((i) => i.id === 'about');
   assert.equal(aboutDrawn.refused, false, 'Help must be readable on a locked board');
+});
+
+test('⛔ the door names every section, because a half-list reads as the whole list', () => {
+  // It listed five of nine -- "Receivers, screens, slots, backgrounds, Planning
+  // Center" -- while logs, demo mode, this group and help were also behind it.
+  // Somebody reading that concludes the others live somewhere else, which is
+  // the confusion #188 exists to end.
+  const labels = SECTIONS.flatMap((s) => s.items).map((i) => i.label);
+  assert.ok(labels.length >= 9, `expected the full rail, got ${labels.length}`);
+
+  for (const label of labels) {
+    assert.ok(
+      DOOR_DETAIL.toLowerCase().includes(label.toLowerCase()),
+      `the door does not mention "${label}"`,
+    );
+  }
+
+  // ⚠️ And nothing it mentions is gone. A list that keeps a retired section is
+  // the same fault pointing the other way.
+  const mentioned = DOOR_DETAIL.split(', ').map((s) => s.trim().toLowerCase());
+  const known = new Set(labels.map((l) => l.toLowerCase()));
+  for (const name of mentioned) {
+    assert.ok(known.has(name), `the door mentions "${name}", which is not a section`);
+  }
 });
 
 test('every item declares an id and a label, and no id twice', () => {
@@ -250,7 +275,14 @@ test('⛔ a rail item with no route is reported, not left to be clicked', () => 
   // #188's criterion is that no route disappears. An item that draws but does
   // nothing is the same failure as a missing item and harder to notice.
   resetAdminRoutes();
-  assert.deepEqual(unroutedItems().sort(), allItems().map((i) => i.id).sort());
+  // ⚠️ Every item EXCEPT the ones the page draws itself. Those never register
+  // a route by design, and reporting them put a red "no route registered"
+  // warning under the rail on every open of a page that was working correctly.
+  const needRoutes = allItems()
+    .map((i) => i.id)
+    .filter((id) => !IN_PAGE_ITEMS.includes(id));
+  assert.deepEqual(unroutedItems().sort(), needRoutes.sort());
+  assert.ok(needRoutes.length > 0, 'the check still covers something');
 
   allItems().forEach((item) => registerAdminRoute(item.id, () => {}));
   assert.deepEqual(unroutedItems(), []);
@@ -298,13 +330,32 @@ test('⛔⛔ there is no bar for the door to be trapped inside', () => {
   // this guard checked the door was not inside the bar. #188's second half
   // retired the bar outright, so the stronger statement is available.
   //
-  // ⚠️ A substring test, not a regex. The helper this replaces built its pattern
-  // with a template literal, which swallows the escape before the regex is
-  // compiled, so it matched nothing. It failed loudly only because it asserted
-  // how many tags it had found rather than assuming one. The project's notes
-  // record the same trap from two earlier guards; the cheapest way not to meet
-  // it a fourth time is not to write the regex.
-  assert.ok(!html.includes('<nav'), 'the menu bar is back; the door must not be inside it');
+  // ⛔⛔ No `\b` in these patterns, on purpose. Written through a shell
+  // heredoc once, the `\b` arrived as a literal backspace (0x08) and
+  // `/class="[^"]*\bnavbar\b/` became a pattern matching nothing -- it would
+  // have passed with the menu bar back in the markup. Fourth time an escape has
+  // been eaten before the regex saw it here; character classes cannot be eaten.
+  //
+  // ⚠️ And `<nav` alone is no longer the right proxy anyway: #188's
+  // full-screen administration page (2026-10-15) gives its section rail a
+  // `<nav>`, which is what a rail is. So this is a CENSUS -- it says which navs
+  // are allowed, so a new one has to be justified here rather than slipping in
+  // behind a passing test.
+  const navIds = (html.match(/<nav[^>]*>/g) || [])
+    .map((tag) => (/id="([^"]+)"/.exec(tag) || [, '(no id)'])[1]);
+  assert.deepEqual(
+    navIds,
+    ['admin-page-rail'],
+    'the only <nav> in the document is the administration rail',
+  );
+  assert.ok(
+    !/class="[^"]*navbar[\s"]/.test(html),
+    'the menu bar is back in the markup',
+  );
+  assert.ok(
+    !/id="nav-menu-button"/.test(html),
+    'the Menu dropdown is back in the markup',
+  );
 
   // The door is where the gear can reach it: inside the view panel.
   const panelAt = html.indexOf('<div id="view-panel"');
@@ -356,4 +407,28 @@ test('⭐ and the door is reached from the gear, which the bar never carried', (
   const app = read('js/app.js');
   assert.match(app, /openAdmin:\s*openAdminPage/, 'the panel must be given the page to open');
   assert.match(app, /initAdminPage\(/, 'and the page has to be initialised');
+});
+
+test('⛔ a section the page draws itself is not reported as broken', () => {
+  // The full-screen page renders Help in the content pane instead of handing
+  // over to an editor, so it never registers a route -- and the "no route"
+  // warning called that a fault, in red, under the rail, on every open.
+  //
+  // ⚠️ The warning also told people to "Use the Menu instead", which #188's
+  // second half retired. The one sentence shown when something IS broken was
+  // pointing at a bar that no longer exists.
+  assert.ok(IN_PAGE_ITEMS.includes('about'), 'Help is drawn in the page');
+  assert.ok(!unroutedItems().includes('about'), 'and so is not an unrouted item');
+
+  // ⛔ But the check must still have teeth: a section that neither registers a
+  // route nor is drawn in the page is exactly the failure #188 names.
+  const ids = SECTIONS.flatMap((s) => s.items).map((i) => i.id);
+  const unknown = ids.filter((id) => !IN_PAGE_ITEMS.includes(id));
+  assert.ok(unknown.length >= 8, 'most sections still hand over to an editor');
+
+  // ⚠️ And the two lists are kept apart on purpose: the lock's list is about
+  // what may be READ on a locked board, this one about what is DRAWN here.
+  // #222 grows this one section at a time, and conflating them would unguard
+  // each section as it moved.
+  assert.notEqual(IN_PAGE_ITEMS, UNGUARDED_ITEMS);
 });

@@ -8,6 +8,14 @@
  * stops pointing at anything, which is the whole reason the board is on that
  * wall.
  *
+ * ⛔⛔ **A position is a BAY**, settled 2026-10-15 -- one place, which could
+ * later be linked to a slot. Not a two-bay unit and not a performer's place.
+ * The design canvas argued a column should cover the unit, because a
+ * performer's microphone and their IEM share one; that is **not** the model,
+ * and the canvas records it as decided. ⚠️ It matters most on **Board mode on a
+ * television**, where the dock is physically under the screen: Rack has no dock
+ * to point at and Pocket is one column.
+ *
  * ⛔ **Everything down there is a dock**, whatever it does. The kinds say whether
  * it charges and whether it can be talked to (the venue's is a Shure SBC200, 3.9in
  * per position, two bays, charging but not networked — see #199).

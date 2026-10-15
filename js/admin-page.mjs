@@ -292,7 +292,24 @@ export function stateLine(id, facts = {}) {
  * and in the page's banner.
  */
 export const DOOR_LABEL = 'Administration';
-export const DOOR_DETAIL = 'Receivers, screens, slots, backgrounds, Planning Center';
+
+/**
+ * ⛔ Every section, not a sample. It listed five of the nine, which is the kind
+ * of half-list somebody reads as the whole list and then concludes that logs or
+ * demo mode live somewhere else -- the exact confusion #188 exists to end.
+ *
+ * ⚠️ Derived rather than typed, so a tenth section cannot be added without this
+ * following it. The test for that is in `admin-page.test.mjs`.
+ *
+ * ⚠️ The labels keep their own capitalisation. Lowercasing the list to make it
+ * read as prose turned "Planning Center" into "planning center", which is a
+ * product's name spelt wrong.
+ */
+export const DOOR_DETAIL = SECTIONS
+  .flatMap((section) => section.items)
+  .map((item) => item.label)
+  .join(', ');
+
 export const DOOR_SCOPE = 'Changes there affect every board';
 
 // ---------------------------------------------------------------------------
@@ -339,9 +356,23 @@ export function resetAdminRoutes() {
  * that draws but does nothing is the same failure as a missing item, and harder
  * to notice, so the board reports this rather than waiting to be clicked.
  */
+/**
+ * Items the page renders itself, so they never register a route.
+ *
+ * ⛔ Not the same list as `UNGUARDED_ITEMS`, even though it holds the same id
+ * today. That one is about the lock -- what may be read on a locked board. This
+ * one is about routing -- what is drawn in the content pane instead of handing
+ * over to an editor. ⭐ #222 moves the rest of the sections into this list one
+ * at a time; conflating it with the lock's list would mean each move silently
+ * unguarded a section.
+ */
+export const IN_PAGE_ITEMS = ['about'];
+
 export function unroutedItems() {
   const have = new Set(routes.keys());
-  return allItems().filter((item) => !have.has(item.id)).map((item) => item.id);
+  return allItems()
+    .filter((item) => !have.has(item.id) && !IN_PAGE_ITEMS.includes(item.id))
+    .map((item) => item.id);
 }
 
 /** Every guarded action, for the drift guard. */

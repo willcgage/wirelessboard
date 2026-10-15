@@ -2859,12 +2859,25 @@ body.live-strip-bottom .rotation-bar {
 }
 
 // ---------------------------------------------------------------------------
-// The administration overlay (#188)
+// The administration page (#188)
 //
-// ⛔ An overlay rather than a full-screen view, decided by the maintainer
-// 2026-10-14: administration happens mid-service, and the board staying visible
-// behind it is the point. The design canvas drew it full-screen; this is the
-// alternative it flagged.
+// ⛔⛔ **Full screen, as the design drew it.** It shipped as a centred 760px
+// overlay over a dimmed board, on the argument that administration happens
+// mid-service and the board staying visible behind it is the point. That was
+// Claude's idea; the maintainer accepted it at the time and reversed it on
+// 2026-10-15: *"we didn't make it full screen, this time I think we need to
+// stay true to the design. That was my mistake to agree to your idea."*
+//
+// ⭐ Why the design is right, now that it is built both ways: a 760px card has
+// no room for two panes, so the rail had to become a reflowing grid of all nine
+// items and every destination had to *replace* it. Full screen restores the
+// shape the design had -- a fixed rail and a content pane beside it -- and that
+// pane is the socket #222 needs to bring the old editors inside. The overlay
+// could never have held them.
+//
+// ⚠️ The board behind really is hidden now. That was the overlay's one genuine
+// advantage and it is given up deliberately: Escape and the close button both
+// return to it, and the gear is reached in one press from there.
 // ---------------------------------------------------------------------------
 .admin-page {
   display: none;
@@ -2877,32 +2890,96 @@ body.live-strip-bottom .rotation-bar {
   display: block;
 }
 
-// Dimmed, not opaque: the board behind is meant to stay readable.
+// ⚠️ Kept as an element so the markup and the close-on-click handler do not
+// have to change, but it no longer dims anything -- the panel covers it.
 .admin-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--color-background, #141414);
 }
 
 .admin-panel {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
 
-  width: min(760px, calc(100vw - 32px));
-  max-height: min(82vh, 760px);
-  padding: 14px 16px 16px;
+  // The safe-area insets matter here and nowhere else in this file: this is
+  // the only surface that goes edge to edge on a tablet.
+  padding:
+    calc(18px + env(safe-area-inset-top, 0px))
+    calc(22px + env(safe-area-inset-right, 0px))
+    calc(18px + env(safe-area-inset-bottom, 0px))
+    calc(22px + env(safe-area-inset-left, 0px));
 
   display: flex;
   flex-direction: column;
+  gap: 12px;
   min-height: 0;
 
-  background: rgba(20, 22, 27, 0.98);
-  border: 1px solid rgba(215, 215, 215, 0.25);
-  border-radius: 12px;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.65);
+  background: var(--color-background, #141414);
   color: var(--color-white);
+}
+
+// The two panes, which are what full screen buys.
+.admin-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 20px;
+}
+
+// ⛔ 236px, from the design. Fixed rather than a fraction: the item labels and
+// their state lines are a known width, and a rail that grows with the window
+// pushes the content pane around for no reason.
+.admin-rail {
+  width: 236px;
+  flex: none;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+// ⛔ Full screen leaves a large empty pane on open. What fills it is the one
+// fact this page exists to state, not a decoration.
+.admin-welcome {
+  max-width: 48ch;
+  padding: 10px 2px;
+}
+
+.admin-welcome__lead {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.admin-welcome__note {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: rgba(215, 215, 215, 0.75);
+}
+
+// ⚠️ A tablet held upright has no room for a 236px rail beside anything, so the
+// two panes stack. Below this width the rail is the page until something is
+// chosen, which is how it behaved as an overlay.
+@media (max-width: 700px) {
+  .admin-layout {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .admin-rail {
+    width: auto;
+    overflow-y: visible;
+  }
 }
 
 .admin-head {
@@ -2953,12 +3030,6 @@ body.live-strip-bottom .rotation-bar {
 
 // ⭐ The rail carries state, so nothing has to be opened to be read: an
 // administrator sees the whole installation from one screen.
-.admin-rail {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
-  align-items: start;
-}
 
 .admin-group__title {
   margin: 0 0 6px;
@@ -2968,18 +3039,30 @@ body.live-strip-bottom .rotation-bar {
   opacity: 0.6;
 }
 
+// ⛔ From the design: a flat row with a left edge that fills in when chosen,
+// not a bordered card. Nine bordered cards in a column read as nine separate
+// objects; the rail is one list.
 .admin-item {
   display: block;
   width: 100%;
-  margin-bottom: 6px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   text-align: left;
 
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(215, 215, 215, 0.18);
-  border-radius: 8px;
+  background: none;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 5px;
   color: var(--color-white);
   cursor: pointer;
+}
+
+.admin-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.admin-item.is-current {
+  background: rgba(255, 255, 255, 0.08);
+  border-left-color: var(--color-good, #69B578);
 }
 
 .admin-item:hover:not(:disabled) {
