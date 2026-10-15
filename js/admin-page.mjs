@@ -18,12 +18,18 @@
  * it does not it stays in the view panel. `SECTIONS` is checked against
  * `GUARDED_ACTIONS` both ways, so the two cannot drift apart.
  *
- * ⛔ **Help is deliberately NOT here.** The design folded Help and the
- * scannable URL into an "About & help" section of this page -- but the page is
- * refused when the lock is on, which would make Help unreachable on a locked
- * wall tablet. Help is the one screen somebody reads when they do not yet know
- * how the board works (#187), and it is not in the guarded set. It stays in the
- * view panel, where the lock does not reach it.
+ * ⛔ **Help IS here, and that is why the door is unguarded.** Help was kept out
+ * of this page at first, because the page was refused outright when the lock
+ * was on and that would have made Help unreachable on a locked wall tablet --
+ * Help being the one screen somebody reads when they do not yet know how the
+ * board works (#187). The maintainer asked for it here, so **the gating moved
+ * rather than the guarantee**: the door opens even when locked, and the eight
+ * guarded items refuse themselves one by one (`sectionsFor`, since #221). Help
+ * carries no guarded action, so it stays readable.
+ *
+ * ⚠️ The consequence is the thing to remember: **nothing may be added to this
+ * page that must not be seen on a locked board.** The door no longer protects
+ * it; only the per-item refusal does, and that is keyed on `action`.
  */
 
 import { GUARDED_ACTIONS, allows } from './viewer-lock.mjs';
