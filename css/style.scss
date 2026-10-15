@@ -607,7 +607,12 @@ p.device-name {
     z-index: 2;
     display: inline-flex;
     align-items: center;
-    gap: 0.25em;
+    // ⛔ 0.25em was too tight. The chip font is clamped to a 0.55rem floor, so on
+    // a 420px card that is 8.8px and the gap was 2.2px -- a solid glyph butted
+    // against the word, which is what "ONo TX" in the first venue photographs
+    // actually was. Measured, not guessed: I dismissed it twice as unconfirmable
+    // because a 0x0 card probe reported nothing.
+    gap: 0.45em;
     max-width: calc(100% - 0.6rem);
     padding: 0.1rem 0.32rem;
     border-radius: 0.35rem;
@@ -3115,4 +3120,26 @@ body.statusbar-top .rotation-bar {
    on the control. */
 body.statusbar-off .rotation-bar {
   border-top-right-radius: 4px;
+}
+
+/* The status chip outside TV mode.
+
+   ⛔ Everything that styles this chip lives inside the `.tvmode` block, so in
+   desk mode — which is the default — it had no layout at all: measured
+   `column-gap: normal`, a 0px gap, the glyph butted against the word. The chip
+   is the colour-blind redundancy for channel state (a glyph and a word, never
+   colour alone), so it is the last thing that should go unstyled.
+
+   ⚠️ This is a floor, not the desk-mode card. Bringing the whole card onto the
+   2.0 language in desk mode is #222; this is the part that was actively
+   misleading, and it is cheap to make right now. */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+
+.status-chip:empty,
+.status-chip.is-quiet {
+  display: none;
 }

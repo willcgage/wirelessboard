@@ -190,6 +190,22 @@ function tick() {
     capacity, shown, group: micboard.group, groups, rotationPref: micboard.rotation,
   });
 
+  // ⛔⛔ Clamped here, once, for every branch below. The page list is rebuilt on
+  // every tick and can get *shorter* -- capacity grows, a group loses channels,
+  // a sync rewrites the board -- while `pageIndex` is module state that remembers
+  // where the rotation had got to. Page 4 of 4 then becomes page 4 of 2, and
+  // `pages[pageIndex]` is `undefined`.
+  //
+  // `nextPage` clamps the index it *returns*, which is why this looked safe; but
+  // the hold and dwell branches read the stale `pageIndex` directly, before any
+  // of that. Four `TypeError: Cannot read properties of undefined (reading
+  // 'slots')` came out of a sweep that changed the card shape a dozen times --
+  // the rotation driver throwing on a board in service, where the next tick is
+  // the only thing that recovers it.
+  if (pageIndex >= pages.length) {
+    pageIndex = 0;
+  }
+
   // ⛔ So the view panel can say why the switch is not in force. A board
   // visibly paging while the panel reads "Off" is the bug, even when the code
   // is right -- that was the maintainer's warning about this being "a little
@@ -248,8 +264,21 @@ function tick() {
     if (step.index !== pageIndex) {
       pageIndex = step.index;
       heldSince = Date.now();
-      showPage(pages[pageIndex]);
     }
+    // ⛔⛔ Outside the index check, and that was the bug. #218 taught the dwell
+    // branch below that a page's *contents* can change while its index does
+    // not -- and left this branch redrawing only when the index moved. So a
+    // board holding on a page never redrew it.
+    //
+    // ⚠️ This is the worse of the two branches to have missed: it holds when a
+    // channel needs attention, which is exactly when the board must be right.
+    //
+    // Measured on a development board, Grid + 3:4: capacity fell from 9 to 3,
+    // the bar correctly read "All channels (1/4) — 3 of 12", and the board kept
+    // the nine-card page from before. Nine cards in three columns is three rows
+    // of 560px in an 898px viewport, and `.tvmode` hides its overflow -- so six
+    // channels sat below a fold nobody could scroll to, indefinitely.
+    showPage(pages[pageIndex]);
     renderBar(pages, {
       held: true,
       heldReason: step.reason,
@@ -288,6 +317,29 @@ function tick() {
   });
 }
 
+/**
+ * Re-page now, because how much fits has changed.
+ *
+ * ⛔ The driver ticks once a second, so without this the board keeps the old
+ * page for up to a second after an operator changes the card shape or the
+ * arrangement -- and during that second it shows more cards than fit, with the
+ * overflow below a fold that `.tvmode` will not scroll. Measured: 12 cards
+ * against a capacity of 3, with 1416px of board below the viewport, for about a
+ * second.
+ *
+ * ⚠️ Deliberately *not* called from inside the layout pass.
+ * `renderDisplayList` mutates the board, the layout watches the board with a
+ * MutationObserver, and a synchronous call here would re-enter the pass that
+ * made it. The caller defers with a timeout and only calls when the capacity
+ * value actually changed -- the second pass then finds it unchanged, and the
+ * chain stops.
+ */
+export function repageForCapacity() {
+  if (!timer) {
+    return;
+  }
+  try { tick(); } catch (_) { /* the next tick is the other way out */ }
+}
 /** Note that somebody is using the board, so the page does not move under them. */
 export function noteInteraction() {
   lastInteraction = Date.now();

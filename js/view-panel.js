@@ -499,6 +499,20 @@ export function initViewPanel(hooks = {}) {
   }
   el.dataset.bound = 'true';
 
+  // ⭐ Help and the scannable URL close the panel on their way out, the same as
+  // the administration door does. Both open something that covers the panel --
+  // the Help overlay sits at z-index 1060 against the panel's 1041, measured
+  // overlapping it by 336x336 -- so leaving the panel up puts a half-hidden
+  // control list under the thing it just opened.
+  //
+  // ⚠️ Bound here rather than in app.js, because closing the panel is the
+  // panel's business; app.js owns what the buttons *do*.
+  ['go-hud', 'go-qr'].forEach((id) => {
+    const link = document.getElementById(id);
+    if (link) {
+      link.addEventListener('click', () => closeViewPanel());
+    }
+  });
   const closeButton = document.getElementById('view-panel-close');
   if (closeButton) {
     closeButton.addEventListener('click', closeViewPanel);
