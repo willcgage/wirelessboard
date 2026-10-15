@@ -161,6 +161,51 @@ test('screens and slots report what is described and what is named', () => {
   assert.equal(stateLine('slots', { config: { slots: [] } }), 'None configured');
 });
 
+test('⭐ the screens line counts what is underneath, because the item owns it', () => {
+  const screens = [{}, {}, {}];
+
+  // ⛔ The state the whole column-floor chain depends on, and the one no board
+  // has ever actually been in on hardware: screens described, nothing below
+  // them. #170/#201 has shipped three times and engaged zero times.
+  assert.equal(stateLine('screens', { config: { screens } }), '3 screens described');
+  assert.equal(
+    stateLine('screens', { config: { screens, docks: [] } }),
+    '3 screens described',
+  );
+
+  assert.equal(
+    stateLine('screens', { config: { screens, docks: [{ kind: 'dock' }, { kind: 'dock' }] } }),
+    '3 screens, 2 docks',
+  );
+  assert.equal(
+    stateLine('screens', { config: { screens, docks: [{ kind: 'dock' }] } }),
+    '3 screens, 1 dock',
+  );
+
+  // ⚠️ A pad charges nothing. Counting two pickup pads as "2 docks" would
+  // claim charging that is not in the room, so each case says what is there.
+  assert.equal(
+    stateLine('screens', { config: { screens, docks: [{ kind: 'pad' }, { kind: 'pad' }] } }),
+    '3 screens, 2 pads',
+  );
+  assert.equal(
+    stateLine('screens', { config: { screens, docks: [{ kind: 'dock' }, { kind: 'pad' }] } }),
+    '3 screens, 2 docks and pads',
+  );
+
+  // A dock can exist before any screen is described -- #189 is why that order
+  // happens at all, and the line must not read "None described" when the list
+  // below it is not empty.
+  assert.equal(
+    stateLine('screens', { config: { screens: [], docks: [{ kind: 'dock' }] } }),
+    'No screens, 1 dock',
+  );
+  assert.equal(stateLine('screens', { config: { screens: [], docks: [] } }), 'None described');
+
+  // Absent config is still "I do not know", not "none".
+  assert.equal(stateLine('screens', { config: {} }), null);
+});
+
 test('backgrounds count pictures and videos separately', () => {
   assert.equal(stateLine('backgrounds', { images: ['a', 'b'], videos: ['c'] }), '2 pictures, 1 video');
   assert.equal(stateLine('backgrounds', { images: ['a'], videos: [] }), '1 picture');

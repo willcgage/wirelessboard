@@ -46,7 +46,14 @@ export const SECTIONS = [
     title: 'Setup',
     items: [
       { id: 'receivers', label: 'Receivers', action: 'config' },
-      { id: 'screens', label: 'Screens', action: 'config' },
+      // ⭐ "& docks" because a dock is **not** a property of a screen
+      // (`docks.mjs`): one dock sits under several screens, a screen can have
+      // none, and #203 moved the width off the screen row onto the dock for
+      // exactly that reason. The dock list had no route of its own, so it was
+      // reachable only by knowing it was further down the screens pane. Naming
+      // it on the rail is the whole fix -- settled with the maintainer
+      // 2026-10-15.
+      { id: 'screens', label: 'Screens & docks', action: 'config' },
       { id: 'slots', label: 'Slots', action: 'slot-edit' },
       { id: 'group', label: 'This group', action: 'group-edit' },
       { id: 'backgrounds', label: 'Backgrounds', action: 'background-library' },
@@ -204,7 +211,30 @@ export function stateLine(id, facts = {}) {
         return null;
       }
       const n = config.screens.length;
-      return n === 0 ? 'None described' : `${plural(n, 'screen', 'screens')} described`;
+      const screens = n === 0 ? null : `${plural(n, 'screen', 'screens')}`;
+
+      // ⭐ The item owns the dock list too, so the line has to be able to say
+      // "screens described, nothing underneath them" -- which is the state the
+      // whole column-floor chain depends on and the state no board has ever
+      // actually been in on hardware.
+      const docks = Array.isArray(config.docks) ? config.docks : [];
+      // ⚠️ A `pad` is a place microphones are left and nothing charges. The
+      // board treats it identically to a dock and only the person editing the
+      // list cares -- but calling two pickup pads "2 docks" claims charging
+      // that is not there, so the mixed case says both.
+      const pads = docks.filter((d) => d && d.kind === 'pad').length;
+      const bays = docks.length - pads;
+      let below = null;
+      if (docks.length) {
+        if (!pads) below = plural(bays, 'dock', 'docks');
+        else if (!bays) below = plural(pads, 'pad', 'pads');
+        else below = `${docks.length} docks and pads`;
+      }
+
+      if (!screens) {
+        return below ? `No screens, ${below}` : 'None described';
+      }
+      return below ? `${screens}, ${below}` : `${screens} described`;
     }
 
     case 'slots': {
