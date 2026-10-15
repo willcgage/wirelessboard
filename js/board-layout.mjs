@@ -460,16 +460,17 @@ export function computeLayout({
   });
 
   // ⛔⛔ `Side by side` is ALWAYS one row (#201). Settled by the maintainer,
-  // 2026-10-14, and it is not a preference the layout may trade away:
+  // 2026-10-14, and it is not a preference the layout may trade away — their rule,
+  // restated in the vocabulary settled on 2026-10-15:
   //
-  //   "Side by Side is always 1 row, and that row is dictated by the width of
-  //    the charging dock or pickup pad. The column/card should not get any less
-  //    wide than the dock width."
+  //   Side by side is always 1 row, and that row is dictated by the width of the
+  //   dock below the screen. The column/card should not get any less wide than
+  //   the dock width.
   //
-  // ⚠️ The quote is verbatim and says "pickup pad" because that was the word at
-  // the time. The model changed on 2026-10-15: **everything underneath a screen
-  // is a dock**, and whether it charges is one of its kinds (`docks.mjs`).
-  // Nothing about the rule changed with it.
+  // ⚠️ Restated, not quoted. The original wording named a second kind of object
+  // for the case where nothing charges, which the model no longer has; #201 carries
+  // it as said, and so does this file's history, if the exact phrasing is ever
+  // needed. The rule did not change with the words.
   //
   // ⭐ Which says what a column *is* on this board: a column points at a
   // physical position on the furniture below the screen -- one place where a

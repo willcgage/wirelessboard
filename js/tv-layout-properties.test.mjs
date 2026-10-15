@@ -335,7 +335,7 @@ test('⭐ the minimum narrows the venue board to the dock, and pages the rest', 
   // may not go narrower.
   //
   // ⚠️ It used to *wrap* to 10x2. It now stays one row of ten and pages the other
-  // two (#201): a column points at a dock or pickup-pad position below the
+  // two (#201): a column points at a position on the dock below the
   // screen, and the second row pointed at nothing.
   const venue = {
     slotCount: 12,

@@ -8,17 +8,14 @@
  * stops pointing at anything, which is the whole reason the board is on that
  * wall.
  *
- * ⛔ Two kinds, because a room has two kinds:
+ * ⛔ **Everything down there is a dock**, whatever it does. The kinds say whether
+ * it charges and whether it can be talked to (the venue's is a Shure SBC200, 3.9in
+ * per position, two bays, charging but not networked — see #199).
  *
- *   - a **dock** charges what sits in it (the venue's is a Shure SBC200, 3.9in
- *     per position, two bays, not networked — see #199)
- *   - a **pad** is a place on the table where microphones are left and nothing
- *     charges
- *
- * ⚠️ **The board treats them identically.** Both are rows of positions with a
- * width, and the floor they impose is the same. The kind exists so a person
+ * ⚠️ **The board treats them identically.** Every entry is a row of positions
+ * with a width, and the floor they impose is the same. The kind exists so a person
  * editing the list knows which one they are looking at, and so the section can
- * take IEM transmitters later without every entry having to be a charger. No
+ * take IEM transmitters later without every entry having to charge something. No
  * layout code branches on it, and none should without a reason written down.
  *
  * ⛔ It lives here rather than on a screen row because a dock is not a property

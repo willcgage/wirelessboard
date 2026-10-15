@@ -4,7 +4,7 @@
  * ⭐ The same shape as the screens editor beside it, and deliberately so: the
  * pairing, merge and summary all come from `editor-rows.mjs`, which is #180's
  * logic in one place rather than two. What is here is only what differs — what
- * counts as a problem with a dock or a pad, and what one is sent as.
+ * counts as a problem with a dock, and what one is sent as.
  *
  * Pure, so the rules can be checked without a DOM.
  */
@@ -52,7 +52,7 @@ function positive(value) {
 export function dockProblem(row) {
   const name = String((row && row.name) || '').trim();
   if (!name) {
-    return 'Give it a name — "Main dock", "Stage left pad".';
+    return 'Give it a name — "Main dock", "Stage left table".';
   }
   // ⛔ The width is required here, unlike on the screen row it came from. A
   // screen with nothing underneath it is a normal thing to describe; a dock

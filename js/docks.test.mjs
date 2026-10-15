@@ -19,7 +19,7 @@ const DOCK = {
 // A dock that charges nothing -- what used to be stored as a `pad`. The id is
 // left as it was so the legacy-reading tests below exercise a realistic row.
 const PAD = {
-  id: 'stage-pad', name: 'Stage left table', kind: 'noncharging', position_inches: 5,
+  id: 'stage-table', name: 'Stage left table', kind: 'noncharging', position_inches: 5,
 };
 
 // ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ test('⭐ a screen takes its position width from the dock it names', () => {
   const screen = { id: 'wall', diagonal_inches: 55, dock_id: 'main-dock' };
   assert.equal(positionInchesForScreen({ screen, docks: [DOCK, PAD] }), 3.9);
   assert.equal(
-    positionInchesForScreen({ screen: { ...screen, dock_id: 'stage-pad' }, docks: [DOCK, PAD] }),
+    positionInchesForScreen({ screen: { ...screen, dock_id: 'stage-table' }, docks: [DOCK, PAD] }),
     5,
   );
 });
@@ -225,7 +225,7 @@ test('⛔ removing dock a screen uses is not silent', () => {
     { id: 'foh', name: 'FOH laptop' },
   ];
   assert.deepEqual(screensUsing('main-dock', screens), ['Auditorium wall']);
-  assert.deepEqual(screensUsing('stage-pad', screens), []);
+  assert.deepEqual(screensUsing('stage-table', screens), []);
   assert.deepEqual(screensUsing('', screens), []);
 });
 
@@ -267,7 +267,7 @@ test('⚠️ a board written while the key was `furniture` keeps its dock AND it
 
 test('the new name wins where a config somehow carries both', () => {
   const [screen] = normalizeScreens([{
-    id: 'wall', diagonal_inches: 55, dock_id: 'stage-pad', furniture_id: 'main-dock',
+    id: 'wall', diagonal_inches: 55, dock_id: 'stage-table', furniture_id: 'main-dock',
   }]);
-  assert.equal(screen.dock_id, 'stage-pad');
+  assert.equal(screen.dock_id, 'stage-table');
 });

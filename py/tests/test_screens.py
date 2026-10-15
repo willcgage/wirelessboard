@@ -35,7 +35,7 @@ def tree(monkeypatch):
 class TestWhatIsKept:
     def test_a_described_screen_survives_intact(self):
         # ⭐ `dock_id` arrived with #203: a screen now names the dock or
-        # pad beneath it rather than restating its width. ⛔ `min_column_inches`
+        # dock beneath it rather than restating its width. ⛔ `min_column_inches`
         # is still here on purpose — a board configured before #203 keeps its
         # floor until the screens are next saved, and dropping it on read would
         # silently widen that board's columns past the dock they were measured
