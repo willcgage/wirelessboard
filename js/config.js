@@ -2254,6 +2254,20 @@ function renderBackgroundFilenameGuide() {
   }
 }
 
+/**
+ * The backgrounds section was opened in the administration page (#222).
+ *
+ * ⚠️ The filename guide is scheduled on `requestAnimationFrame`, so it draws
+ * nothing in the development browser pane -- rAF never fires there, measured
+ * directly. Verifying this section means Claude in Chrome, not the pane that
+ * served Screens and Logs.
+ */
+export function showBackgroundsSection() {
+  ensureBackgroundDirectoryBindings();
+  loadBackgroundDirectoryState({ silent: true });
+  scheduleBackgroundFilenameGuide();
+}
+
 export function scheduleBackgroundFilenameGuide() {
   if (backgroundFilenameGuideState.scheduled) {
     return;
@@ -3703,9 +3717,7 @@ function handleNotePreview() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('wirelessboard:background-view-opened', () => {
-    try { ensureBackgroundDirectoryBindings(); } catch (_) {}
-    try { loadBackgroundDirectoryState({ silent: true }); } catch (_) {}
-    try { scheduleBackgroundFilenameGuide(); } catch (_) {}
+    try { showBackgroundsSection(); } catch (_) {}
   });
 
   window.addEventListener('wirelessboard:slot-name-updated', () => {

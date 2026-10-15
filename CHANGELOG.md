@@ -8,6 +8,13 @@
   own: it was a section further down the devices pane, reachable only by already knowing it was
   there.
 
+### Removed
+- **Google Drive backgrounds are gone** (#83). The feature never put a file on a board: nothing
+  called the fetch, so a fully authorized account still showed nothing, and authorization could not
+  even start in the desktop app. Its settings UI, its five API routes and its module are removed —
+  1,573 lines. ⚠️ A `cloud` block already in a `config.json` is left alone rather than rewritten,
+  and any token in the OS keyring is left for you to remove if you want it gone.
+
 ### Changed
 - **Everything underneath a screen is a dock.** This replaces the charging-dock / pickup-pad split
   described under 2.0.0-beta.5 below, which named the *absence* of charging as a different kind of
@@ -34,6 +41,8 @@
   Logs tab, and `#settings=logs` — a link that named that tab — now opens Administration on Logs.
 - **The log viewer kept following the file after you stopped looking at it.** It polls while its
   section is open and stops when the section is left or the page is closed.
+- **Backgrounds opens inside Administration** too (#222, three of six panes). `#background=true`,
+  which named a view of its own, now opens Administration on Backgrounds.
 
 ## [2.0.0-beta.5] - 2026-10-14
 

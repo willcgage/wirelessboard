@@ -3214,6 +3214,67 @@ body.live-strip-bottom .rotation-bar {
   color: rgba(215, 215, 215, 0.6);
 }
 
+// The backgrounds section (#222). `library-section` and `input-group` came
+// from the view this pane used to be.
+.admin-section--moved .library-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-section--moved .input-group {
+  display: flex;
+  gap: 6px;
+}
+
+.admin-section--moved .input-group > .form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// ⛔ Bootstrap's `.table` paints its own background through CSS variables, so
+// on this ground the header came out dark and every body row came out WHITE.
+// Setting the variables is the fix; overriding `background` on the cells is
+// not, because the stripe variable would still win on alternate rows.
+.admin-section--moved .table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--color-white);
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.04);
+  --bs-table-striped-color: var(--color-white);
+  --bs-table-border-color: rgba(215, 215, 215, 0.12);
+  color: var(--color-white);
+}
+
+// ⚠️ The filename guide is the one table here somebody reads ROW BY ROW,
+// looking for their own name, rather than scanning -- so it keeps striping.
+
+// ⛔ `d-grid gap-2` is Bootstrap's "make these buttons full width and stack
+// them", which is right in a narrow column of the old view and wrong in a
+// content pane 700px across -- Save Folder and Use Default came out as two
+// 702px bars. ⚠️ `.gap-2` is what distinguishes them from the row-remove
+// column, which is a `d-grid` of its own and must stay 44px.
+// ⚠️ Overridden INSIDE the grid, not by changing `display`. Bootstrap's
+// `.d-grid` is `display: grid !important`, so `display: flex` here lost
+// silently -- the buttons stayed two 702px bars and only measuring showed it.
+// Flowing the grid along the column axis does the same job and wins.
+.admin-section--moved .d-grid.gap-2 {
+  grid-auto-flow: column;
+  justify-content: start;
+  gap: 8px;
+}
+
+// ⭐ The filename guide is read row by row by somebody looking for one name,
+// so the columns belong next to each other. Left to fill the pane they spread
+// to 1,400px with the name and its file at opposite ends of the screen.
+.admin-section--moved .table-responsive {
+  max-width: 78ch;
+}
+
+// A subtitle that is not inside a `--sub` head block still needs the air.
+.admin-section--moved .admin-section__subtitle {
+  margin-top: 6px;
+}
+
 // ⚠️ The empty-list line was `small text-muted`, which on this ground is about
 // 2.5:1 -- readable as an absence rather than as a sentence.
 .admin-section--moved .text-muted {

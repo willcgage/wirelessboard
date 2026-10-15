@@ -22,7 +22,7 @@ import { setTimeMode } from './signal-view.js';
 import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, bindScreenHandlers,
   configureConfigModule, scheduleBackgroundFilenameGuide, refreshScreensEditor,
-  showLogsSection, hideLogsSection,
+  showLogsSection, hideLogsSection, showBackgroundsSection,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
@@ -260,47 +260,25 @@ function mapGroups() {
   // administration page now.
   const inlineCloseBtn = document.getElementById('close-settings-inline');
 
-  function openBackground() {
-    if (refuseWhenLocked('background-library')) return;
-    micboard.settingsMode = 'BACKGROUND';
-    micboard.url.settings = undefined;
-    micboard.url.pco = undefined;
-    micboard.url.background = 'true';
-    updateHash();
-    resetViews();
-    try {
-      window.dispatchEvent(new Event('wirelessboard:background-view-opened'));
-    } catch (e) {}
-  }
   // Ensure single-view visibility helper
   function resetViews() {
     const mb = document.getElementById('micboard');
     const settings = document.querySelector('.settings');
     const pcoView = document.getElementById('pco-settings');
-    const backgroundView = document.getElementById('background-settings');
     const wantPCO = (micboard.settingsMode === 'PCO' || micboard.url.pco === 'true');
-    const wantBackground = (micboard.settingsMode === 'BACKGROUND' || micboard.url.background === 'true');
     const wantCFG = (micboard.settingsMode === 'CONFIG' || micboard.url.settings === 'true' || micboard.url.settings === 'logs');
     const wasConfig = micboard.settingsMode === 'CONFIG';
     if (wantPCO) {
       if (mb) mb.style.display = 'none';
       if (settings) settings.style.display = 'none';
-      if (backgroundView) backgroundView.style.display = 'none';
       if (pcoView) pcoView.style.display = 'block';
-    } else if (wantBackground) {
-      if (mb) mb.style.display = 'none';
-      if (settings) settings.style.display = 'none';
-      if (pcoView) pcoView.style.display = 'none';
-      if (backgroundView) backgroundView.style.display = 'block';
     } else if (wantCFG) {
       if (mb) mb.style.display = 'none';
       if (pcoView) pcoView.style.display = 'none';
-      if (backgroundView) backgroundView.style.display = 'none';
       if (settings) settings.style.display = 'block';
     } else {
       if (pcoView) pcoView.style.display = 'none';
       if (settings) settings.style.display = 'none';
-      if (backgroundView) backgroundView.style.display = 'none';
       if (mb) mb.style.display = 'grid';
       if (wasConfig && typeof micboard.stopLogAutoRefresh === 'function') {
         try { micboard.stopLogAutoRefresh(true); } catch (e) {}
@@ -321,11 +299,9 @@ function mapGroups() {
       const mb = document.getElementById('micboard');
       const settings = document.querySelector('.settings');
       const pcoView = document.getElementById('pco-settings');
-      const backgroundView = document.getElementById('background-settings');
       if (mb) mb.style.display = 'grid';
       if (settings) settings.style.display = 'none';
       if (pcoView) pcoView.style.display = 'none';
-      if (backgroundView) backgroundView.style.display = 'none';
       resetViews();
     });
   }
@@ -377,7 +353,6 @@ function mapGroups() {
   registerAdminRoute('screens', () => openConfigPane('devices'));
   registerAdminRoute('slots', openSlotNames);
   registerAdminRoute('group', openGroupEdit);
-  registerAdminRoute('backgrounds', openBackground);
   registerAdminRoute('demo', toggleDemoMode);
   // ⭐ `showPCOView` guards the lock itself, so the event route is as safe as
   // the menu item and needs no second check here.
@@ -447,19 +422,14 @@ function mapGroups() {
   // draws and `showScannableUrl` opens the dialog for. The dialog itself
   // (`#qr-modal`) is unchanged.
 
-  const backgroundClose = document.getElementById('background-close');
-  if (backgroundClose) {
-    backgroundClose.addEventListener('click', (event) => {
-      event.preventDefault();
-      micboard.settingsMode = 'NONE';
-      micboard.url.background = undefined;
-      updateHash();
-      resetViews();
-    });
-  }
-
+  // ⛔ The old view's own Close button went with the view (#222). The
+  // administration page has one close, at the top right, and Escape -- and a
+  // section that closed itself while the page stayed open was one of the ways
+  // #216 left a board with no editor and no way back.
+  // ⚠️ Still an event, because anything may dispatch it, but it opens the
+  // administration page on the section rather than a view of its own (#222).
   if (typeof window !== 'undefined' && !window.__wirelessboardBackgroundBound) {
-    window.addEventListener('wirelessboard:open-background', openBackground);
+    window.addEventListener('wirelessboard:open-background', () => openAdminPage('backgrounds'));
     window.__wirelessboardBackgroundBound = true;
   }
 
@@ -673,8 +643,6 @@ export function updateHash() {
     }
   } else if (micboard.settingsMode === 'PCO') {
     hash = '#pco=true';
-  } else if (micboard.settingsMode === 'BACKGROUND') {
-    hash = '#background=true';
   }
   hash = hash.replace('&', '');
   window.history.replaceState(undefined, undefined, hash);
@@ -821,10 +789,8 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     const s = document.querySelector('.settings');
     const p = document.getElementById('pco-settings');
-    const b = document.getElementById('background-settings');
     if (s) s.style.display = 'none';
     if (p) p.style.display = 'none';
-    if (b) b.style.display = 'none';
   } catch (_) {}
   keybindings();
   // Bind PCO navbar and handlers
@@ -842,6 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fillSection: (id) => {
         if (id === 'screens') refreshScreensEditor();
         if (id === 'logs') showLogsSection();
+        if (id === 'backgrounds') showBackgroundsSection();
       },
       // ⛔ The other edge, and the reason it exists: the log viewer follows the
       // file on a timer. A section that is hidden, or a page that is closed,
@@ -929,11 +896,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }, 100);
   }
+  // ⚠️ `#background=true` named a view of its own until #222 moved the pane
+  // into the administration page. Answered where it now lives, rather than
+  // left pointing at a view that no longer exists.
   if (micboard.url.background === 'true') {
+    micboard.url.background = undefined;
     setTimeout(() => {
-      if (!runAdminRoute('backgrounds')) {
-        window.dispatchEvent(new Event('wirelessboard:open-background'));
-      }
+      openAdminPage('backgrounds');
     }, 100);
   }
 });
