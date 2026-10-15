@@ -1633,9 +1633,17 @@ def dock_kind(value: Any) -> str:
 def normalize_docks(payload: Any) -> List[Dict[str, Any]]:
     """The dock below the screens, whatever it does or does not do (#203).
 
-    ⭐ This is what a column points at. The television hangs above a piece of
-    dock with positions in it, and a column is meant to correspond to one
-    of them -- narrower than a position and it stops pointing at anything.
+    ⭐ This is what a column points at. The television hangs above a dock with
+    positions in it, and a column is meant to correspond to one of them --
+    narrower than a position and it stops pointing at anything.
+
+    ⛔⛔ **A position is a BAY**, settled 2026-10-15. Not a two-bay unit, not a
+    performer's place: one bay, which could later be linked to a slot. The
+    design canvas argued the other way -- that a column should cover the unit,
+    because a performer's microphone and their IEM share one -- and that is
+    **not** the model. ⚠️ It matters most on Board mode on a television, where
+    the dock is physically under the screen and the columns are meant to line
+    up with it; Rack has no dock to point at and Pocket is one column.
 
     ⛔ **Every entry is a dock.** The kinds say whether it charges and whether
     it can be talked to -- the venue's is a Shure SBC200, 3.9in per position,

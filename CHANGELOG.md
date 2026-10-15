@@ -19,7 +19,15 @@
   so no board's columns change.
 
 ### Fixed
-- _Nothing yet._
+- **Administration is full screen**, as the design drew it, replacing the centred overlay over a
+  dimmed board. A 760px card had no room for two panes, so the section rail had to reflow into a
+  grid and every destination replaced it; full screen restores the fixed rail with a content area
+  beside it, and Help now opens *next to* the rail instead of hiding it.
+- **The Administration door named five of its nine sections.** It now names all of them, derived
+  from the section list so a new section cannot be left out.
+- **A red "no route registered for: about" warning appeared under the rail on every open**, because
+  Help is drawn in the page rather than opening an editor and so registers no route. It also told
+  people to "use the Menu instead" — a bar retired in 2.0.0-beta.5.
 
 ## [2.0.0-beta.5] - 2026-10-14
 

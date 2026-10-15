@@ -107,14 +107,15 @@
       </div>
     </div>
 
-    <!-- ⛔⛔ The administration overlay (#188). Static markup, like the view
+    <!-- ⛔⛔ The administration page (#188). Static markup, like the view
          panel, so the ids it is filled through exist in the document rather
          than only in a function -- `dead-ids.test.mjs` requires that of every
          `getElementById` and is right to.
 
-         ⛔ An overlay rather than a full-screen view (maintainer, 2026-10-14):
-         administration happens mid-service, and the board staying visible
-         behind it is the point. -->
+         ⛔⛔ Full screen, as the design drew it (maintainer, 2026-10-15,
+         reversing the centred overlay that shipped). The two panes below --
+         a fixed rail and a content area beside it -- are what full screen
+         buys, and the content area is where #222 brings the old editors. -->
     <div id="admin-page" class="admin-page">
       <div class="admin-backdrop" id="admin-page-backdrop"></div>
       <div class="admin-panel" role="dialog" aria-modal="true" aria-labelledby="admin-page-banner">
@@ -126,7 +127,10 @@
         <!-- ⚠️ The third and loudest statement of the boundary (#116). Filled
              from `scopeNote`, so there is one phrasing of it in the project. -->
         <p class="admin-banner" id="admin-page-banner"></p>
-        <div class="admin-body" id="admin-page-body"></div>
+        <div class="admin-body admin-layout" id="admin-page-body">
+          <nav class="admin-rail" id="admin-page-rail" aria-label="Administration sections"></nav>
+          <div class="admin-content" id="admin-page-content"></div>
+        </div>
       </div>
     </div>
 

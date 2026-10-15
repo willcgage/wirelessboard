@@ -72,10 +72,31 @@ test('⛔ nothing hides the way back, under any class', () => {
 test('⛔ and the bar it used to restore is really gone', () => {
   // #188. Leaving the markup behind while the route moved would mean two menus,
   // one of them unreachable and both of them maintained.
-  assert.ok(!/<nav\b/.test(markup), 'the menu bar is still in the markup');
+  // ⛔⛔ No `\b` in these patterns, on purpose. Written through a shell
+  // heredoc once, the `\b` arrived as a literal backspace (0x08) and
+  // `/class="[^"]*\bnavbar\b/` became a pattern matching nothing -- it would
+  // have passed with the menu bar back in the markup. Fourth time an escape has
+  // been eaten before the regex saw it here; character classes cannot be eaten.
+  //
+  // ⚠️ And `<nav` alone is no longer the right proxy anyway: #188's
+  // full-screen administration page (2026-10-15) gives its section rail a
+  // `<nav>`, which is what a rail is. So this is a CENSUS -- it says which navs
+  // are allowed, so a new one has to be justified here rather than slipping in
+  // behind a passing test.
+  const navIds = (markup.match(/<nav[^>]*>/g) || [])
+    .map((tag) => (/id="([^"]+)"/.exec(tag) || [, '(no id)'])[1]);
+  assert.deepEqual(
+    navIds,
+    ['admin-page-rail'],
+    'the only <nav> in the document is the administration rail',
+  );
+  assert.ok(
+    !/class="[^"]*navbar[\s"]/.test(markup),
+    'the menu bar is back in the markup',
+  );
   assert.ok(
     !/id="nav-menu-button"/.test(markup),
-    'the Menu dropdown is still in the markup',
+    'the Menu dropdown is back in the markup',
   );
 });
 

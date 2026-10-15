@@ -92,6 +92,13 @@ function renderItem(item) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'admin-item';
+  // ⭐ Only meaningful now that the rail survives the choice. `about` is the
+  // one section that renders here rather than handing over, so it is the only
+  // one that can be "current" -- the rest close the page.
+  if (item.id === 'about' && view === 'about') {
+    button.classList.add('is-current');
+    button.setAttribute('aria-current', 'page');
+  }
   button.dataset.adminItem = item.id;
 
   const label = document.createElement('span');
@@ -122,7 +129,8 @@ function renderItem(item) {
 
   button.addEventListener('click', () => {
     // ⭐ A section the overlay draws itself stays in the overlay, so the board
-    // is still visible behind it. That is what #222 wants for all of them.
+    // renders in the content pane beside the rail. That is what #222 wants for
+    // all of them.
     if (item.id === 'about') {
       view = 'about';
       renderAdminPage();
@@ -134,6 +142,36 @@ function renderItem(item) {
     runAdminRoute(item.id);
   });
   return button;
+}
+
+/**
+ * What the content pane says before anything is chosen.
+ *
+ * ⛔ Not a decoration. Full screen means there is now a large empty area on
+ * open, and the honest thing to put in it is the one fact this page exists to
+ * state -- that these settings are not this screen's -- plus what is still
+ * true of the destinations: most of them hand over to an editor that takes the
+ * screen, which is #222 and is the next piece of work.
+ */
+function renderWelcome() {
+  const wrap = document.createElement('div');
+  wrap.className = 'admin-welcome';
+
+  const lead = document.createElement('p');
+  lead.className = 'admin-welcome__lead';
+  lead.textContent = 'Choose a section.';
+  wrap.appendChild(lead);
+
+  // ⛔ The boundary, not the section list. The rail is already the list, and
+  // printing it twice beside itself says nothing; what the empty pane should
+  // carry is the one thing a person needs to know before they touch anything
+  // here, which is that none of it is this screen's.
+  const scope = document.createElement('p');
+  scope.className = 'admin-welcome__note';
+  scope.textContent = `${DOOR_SCOPE}, not just this one.`;
+  wrap.appendChild(scope);
+
+  return wrap;
 }
 
 function renderRail() {
@@ -172,7 +210,13 @@ function renderRail() {
   if (missing.length) {
     const warn = document.createElement('p');
     warn.className = 'admin-unrouted';
-    warn.textContent = `No route registered for: ${missing.join(', ')}. Use the Menu instead.`;
+    // ⛔ It used to end "Use the Menu instead." The Menu was retired by #188's
+    // second half, so the one sentence shown when something is broken was
+    // sending people to a bar that no longer exists. ⚠️ There is no fallback
+    // route to offer now, which is the honest thing to say: this is a fault in
+    // the build, not something the operator can work around.
+    warn.textContent = `No route registered for: ${missing.join(', ')}. `
+      + 'This is a fault in this build, not something you can work around here.';
     rail.appendChild(warn);
   }
 
@@ -184,8 +228,9 @@ function renderRail() {
  * Help, rendered inside the overlay.
  *
  * ⭐ The first section that does not hand over to an old pane, which is the
- * pattern #222 wants for all of them: the board stays visible behind it, which
- * is why the overlay was chosen over a full-screen view.
+ * pattern #222 wants for all of them -- and the reason it was possible here
+ * first is that Help is text, so it fitted even in the overlay. The content
+ * pane is where the rest of them go.
  *
  * ⛔ Reachable on a locked board, which is the whole reason Help is on this
  * page rather than in the view panel -- see the `about` item in
@@ -241,15 +286,33 @@ function renderHelp() {
   return wrap;
 }
 
+/**
+ * ⛔⛔ The rail stays on screen, and the content pane changes.
+ *
+ * It used to be one body that Help *replaced*, because a 760px overlay had no
+ * room for two panes. Full screen means a section can be read without losing
+ * the way to the next one -- which is the point of a rail, and was the main
+ * thing the overlay could not do.
+ *
+ * ⚠️ The rail is rebuilt on every render rather than diffed, because the state
+ * lines and the per-item refusals follow the board and a stale "9 found" is
+ * worse than a flicker.
+ */
 export function renderAdminPage() {
   const page = document.getElementById(PAGE_ID);
   if (!page) {
     return;
   }
   renderBanner();
-  const body = document.getElementById('admin-page-body');
-  if (body) {
-    body.replaceChildren(view === 'about' ? renderHelp() : renderRail());
+
+  const rail = document.getElementById('admin-page-rail');
+  if (rail) {
+    rail.replaceChildren(renderRail());
+  }
+
+  const content = document.getElementById('admin-page-content');
+  if (content) {
+    content.replaceChildren(view === 'about' ? renderHelp() : renderWelcome());
   }
 }
 
