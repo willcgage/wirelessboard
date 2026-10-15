@@ -130,9 +130,9 @@ test('⛔ no source file presents a pickup pad as a current thing', () => {
   assert.deepEqual(
     offences,
     [],
-    'Everything underneath a screen is a dock. Use a kind '
-      + "('charging', 'networked', 'noncharging') rather than a second noun:\n  "
-      + offences.join('\n  '),
+    'Everything underneath a screen is a dock. Use a kind (\'charging\', '
+      + '\'networked\', \'noncharging\') rather than a second noun:\n  '
+      + `${offences.join('\n  ')}`,
   );
 });
 

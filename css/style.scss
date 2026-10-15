@@ -2967,6 +2967,192 @@ body.live-strip-bottom .rotation-bar {
   color: rgba(215, 215, 215, 0.75);
 }
 
+// ---------------------------------------------------------------------------
+// A section that moved out of the configuration page (#222)
+//
+// ⛔ The editors keep their ids and their logic; only the frame changes. These
+// rules replace the Bootstrap card vocabulary they were wearing -- `config-panel
+// p-3 border rounded`, `btn btn-primary btn-sm` -- which is what made the old
+// pages read as a different application a tap away from the board.
+// ---------------------------------------------------------------------------
+.admin-section--moved {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.admin-section__head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.admin-section__head--sub {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(215, 215, 215, 0.14);
+}
+
+.admin-section__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.admin-section__subtitle {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.admin-section__lead,
+.admin-prose {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: rgba(215, 215, 215, 0.75);
+  max-width: 78ch;
+}
+
+.admin-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+// ⛔ 44px tall. The administration page is used on a wall tablet, and #116's
+// unlock control is 44px for the same reason: it is who this is for.
+.admin-btn {
+  min-height: 44px;
+  padding: 0 14px;
+
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(215, 215, 215, 0.22);
+  border-radius: 6px;
+  color: var(--color-white);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.admin-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.admin-btn--primary {
+  background: rgba(0, 100, 148, 0.55);
+  border-color: rgba(79, 163, 209, 0.55);
+}
+
+.admin-btn--primary:hover:not(:disabled) {
+  background: rgba(0, 100, 148, 0.75);
+}
+
+.admin-status {
+  font-size: 0.78rem;
+  color: rgba(215, 215, 215, 0.75);
+}
+
+// ⛔ The row that moved. Its markup is still Bootstrap's grid, built by
+// `config.js`, and rewriting that would mean rewriting the editor -- so the
+// classes are re-laid-out here instead. ⚠️ `min-width: 0` on every column is
+// what stops a long value widening the row past the pane; without it the row
+// grows and the pane scrolls sideways, which is how the Remove button ended up
+// off the edge.
+.admin-section--moved .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin: 0 0 10px;
+}
+
+// ⛔ Shape-agnostic on purpose. A screen row has four fields and a dock row has
+// five, and a fixed `grid-template-columns` that fitted one squeezed the other
+// -- the dock's "Positions" input ended up 44px wide holding a 59px number,
+// which is where the editor's horizontal scrollbar came from. Each field asks
+// for 120px and wraps when it cannot have it.
+.admin-section--moved .row > * {
+  flex: 1 1 120px;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+}
+
+// The remove control is a fixed 44px square whatever else is on the row.
+.admin-section--moved .row > .d-grid {
+  flex: 0 0 44px;
+}
+
+// The note under a row -- a warning, or what is still unfinished -- runs the
+// full width rather than sharing a line with the fields.
+.admin-section--moved .row > .col-12:last-child {
+  flex: 1 1 100%;
+}
+
+.admin-section--moved .form-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(215, 215, 215, 0.6);
+}
+
+.admin-section--moved .form-control,
+.admin-section--moved .form-select {
+  min-height: 38px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(215, 215, 215, 0.22);
+  border-radius: 6px;
+  color: var(--color-white);
+  font-size: 0.82rem;
+}
+
+.admin-section--moved .form-control:focus,
+.admin-section--moved .form-select:focus {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(79, 163, 209, 0.7);
+  box-shadow: none;
+  color: var(--color-white);
+}
+
+// ⭐ 44px tall, like every other control somebody uses on a wall tablet.
+.admin-row-remove {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: none;
+  border: 1px solid rgba(215, 215, 215, 0.2);
+  border-radius: 6px;
+  color: rgba(215, 215, 215, 0.8);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.admin-row-remove:hover {
+  background: rgba(220, 73, 58, 0.25);
+  border-color: rgba(220, 73, 58, 0.6);
+  color: var(--color-white);
+}
+
+// ⚠️ The empty-list line was `small text-muted`, which on this ground is about
+// 2.5:1 -- readable as an absence rather than as a sentence.
+.admin-section--moved .text-muted {
+  color: rgba(215, 215, 215, 0.7) !important;
+}
+
 // ⚠️ A tablet held upright has no room for a 236px rail beside anything, so the
 // two panes stack. Below this width the rail is the page until something is
 // chosen, which is how it behaved as an overlay.

@@ -21,7 +21,7 @@ import { initViewPanel, toggleViewPanel } from './view-panel.js';
 import { setTimeMode } from './signal-view.js';
 import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, bindScreenHandlers,
-  configureConfigModule, scheduleBackgroundFilenameGuide,
+  configureConfigModule, scheduleBackgroundFilenameGuide, refreshScreensEditor,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
@@ -832,6 +832,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // having rendered, because it is the route to all of them.
   try {
     initAdminPage({
+      // ⭐ #222: a section whose markup moved into the administration page is
+      // filled by the module that still owns its logic. The page knows what is
+      // on screen; `config.js` knows what goes in it.
+      fillSection: (id) => {
+        if (id === 'screens') refreshScreensEditor();
+      },
       getLockState: () => micboard.viewerLock,
       getViewers: () => micboard.viewers,
       // ⚠️ Help shows the build number, which the retired overlay used to carry.
