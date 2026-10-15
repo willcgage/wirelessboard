@@ -2,10 +2,21 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **The administration rail names the dock list.** The item is **Screens & docks**, and its state
+  line counts what is underneath a screen — `3 screens, 1 dock`, or `3 screens described` when
+  there is nothing below them. The dock list has existed since 2.0.0-beta.5 but had no route of its
+  own: it was a section further down the devices pane, reachable only by already knowing it was
+  there.
 
 ### Changed
-- _Nothing yet._
+- **Everything underneath a screen is a dock.** This replaces the charging-dock / pickup-pad split
+  described under 2.0.0-beta.5 below, which named the *absence* of charging as a different kind of
+  object. There is now one kind of thing with three kinds: `charging`, `networked` (a charging dock
+  that can also be asked what is in it — nothing reads this yet) and `noncharging`.
+
+  Docks described on beta.5 are carried forward with their meaning intact: a stored `dock` becomes
+  `charging` and a stored `pad` becomes `noncharging`. Nothing in the layout branches on the kind,
+  so no board's columns change.
 
 ### Fixed
 - _Nothing yet._

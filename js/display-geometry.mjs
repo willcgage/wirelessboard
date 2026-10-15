@@ -113,7 +113,7 @@ export function normalizeScreens(list) {
       id,
       name: String(entry.name || '').trim() || id,
       diagonal_inches: diagonal,
-      // ⭐ Which dock or pad is underneath (#203). A screen with nothing
+      // ⭐ Which dock is underneath (#203). A screen with nothing
       // under it is still worth describing; it simply imposes no minimum.
       // ⚠️ `furniture_id` too, for the same window as the `furniture` key.
       // Without it a board from that window keeps its docks and loses the link.

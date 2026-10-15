@@ -460,18 +460,25 @@ export function computeLayout({
   });
 
   // ⛔⛔ `Side by side` is ALWAYS one row (#201). Settled by the maintainer,
-  // 2026-10-14, and it is not a preference the layout may trade away:
+  // 2026-10-14, and it is not a preference the layout may trade away — their rule,
+  // restated in the vocabulary settled on 2026-10-15:
   //
-  //   "Side by Side is always 1 row, and that row is dictated by the width of
-  //    the charging dock or pickup pad. The column/card should not get any less
-  //    wide than the dock width."
+  //   Side by side is always 1 row, and that row is dictated by the width of the
+  //   dock below the screen. The column/card should not get any less wide than
+  //   the dock width.
+  //
+  // ⚠️ Restated, not quoted. The original wording named a second kind of object
+  // for the case where nothing charges, which the model no longer has; #201 carries
+  // it as said, and so does this file's history, if the exact phrasing is ever
+  // needed. The rule did not change with the words.
   //
   // ⭐ Which says what a column *is* on this board: a column points at a
-  // physical position on the table below the screen -- a bay on a charging dock,
-  // or a spot on a pickup pad where microphones are left without charging. The
-  // column count is the dock's, not the channel count's, and a thirteenth
-  // channel on twelve positions goes to a second page rather than a second row,
-  // because there is no second row of furniture for it to point at.
+  // physical position on the furniture below the screen -- one place where a
+  // microphone lives when it is not in somebody's hand, whether or not that
+  // place charges it. The column count is the dock's, not the channel count's,
+  // and a thirteenth channel on twelve positions goes to a second page rather
+  // than a second row, because there is no second row of positions for it to
+  // point at.
   //
   // ⚠️ Two boards change, both of them deliberately: Max 6 with twelve channels
   // goes 6x2 -> 6x1 and pages, and #170's dock floor goes 10x2 -> 10x1 and

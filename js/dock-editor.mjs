@@ -4,7 +4,7 @@
  * ⭐ The same shape as the screens editor beside it, and deliberately so: the
  * pairing, merge and summary all come from `editor-rows.mjs`, which is #180's
  * logic in one place rather than two. What is here is only what differs — what
- * counts as a problem with a dock or a pad, and what one is sent as.
+ * counts as a problem with a dock, and what one is sent as.
  *
  * Pure, so the rules can be checked without a DOM.
  */
@@ -15,7 +15,7 @@ import {
   mergeSaved as rowsMergeSaved,
   saveSummary as rowsSaveSummary,
 } from './editor-rows.mjs';
-import { isDockKind } from './docks.mjs';
+import { dockKind } from './docks.mjs';
 
 /** A stable id from a name: lowercase, hyphenated, nothing surprising. */
 export function dockId(name) {
@@ -52,7 +52,7 @@ function positive(value) {
 export function dockProblem(row) {
   const name = String((row && row.name) || '').trim();
   if (!name) {
-    return 'Give it a name — "Main dock", "Stage left pad".';
+    return 'Give it a name — "Main dock", "Stage left table".';
   }
   // ⛔ The width is required here, unlike on the screen row it came from. A
   // screen with nothing underneath it is a normal thing to describe; a dock
@@ -78,9 +78,7 @@ const SPEC = {
   entry: (row, ids) => ({
     id: row.id || uniqueDockId(String(row.name).trim(), ids),
     name: String(row.name).trim(),
-    // ⚠️ Anything unrecognised becomes a dock rather than failing the row. The
-    // width is the part that matters and it is present by now.
-    kind: isDockKind(row.kind) ? row.kind : 'dock',
+    kind: dockKind(row.kind),
     position_inches: positive(row.position_inches),
     positions: positive(row.positions),
   }),
@@ -100,7 +98,7 @@ export function mergeSaved(rows, saved) {
 
 export function saveSummary(rows) {
   return rowsSaveSummary(rows, SPEC, {
-    noun: (n) => (n === 1 ? 'dock or pad' : 'docks and pads'),
+    noun: (n) => (n === 1 ? 'dock' : 'docks'),
     nothing: 'Nothing described. Screens will have no minimum column width.',
   });
 }

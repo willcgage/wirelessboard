@@ -86,7 +86,7 @@ const SPEC = {
     id: row.id || uniqueScreenId(String(row.name).trim(), ids),
     name: String(row.name).trim(),
     diagonal_inches: positive(row.diagonal_inches),
-    // ⭐ Which dock or pad is underneath (#203). The width itself lives on the
+    // ⭐ Which dock is underneath (#203). The width itself lives on the
     // dock now; this is the reference to it.
     dock_id: String(row.dock_id || '').trim() || null,
     // ⛔ Carried forward, not dropped. A board configured before #203 has its
