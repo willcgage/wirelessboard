@@ -21,6 +21,7 @@ import {
 import { BOARD_CONTROLS, groupChoices } from './panel-controls.mjs';
 import { screenChoices, describeScreenChoice } from './display-geometry.mjs';
 import { scopeNote } from './viewer-scope.mjs';
+import { pageRefused, DOOR_DETAIL, DOOR_SCOPE } from './admin-page.mjs';
 
 /**
  * Both tables, in one panel (#160).
@@ -58,6 +59,8 @@ let board = {
   getGroup: () => 0,
   setGroup: () => {},
   getPagingState: () => ({ reason: null }),
+  getLockState: () => 'off',
+  openAdmin: () => {},
 };
 
 /**
@@ -291,6 +294,54 @@ function renderGroupRow() {
   return row;
 }
 
+/**
+ * The way out of this panel and into everything that is not this screen (#188).
+ *
+ * ⛔⛔ This is the route that did not exist. The menu bar carried the only
+ * pointer route to every global setting, `body.topbar-hidden .navbar` removes
+ * it, and #160 retired the keyboard -- so on a board with the bar hidden the
+ * way to reach any global setting was to put back a bar you had deliberately
+ * hidden. Every one of the first sixteen venue photographs is in that state.
+ *
+ * ⚠️ It carries the boundary on itself, which is the second of the three
+ * places it is stated. #116 exists because the per-device / global split was
+ * invisible, and putting global settings behind this same gear erases the
+ * distinction unless the route re-states it.
+ *
+ * ⛔ Drawn refused, not hidden, when the board is locked to display only --
+ * with the reason and where to undo it. A door that vanishes teaches nobody
+ * that the lock is on.
+ */
+function renderAdminDoor() {
+  const door = document.getElementById('admin-door');
+  if (!door) {
+    return;
+  }
+  const detail = door.querySelector('.admin-door__detail');
+  const scope = door.querySelector('.admin-door__scope');
+  if (detail) detail.textContent = DOOR_DETAIL;
+
+  const refused = pageRefused(board.getLockState());
+  door.classList.toggle('is-refused', refused);
+  door.disabled = refused;
+  if (scope) {
+    scope.textContent = refused
+      ? 'Locked to display only — unlock it above'
+      : DOOR_SCOPE;
+  }
+
+  if (!door.dataset.bound) {
+    door.dataset.bound = 'true';
+    door.addEventListener('click', () => {
+      if (pageRefused(board.getLockState())) {
+        return;
+      }
+      closeViewPanel();
+      board.openAdmin();
+    });
+  }
+}
+
 export function renderViewPanel() {
   const body = document.getElementById('view-panel-body');
   if (!body) {
@@ -315,6 +366,8 @@ export function renderViewPanel() {
   if (foot) {
     foot.textContent = scopeNote('device');
   }
+
+  renderAdminDoor();
 
   controlGroups(allControls()).forEach((group) => {
     const section = document.createElement('section');
