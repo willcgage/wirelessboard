@@ -192,7 +192,10 @@ export function slotEditToggle() {
   renderGroup(0);
   setBackground('NONE');
   if (micboard.displayMode === 'tvmode') {
-    setDisplayMode('deskmode');
+    // ⛔ Not remembered. Desk mode here is the editor's need, not a choice
+    // about how this screen should look -- a board power-cut mid-edit must come
+    // back as the wall it is, not as the desk the editor wanted (#216).
+    setDisplayMode('deskmode', { remember: false });
   }
   micboard.settingsMode = 'EXTENDED';
   initSlotEdit();
@@ -222,7 +225,9 @@ export function slotEditClose() {
   const before = boardBeforeEdit;
   boardBeforeEdit = null;
   if (before && before.displayMode && before.displayMode !== micboard.displayMode) {
-    setDisplayMode(before.displayMode);
+    // Likewise on the way back: this restores what was already stored, so
+    // writing it again would only be a chance to write something else.
+    setDisplayMode(before.displayMode, { remember: false });
   }
   // ⭐ Re-renders from the template, so the editor's own styling -- the hidden
   // chart zone, the shown error zone, the input boxes -- goes with it rather

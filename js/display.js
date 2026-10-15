@@ -17,7 +17,7 @@ import { startRotation, stopRotation } from './rotation-view.js';
 import {
   writePref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
-  WASH_KEY,
+  WASH_KEY, DISPLAY_MODE_KEY, DISPLAY_MODES,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
   VIEWER_LOCK_KEY,
@@ -52,10 +52,27 @@ function applyDefaultBackgroundIfNeeded() {
   }
 }
 
-export function setDisplayMode(mode) {
+/**
+ * Desk or TV.
+ *
+ * ⭐ Remembered, as of #216, so a wall comes back the way it was left -- after
+ * a power cut, after Escape (which reloads the page), or after a visit to the
+ * slot-name editor. It is the last of the view preferences to be stored and it
+ * uses the same machinery as all of them.
+ *
+ * ⛔ `remember: false` for a switch the operator did not ask for. The slot-name
+ * editor forces desk mode because two text fields per card are not something to
+ * type into from across a room -- that is the editor's need, not a choice about
+ * how this screen should look, and storing it would mean a board power-cut
+ * mid-edit came back as a desk. Same shape as `setInfoDrawer`'s `switchToTv`.
+ */
+export function setDisplayMode(mode, { remember = true } = {}) {
   const selector = document.getElementById('container');
   swapClass(selector, micboard.displayMode, mode);
   micboard.displayMode = mode;
+  if (remember) {
+    writePref({ storage: safeStorage(), key: DISPLAY_MODE_KEY, value: mode });
+  }
   requestTvLayoutUpdate();
   if (mode === 'tvmode') {
     applyDefaultBackgroundIfNeeded();
@@ -88,6 +105,12 @@ function applyViewClasses() {
   // are a reading trap, and the variable these drive is already --tvmode-type-*.
   container.classList.add(`type-${micboard.typeSize}`);
   container.classList.add(`wash-${micboard.wash}`);
+  // ⭐ Desk or TV, from the same resolved state as the rest (#216). This was
+  // the one view class the container got from the markup instead of from
+  // `micboard`, so a remembered TV board painted as a desk board until
+  // something else happened to call `setDisplayMode`.
+  DISPLAY_MODES.forEach((m) => container.classList.remove(m));
+  container.classList.add(micboard.displayMode);
 }
 
 /**
