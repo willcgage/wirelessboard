@@ -1,6 +1,7 @@
 import { micboard } from './app.js';
 import { computeLayout, gridTemplateFor, layoutSlotCount } from './board-layout.mjs';
 import { minColumnPixelsForScreen } from './display-geometry.mjs';
+import { repageForCapacity } from './rotation-view.js';
 
 let tvResizeObserver;
 let tvMutationObserver;
@@ -173,7 +174,16 @@ export function updateTvLayoutMetrics() {
   // ⛔ Published rather than recomputed. The driver deriving it would mean two
   // places reading the container's width and calling `computeLayout`, and they
   // would disagree the first time either changed.
+  const capacityChanged = micboard.boardCapacity !== capacity;
   micboard.boardCapacity = capacity;
+
+  // ⭐ Tell the rotation driver at once, rather than leaving it to notice on its
+  // next tick up to a second later. See `repageForCapacity` for why this is
+  // deferred rather than called straight through -- this function is the one it
+  // would otherwise re-enter.
+  if (capacityChanged) {
+    setTimeout(() => { try { repageForCapacity(); } catch (_) {} }, 0);
+  }
 
   // ⚠️ So an operator who asked for one row and got two can tell a rule from
   // a bug. Nothing styles this yet; it is the hook for saying so.
