@@ -1572,7 +1572,7 @@ def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
             'id': screen_id,
             'name': str(entry.get('name') or '').strip() or screen_id,
             'diagonal_inches': diagonal,
-            # ⭐ Which dock or pad is underneath (#203). A screen worth
+            # ⭐ Which dock is underneath (#203). A screen worth
             # describing may still have nothing below it, and must then impose
             # no minimum.
             # ⚠️ `furniture_id` is read for the same reason `furniture` is, and
@@ -1595,23 +1595,55 @@ def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
     return out
 
 
-DOCK_KINDS = ('dock', 'pad')
+# ⛔ Everything underneath a screen is a **dock**, settled by the maintainer
+# 2026-10-15: "Everything should be a Dock, whether it is a non-charging dock,
+# or a charging dock (non-network enabled or network enabled)." This replaced a
+# dock/pad split, where "pad" named the absence of a feature as a different kind
+# of object.
+#
+# ⭐ `networked` is the only one that is more than a label: such a dock can be
+# asked what is in it and how charged it is. Nothing reads it yet (#199 -- the
+# venue's SBC200 is not networked).
+#
+# ⛔ Must stay in step with DOCK_KINDS in js/docks.mjs; the browser normalises
+# the same payload before it is sent and this is what gets stored.
+DOCK_KINDS = ('charging', 'networked', 'noncharging')
+
+# ⛔ Read, never written, and NOT interchangeable. A stored `dock` was labelled
+# "Charging dock"; a stored `pad` was a place where nothing charges. Collapsing
+# both to one value would tell an operator their dock charges when it does not,
+# or the reverse -- and the kind is the only record of that.
+LEGACY_DOCK_KINDS = {'dock': 'charging', 'pad': 'noncharging'}
+
+
+def dock_kind(value: Any) -> str:
+    """A stored kind, as one of the current kinds.
+
+    ⚠️ Anything unrecognised becomes `charging`, which is what the old code did
+    via its `dock` default. The width is the part that matters and it is
+    present by the time this is called; refusing a row over a label would lose
+    a real measurement, and that measurement decides the column count (#201).
+    """
+    raw = value.strip() if isinstance(value, str) else ''
+    if raw in DOCK_KINDS:
+        return raw
+    return LEGACY_DOCK_KINDS.get(raw, 'charging')
 
 
 def normalize_docks(payload: Any) -> List[Dict[str, Any]]:
-    """The dock below the screens: charging docks and pickup pads (#203).
+    """The dock below the screens, whatever it does or does not do (#203).
 
     ⭐ This is what a column points at. The television hangs above a piece of
     dock with positions in it, and a column is meant to correspond to one
     of them -- narrower than a position and it stops pointing at anything.
 
-    ⛔ Two kinds because a room has two: a **dock** charges what sits in it (the
-    venue's is a Shure SBC200, 3.9in per position, two bays, not networked), a
-    **pad** is a place on the table where microphones are left and nothing
-    charges. ⚠️ Nothing in the layout branches on the kind -- both are rows of
-    positions with a width and impose the same floor. It is there so a person
-    editing the list knows which object they are looking at, and so the section
-    can take IEM transmitters later without every entry having to be a charger.
+    ⛔ **Every entry is a dock.** The kinds say whether it charges and whether
+    it can be talked to -- the venue's is a Shure SBC200, 3.9in per position,
+    two bays, charging but not networked (#199). ⚠️ Nothing in the layout
+    branches on the kind: every entry is a row of positions with a width, and
+    they impose the same floor. It is there so a person editing the list knows
+    which object they are looking at, and so the section can take IEM
+    transmitters later without every entry having to charge something.
 
     ⛔ Separate from the screens because a dock is not a property of a screen:
     one dock can sit under several, one screen can have none, and a dock can be
@@ -1646,9 +1678,7 @@ def normalize_docks(payload: Any) -> List[Dict[str, Any]]:
         out.append({
             'id': item_id,
             'name': str(entry.get('name') or '').strip() or item_id,
-            # ⚠️ An unrecognised kind becomes a dock rather than losing the
-            # entry. The width is the part that matters and it is present.
-            'kind': kind if kind in DOCK_KINDS else 'dock',
+            'kind': dock_kind(kind),
             'position_inches': width,
             'positions': _positive(entry.get('positions')),
         })

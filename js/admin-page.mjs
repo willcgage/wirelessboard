@@ -217,19 +217,15 @@ export function stateLine(id, facts = {}) {
       // "screens described, nothing underneath them" -- which is the state the
       // whole column-floor chain depends on and the state no board has ever
       // actually been in on hardware.
+      //
+      // ⚠️ One noun, because **everything underneath a screen is a dock**
+      // (settled 2026-10-15). An earlier version of this line counted "pads"
+      // separately so as not to claim charging that was not in the room; the
+      // model changed instead, and a charging dock, a networked one and one
+      // that charges nothing are now three kinds of the same object. Whether it
+      // charges is a fact about a dock, not a reason to count it apart.
       const docks = Array.isArray(config.docks) ? config.docks : [];
-      // ⚠️ A `pad` is a place microphones are left and nothing charges. The
-      // board treats it identically to a dock and only the person editing the
-      // list cares -- but calling two pickup pads "2 docks" claims charging
-      // that is not there, so the mixed case says both.
-      const pads = docks.filter((d) => d && d.kind === 'pad').length;
-      const bays = docks.length - pads;
-      let below = null;
-      if (docks.length) {
-        if (!pads) below = plural(bays, 'dock', 'docks');
-        else if (!bays) below = plural(pads, 'pad', 'pads');
-        else below = `${docks.length} docks and pads`;
-      }
+      const below = docks.length ? plural(docks.length, 'dock', 'docks') : null;
 
       if (!screens) {
         return below ? `No screens, ${below}` : 'None described';

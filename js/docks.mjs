@@ -30,17 +30,66 @@
  * Pure, so the rules can be checked without a DOM.
  */
 
-/** What a dock can be. */
-export const DOCK_KINDS = ['dock', 'pad'];
+/**
+ * What a dock can be.
+ *
+ * ⛔ **Everything underneath a screen is a dock**, settled by the maintainer
+ * 2026-10-15: *"Everything should be a Dock, whether it is a non-charging dock,
+ * or a charging dock (non-network enabled or network enabled)."* This replaced
+ * a `dock` / `pad` split.
+ *
+ * ⭐ Why that is the better model: "pad" named the *absence* of a feature as a
+ * different kind of object, so a table-top spot and the rack it replaced were
+ * two things rather than one thing with charging switched off. The list is now
+ * one kind of object along one axis — does it charge, and can it be talked to.
+ *
+ * ⚠️ The axis is deliberately ordered, not a pair of flags: a networked dock
+ * that does not charge is not a thing anyone has, and two booleans would make
+ * room for it in the editor. If one ever appears, it earns a fourth value here
+ * rather than a second field everywhere.
+ *
+ * ⭐ `networked` is the only one that is more than a label: a networked dock can
+ * be asked what is in it and how charged it is, which makes it a data source
+ * the way a receiver is. Nothing reads it yet (#199 — the venue's SBC200 is not
+ * networked), so it is recorded now so the list does not need reshaping later.
+ */
+export const DOCK_KINDS = ['charging', 'networked', 'noncharging'];
 
 /** What each kind is called where a person reads it. */
 export const DOCK_KIND_LABELS = {
-  dock: 'Charging dock',
-  pad: 'Pickup pad',
+  charging: 'Charging dock',
+  networked: 'Charging dock, networked',
+  noncharging: 'Non-charging dock',
 };
 
+/**
+ * The two kinds this replaced, mapped so that no described dock changes meaning.
+ *
+ * ⛔ **Read, never written, and not interchangeable.** A stored `dock` was
+ * labelled *Charging dock*; a stored `pad` was a place where nothing charges.
+ * Collapsing both to one value would tell an operator their dock charges when
+ * it does not, or the reverse — and the kind is the only record of that, since
+ * nothing in the layout branches on it.
+ */
+const LEGACY_DOCK_KINDS = { dock: 'charging', pad: 'noncharging' };
+
+/** True for a kind this version writes. Legacy values are read, not written. */
 export function isDockKind(value) {
   return DOCK_KINDS.includes(value);
+}
+
+/**
+ * A stored kind, as one of the current kinds.
+ *
+ * ⚠️ Anything unrecognised becomes `charging` rather than being dropped, which
+ * is what the old code did via its `dock` default. The width is the part that
+ * matters and it is present; refusing a row over a label would lose a real
+ * measurement, and that measurement now decides the column count (#201).
+ */
+export function dockKind(value) {
+  const raw = String(value == null ? '' : value).trim();
+  if (isDockKind(raw)) return raw;
+  return LEGACY_DOCK_KINDS[raw] || 'charging';
 }
 
 /** A number, or null when it is not one we can use. */
@@ -71,10 +120,7 @@ export function normalizeDocks(list) {
     out.push({
       id,
       name: String(entry.name || '').trim() || id,
-      // ⚠️ Anything unrecognised becomes a dock rather than being dropped. The
-      // width is the part that matters and it is present; refusing the whole
-      // entry over a label would lose a real measurement.
-      kind: isDockKind(entry.kind) ? entry.kind : 'dock',
+      kind: dockKind(entry.kind),
       position_inches: width,
       // Optional. Nothing reads it yet; it is what a person counts to check
       // they have described the right one.

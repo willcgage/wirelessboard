@@ -466,12 +466,18 @@ export function computeLayout({
   //    the charging dock or pickup pad. The column/card should not get any less
   //    wide than the dock width."
   //
+  // ⚠️ The quote is verbatim and says "pickup pad" because that was the word at
+  // the time. The model changed on 2026-10-15: **everything underneath a screen
+  // is a dock**, and whether it charges is one of its kinds (`docks.mjs`).
+  // Nothing about the rule changed with it.
+  //
   // ⭐ Which says what a column *is* on this board: a column points at a
-  // physical position on the table below the screen -- a bay on a charging dock,
-  // or a spot on a pickup pad where microphones are left without charging. The
-  // column count is the dock's, not the channel count's, and a thirteenth
-  // channel on twelve positions goes to a second page rather than a second row,
-  // because there is no second row of furniture for it to point at.
+  // physical position on the furniture below the screen -- one place where a
+  // microphone lives when it is not in somebody's hand, whether or not that
+  // place charges it. The column count is the dock's, not the channel count's,
+  // and a thirteenth channel on twelve positions goes to a second page rather
+  // than a second row, because there is no second row of positions for it to
+  // point at.
   //
   // ⚠️ Two boards change, both of them deliberately: Max 6 with twelve channels
   // goes 6x2 -> 6x1 and pages, and #170's dock floor goes 10x2 -> 10x1 and

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  DOCK_KINDS, isDockKind, normalizeDocks, dockById,
+  DOCK_KINDS, isDockKind, dockKind, normalizeDocks, dockById,
   positionInchesForScreen, dockChoices,
 } from './docks.mjs';
 import {
@@ -14,44 +14,69 @@ import {
 } from './display-geometry.mjs';
 
 const DOCK = {
-  id: 'main-dock', name: 'Main dock', kind: 'dock', position_inches: 3.9, positions: 2,
+  id: 'main-dock', name: 'Main dock', kind: 'charging', position_inches: 3.9, positions: 2,
 };
+// A dock that charges nothing -- what used to be stored as a `pad`. The id is
+// left as it was so the legacy-reading tests below exercise a realistic row.
 const PAD = {
-  id: 'stage-pad', name: 'Stage left pad', kind: 'pad', position_inches: 5,
+  id: 'stage-pad', name: 'Stage left table', kind: 'noncharging', position_inches: 5,
 };
 
 // ---------------------------------------------------------------------------
 // The model
 // ---------------------------------------------------------------------------
 
-test('a dock is a bay or a pad, and the board treats them alike', () => {
-  assert.deepEqual(DOCK_KINDS, ['dock', 'pad']);
-  assert.ok(isDockKind('dock') && isDockKind('pad'));
+test('⛔ everything underneath a screen is a dock, and the board treats them alike', () => {
+  assert.deepEqual(DOCK_KINDS, ['charging', 'networked', 'noncharging']);
+  assert.ok(isDockKind('charging') && isDockKind('networked') && isDockKind('noncharging'));
   assert.ok(!isDockKind('shelf'));
 
-  // ⛔ The kind is descriptive. Nothing in the layout branches on it — both are
-  // rows of positions with a width and impose the same floor — so a pad and a
-  // dock of the same width must produce the same answer.
+  // ⛔ The split this replaced is gone: "pad" named the absence of charging as
+  // a different kind of object. These are no longer kinds this version writes.
+  assert.ok(!isDockKind('dock'));
+  assert.ok(!isDockKind('pad'));
+
+  // ⛔ The kind is descriptive. Nothing in the layout branches on it — every
+  // entry is a row of positions with a width and imposes the same floor — so
+  // docks of the same width must produce the same answer whatever they do.
   const screens = [{ id: 'wall', diagonal_inches: 55, dock_id: 'a' }];
-  const asDock = minColumnPixelsForScreen({
+  const forKind = (kind) => minColumnPixelsForScreen({
     screens,
     screenId: 'wall',
     widthPx: 1920,
     heightPx: 1080,
     docks: [{
-      id: 'a', name: 'A', kind: 'dock', position_inches: 4,
+      id: 'a', name: 'A', kind, position_inches: 4,
     }],
   });
-  const asPad = minColumnPixelsForScreen({
-    screens,
-    screenId: 'wall',
-    widthPx: 1920,
-    heightPx: 1080,
-    docks: [{
-      id: 'a', name: 'A', kind: 'pad', position_inches: 4,
-    }],
-  });
-  assert.equal(asDock, asPad);
+  assert.equal(forKind('charging'), forKind('noncharging'));
+  assert.equal(forKind('charging'), forKind('networked'));
+});
+
+test('⛔ the two kinds this replaced are read, and never confused with each other', () => {
+  // A stored `dock` was LABELLED "Charging dock"; a stored `pad` was a place
+  // where nothing charges. Collapsing both one way would tell an operator
+  // their dock charges when it does not, or the reverse — and since nothing
+  // branches on the kind, that label is the only record of it.
+  assert.equal(dockKind('dock'), 'charging');
+  assert.equal(dockKind('pad'), 'noncharging');
+
+  // Current values pass through, and junk defaults the way the old code did.
+  assert.equal(dockKind('networked'), 'networked');
+  assert.equal(dockKind('noncharging'), 'noncharging');
+  assert.equal(dockKind('shelf'), 'charging');
+  assert.equal(dockKind(''), 'charging');
+  assert.equal(dockKind(undefined), 'charging');
+  assert.equal(dockKind(null), 'charging');
+  assert.equal(dockKind(7), 'charging');
+
+  // ⛔ A board that described its docks before this change keeps them, with
+  // the same meaning, through a normalise — which is what runs on every save.
+  const migrated = normalizeDocks([
+    { id: 'a', name: 'Rack', kind: 'dock', position_inches: 3.9 },
+    { id: 'b', name: 'Table', kind: 'pad', position_inches: 5 },
+  ]);
+  assert.deepEqual(migrated.map((d) => d.kind), ['charging', 'noncharging']);
 });
 
 test('⛔ an entry with no position width is dropped, not kept half-made', () => {
@@ -67,9 +92,9 @@ test('⛔ an entry with no position width is dropped, not kept half-made', () =>
   assert.deepEqual(cleaned.map((f) => f.id), ['main-dock']);
 });
 
-test('an unrecognised kind becomes a dock rather than losing the measurement', () => {
+test('an unrecognised kind becomes a charging dock rather than losing the measurement', () => {
   const [only] = normalizeDocks([{ ...DOCK, kind: 'trolley' }]);
-  assert.equal(only.kind, 'dock');
+  assert.equal(only.kind, 'charging');
   assert.equal(only.position_inches, 3.9, 'the width is the part that matters');
 });
 
@@ -164,16 +189,16 @@ test('a count of positions is optional, but junk in it is not', () => {
 test('incomplete rows are held back, and the summary says they are still there', () => {
   const rows = [
     {
-      name: 'Main dock', kind: 'dock', position_inches: 3.9, positions: 2,
+      name: 'Main dock', kind: 'charging', position_inches: 3.9, positions: 2,
     },
     { name: 'Half-typed' },
   ];
   const payload = toPayload(rows);
   assert.equal(payload.length, 1);
   assert.deepEqual(payload[0], {
-    id: 'main-dock', name: 'Main dock', kind: 'dock', position_inches: 3.9, positions: 2,
+    id: 'main-dock', name: 'Main dock', kind: 'charging', position_inches: 3.9, positions: 2,
   });
-  assert.match(saveSummary(rows), /1 dock or pad saved/);
+  assert.match(saveSummary(rows), /1 dock saved/);
   assert.match(saveSummary(rows), /still here to finish/);
   assert.match(saveSummary([]), /Nothing described/);
 });
@@ -210,7 +235,7 @@ test('the picker says what each choice means, and offers "nothing underneath"', 
   assert.match(choices[0].label, /Nothing underneath/);
   assert.match(choices[1].label, /Charging dock/);
   assert.match(choices[1].label, /3\.9in/);
-  assert.match(choices[2].label, /Pickup pad/);
+  assert.match(choices[2].label, /Non-charging dock/);
 });
 
 // ---------------------------------------------------------------------------

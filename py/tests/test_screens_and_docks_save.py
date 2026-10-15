@@ -29,7 +29,7 @@ def stored(monkeypatch):
 
 WALL = {'id': 'wall', 'name': 'Auditorium wall', 'diagonal_inches': 55}
 DOCK = {
-    'id': 'green-room', 'name': 'Green Room', 'kind': 'dock',
+    'id': 'green-room', 'name': 'Green Room', 'kind': 'charging',
     'position_inches': 3.9, 'positions': 11,
 }
 
@@ -89,3 +89,74 @@ class TestTheHandlerContract:
         saved = config.update_screens_and_docks([WALL], [DOCK])
         assert saved['screens'][0]['name'] == 'Auditorium wall'
         assert saved['docks'][0]['name'] == 'Green Room'
+
+
+class TestTheKindsThisReplaced:
+    """⛔ Everything underneath a screen is a dock (settled 2026-10-15).
+
+    The `dock` / `pad` split is gone. These values are in real `config.json`
+    files, and this is the normaliser that rewrites them on every save -- so a
+    board that described its docks before the change has to come through with
+    the same meaning.
+
+    ⛔ Why this class exists at all: #212 renamed a function in here and shipped
+    a `NameError`, so **every** Screens/Dock save 500'd in beta.5. It had been
+    checked by hand before the rename and never after.
+    """
+
+    def test_a_stored_dock_was_a_charging_dock(self):
+        [only] = config.normalize_docks([dict(DOCK, kind='dock')])
+        assert only['kind'] == 'charging'
+
+    def test_a_stored_pad_charged_nothing_and_still_does(self):
+        # ⛔ Not interchangeable with the above. Mapping both one way would tell
+        # an operator their dock charges when it does not, or the reverse, and
+        # the kind is the only record of it -- nothing branches on it.
+        [only] = config.normalize_docks([dict(DOCK, kind='pad')])
+        assert only['kind'] == 'noncharging'
+
+    def test_the_current_kinds_pass_through(self):
+        for kind in config.DOCK_KINDS:
+            [only] = config.normalize_docks([dict(DOCK, kind=kind)])
+            assert only['kind'] == kind
+
+    def test_junk_keeps_the_measurement_and_defaults_the_way_it_used_to(self):
+        for junk in ('trolley', '', None, 7, {}, True):
+            [only] = config.normalize_docks([dict(DOCK, kind=junk)])
+            assert only['kind'] == 'charging'
+            assert only['position_inches'] == 3.9, 'the width is what matters'
+
+    def test_a_save_carries_the_old_kinds_forward(self, stored):
+        """The whole point: the migration happens where boards actually save."""
+        saved = config.update_screens_and_docks(
+            [dict(WALL, dock_id='green-room')],
+            [dict(DOCK, kind='pad')])
+
+        assert saved['docks'][0]['kind'] == 'noncharging'
+        # And the screen still finds its floor, which is the reason any of
+        # this is stored.
+        assert saved['screens'][0]['dock_id'] == 'green-room'
+        assert saved['docks'][0]['position_inches'] == 3.9
+
+    def test_the_two_sides_agree_on_the_kinds(self):
+        """⛔ py/config.py and js/docks.mjs must list the same kinds.
+
+        The browser normalises the payload before it is sent and this
+        normalises what gets stored. If they disagree, one of them silently
+        rewrites the other's value on every save.
+        """
+        import pathlib
+        import re
+
+        source = pathlib.Path(__file__).resolve().parents[2] / 'js' / 'docks.mjs'
+        text = source.read_text(encoding='utf-8')
+        found = re.search(r"export const DOCK_KINDS = \[([^\]]*)\]", text)
+        assert found, 'DOCK_KINDS not found in js/docks.mjs'
+        js_kinds = tuple(re.findall(r"'([^']+)'", found.group(1)))
+        assert js_kinds == config.DOCK_KINDS
+
+        legacy = re.search(r"const LEGACY_DOCK_KINDS = \{([^}]*)\}", text)
+        assert legacy, 'LEGACY_DOCK_KINDS not found in js/docks.mjs'
+        js_legacy = dict(re.findall(r"(\w+): '([^']+)'", legacy.group(1)))
+        assert js_legacy == config.LEGACY_DOCK_KINDS
+

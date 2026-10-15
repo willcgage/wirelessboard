@@ -174,30 +174,35 @@ test('⭐ the screens line counts what is underneath, because the item owns it',
   );
 
   assert.equal(
-    stateLine('screens', { config: { screens, docks: [{ kind: 'dock' }, { kind: 'dock' }] } }),
+    stateLine('screens', {
+      config: { screens, docks: [{ kind: 'charging' }, { kind: 'charging' }] },
+    }),
     '3 screens, 2 docks',
   );
   assert.equal(
-    stateLine('screens', { config: { screens, docks: [{ kind: 'dock' }] } }),
+    stateLine('screens', { config: { screens, docks: [{ kind: 'charging' }] } }),
     '3 screens, 1 dock',
   );
 
-  // ⚠️ A pad charges nothing. Counting two pickup pads as "2 docks" would
-  // claim charging that is not in the room, so each case says what is there.
+  // ⛔ One noun, whatever the kinds are: **everything underneath a screen is a
+  // dock**. Whether it charges, and whether it can be talked to, is a fact
+  // about a dock rather than a reason to count it apart -- so a room with one
+  // of each still reads "3 docks" and never "1 dock and 2 somethings".
   assert.equal(
-    stateLine('screens', { config: { screens, docks: [{ kind: 'pad' }, { kind: 'pad' }] } }),
-    '3 screens, 2 pads',
-  );
-  assert.equal(
-    stateLine('screens', { config: { screens, docks: [{ kind: 'dock' }, { kind: 'pad' }] } }),
-    '3 screens, 2 docks and pads',
+    stateLine('screens', {
+      config: {
+        screens,
+        docks: [{ kind: 'charging' }, { kind: 'networked' }, { kind: 'noncharging' }],
+      },
+    }),
+    '3 screens, 3 docks',
   );
 
   // A dock can exist before any screen is described -- #189 is why that order
   // happens at all, and the line must not read "None described" when the list
   // below it is not empty.
   assert.equal(
-    stateLine('screens', { config: { screens: [], docks: [{ kind: 'dock' }] } }),
+    stateLine('screens', { config: { screens: [], docks: [{ kind: 'charging' }] } }),
     'No screens, 1 dock',
   );
   assert.equal(stateLine('screens', { config: { screens: [], docks: [] } }), 'None described');

@@ -25,7 +25,7 @@ import {
   screensUsing,
 } from './dock-editor.mjs';
 import {
-  DOCK_KINDS, DOCK_KIND_LABELS, dockChoices,
+  DOCK_KINDS, DOCK_KIND_LABELS, dockChoices, dockKind,
 } from './docks.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
 import { assignNumbers } from './slot-numbering.mjs';
@@ -5450,7 +5450,7 @@ function renderDockRows() {
       opt.textContent = DOCK_KIND_LABELS[value];
       kind.appendChild(opt);
     });
-    kind.value = row.kind || 'dock';
+    kind.value = dockKind(row.kind);
     kind.addEventListener('change', () => {
       dockRows[index].kind = kind.value;
       renderScreenRows();
