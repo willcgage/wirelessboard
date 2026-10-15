@@ -824,17 +824,6 @@ const folderPickerState = {
   bound: false,
 };
 
-const GOOGLE_DRIVE_AUTH_MESSAGE = 'wirelessboard:drive-auth';
-
-const googleDriveState = {
-  provider: null,
-  loading: false,
-  saving: false,
-  authWindow: null,
-};
-
-let googleDriveMessageListenerBound = false;
-
 function logEl(id) {
   return document.getElementById(id);
 }
@@ -2265,6 +2254,20 @@ function renderBackgroundFilenameGuide() {
   }
 }
 
+/**
+ * The backgrounds section was opened in the administration page (#222).
+ *
+ * ⚠️ The filename guide is scheduled on `requestAnimationFrame`, so it draws
+ * nothing in the development browser pane -- rAF never fires there, measured
+ * directly. Verifying this section means Claude in Chrome, not the pane that
+ * served Screens and Logs.
+ */
+export function showBackgroundsSection() {
+  ensureBackgroundDirectoryBindings();
+  loadBackgroundDirectoryState({ silent: true });
+  scheduleBackgroundFilenameGuide();
+}
+
 export function scheduleBackgroundFilenameGuide() {
   if (backgroundFilenameGuideState.scheduled) {
     return;
@@ -2615,344 +2618,6 @@ async function saveBackgroundDirectory(path, { useDefault = false, defaultMode =
   }
 }
 
-function setGoogleDriveStatus(message, level = 'info') {
-  const statusEl = document.getElementById('google-drive-status');
-  if (!statusEl) return;
-
-  statusEl.textContent = message || '';
-  statusEl.classList.remove('text-success', 'text-danger', 'text-warning', 'text-muted');
-
-  if (!message) {
-    statusEl.classList.add('text-muted');
-    return;
-  }
-
-  statusEl.classList.add(STATUS_CLASSES[level] || 'text-muted');
-}
-
-function formatGoogleDriveClientSummary(summary = {}) {
-  if (!summary || !summary.has_configuration) {
-    return 'No OAuth client uploaded yet.';
-  }
-
-  const info = summary.installed || summary.web || {};
-  const parts = [];
-  if (info.project_id) parts.push(`Project: ${info.project_id}`);
-  if (info.client_id) parts.push(`Client ID: ${info.client_id}`);
-  if (Array.isArray(info.redirect_uris) && info.redirect_uris.length) {
-    parts.push(`Redirect URIs: ${info.redirect_uris.length}`);
-  }
-  if (Array.isArray(info.javascript_origins) && info.javascript_origins.length) {
-    parts.push(`Origins: ${info.javascript_origins.length}`);
-  }
-
-  return parts.length ? parts.join('\n') : 'OAuth client is present.';
-}
-
-function updateGoogleDriveControlState() {
-  const busy = googleDriveState.loading || googleDriveState.saving;
-  const provider = googleDriveState.provider || {};
-  const hasClient = !!(provider.client && provider.client.has_configuration);
-  const hasAuth = !!(provider.auth && provider.auth.has_credentials);
-
-  const enabledInput = document.getElementById('google-drive-enabled');
-  if (enabledInput) {
-    enabledInput.disabled = googleDriveState.loading && !provider;
-    enabledInput.checked = !!provider.enabled;
-  }
-
-  const fileInput = document.getElementById('google-drive-client-file');
-  if (fileInput) fileInput.disabled = busy;
-
-  const clearClientBtn = document.getElementById('google-drive-client-clear');
-  if (clearClientBtn) clearClientBtn.disabled = busy || !hasClient;
-
-  const refreshBtn = document.getElementById('google-drive-refresh');
-  if (refreshBtn) refreshBtn.disabled = busy;
-
-  const authStartBtn = document.getElementById('google-drive-auth-start');
-  if (authStartBtn) authStartBtn.disabled = busy || !hasClient;
-
-  const authClearBtn = document.getElementById('google-drive-auth-clear');
-  if (authClearBtn) authClearBtn.disabled = busy || !hasAuth;
-
-  const authRefreshBtn = document.getElementById('google-drive-auth-refresh');
-  if (authRefreshBtn) authRefreshBtn.disabled = busy;
-}
-
-function renderGoogleDriveSettings(provider = {}) {
-  googleDriveState.provider = provider;
-
-  const summaryEl = document.getElementById('google-drive-client-summary');
-  if (summaryEl) {
-    summaryEl.textContent = formatGoogleDriveClientSummary(provider.client);
-  }
-
-  const authStatusEl = document.getElementById('google-drive-auth-status');
-  if (authStatusEl) {
-    authStatusEl.classList.remove('text-success', 'text-warning', 'text-danger', 'text-muted');
-    if (provider.auth && provider.auth.has_credentials) {
-      authStatusEl.classList.add('text-success');
-      const updated = provider.auth.updated_at ? new Date(provider.auth.updated_at).toLocaleString() : null;
-      authStatusEl.textContent = updated
-        ? `Authorized · updated ${updated}`
-        : 'Authorized for Google Drive access.';
-    } else {
-      authStatusEl.classList.add('text-warning');
-      authStatusEl.textContent = 'Not authorized yet. Start the Google sign-in flow to grant access.';
-    }
-  }
-
-  updateGoogleDriveControlState();
-}
-
-function ensureGoogleDriveMessageBinding() {
-  if (googleDriveMessageListenerBound) return;
-  googleDriveMessageListenerBound = true;
-  window.addEventListener('message', handleGoogleDriveAuthMessage);
-}
-
-function handleGoogleDriveAuthMessage(event) {
-  if (!event || !event.data || event.origin !== window.location.origin) {
-    return;
-  }
-
-  const payload = event.data;
-  if (payload.type !== GOOGLE_DRIVE_AUTH_MESSAGE) {
-    return;
-  }
-
-  if (googleDriveState.authWindow && !googleDriveState.authWindow.closed) {
-    try { googleDriveState.authWindow.close(); } catch (_) {}
-  }
-  googleDriveState.authWindow = null;
-
-  if (payload.ok) {
-    setGoogleDriveStatus('Google Drive access granted.', 'success');
-  } else {
-    const message = payload.error || 'Google Drive authorization failed.';
-    setGoogleDriveStatus(message, 'error');
-  }
-
-  loadGoogleDriveState({ silent: true }).catch(() => {});
-}
-
-async function loadGoogleDriveState({ silent = false } = {}) {
-  if (googleDriveState.loading) {
-    return;
-  }
-
-  googleDriveState.loading = true;
-  updateGoogleDriveControlState();
-  if (!silent) {
-    setGoogleDriveStatus('Loading Google Drive settings…', 'info');
-  }
-
-  try {
-    const response = await fetch(`api/cloud/google-drive/config?_=${Date.now()}`, { cache: 'no-store' });
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !data || data.ok === false) {
-      const message = data && data.error ? data.error : `Request failed (${response.status})`;
-      throw new Error(message);
-    }
-    renderGoogleDriveSettings(data.drive || {});
-    if (!silent) {
-      setGoogleDriveStatus('Google Drive settings loaded.', 'success');
-    }
-  } catch (err) {
-    setGoogleDriveStatus(`Failed to load Google Drive settings: ${formatError(err)}`, 'error');
-    throw err;
-  } finally {
-    googleDriveState.loading = false;
-    updateGoogleDriveControlState();
-  }
-}
-
-async function updateGoogleDriveSettings(payload, { successMessage } = {}) {
-  googleDriveState.saving = true;
-  updateGoogleDriveControlState();
-  setGoogleDriveStatus('Saving Google Drive settings…', 'info');
-
-  try {
-    const response = await fetch('api/cloud/google-drive/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !data || data.ok === false) {
-      const message = data && data.error ? data.error : `Request failed (${response.status})`;
-      throw new Error(message);
-    }
-
-    renderGoogleDriveSettings(data.drive || {});
-    setGoogleDriveStatus(successMessage || 'Google Drive settings saved.', 'success');
-  } catch (err) {
-    setGoogleDriveStatus(`Failed to update Google Drive settings: ${formatError(err)}`, 'error');
-    throw err;
-  } finally {
-    googleDriveState.saving = false;
-    updateGoogleDriveControlState();
-  }
-}
-
-async function handleGoogleDriveClientFile(event) {
-  const input = event.target;
-  const file = input && input.files && input.files[0];
-  if (!file) return;
-
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    await updateGoogleDriveSettings({ client: parsed }, { successMessage: 'OAuth client uploaded.' });
-  } catch (err) {
-    setGoogleDriveStatus(`Failed to upload OAuth client: ${formatError(err)}`, 'error');
-    throw err;
-  } finally {
-    try { if (input) input.value = ''; } catch (_) {}
-  }
-}
-
-async function removeGoogleDriveClient() {
-  try {
-    await updateGoogleDriveSettings({ client: null }, { successMessage: 'OAuth client removed.' });
-  } catch (err) {
-    // status already handled inside updateGoogleDriveSettings
-  }
-}
-
-async function startGoogleDriveAuthorization() {
-  if (googleDriveState.saving) return;
-  ensureGoogleDriveMessageBinding();
-
-  googleDriveState.saving = true;
-  updateGoogleDriveControlState();
-  setGoogleDriveStatus('Starting Google authorization…', 'info');
-
-  const redirectUri = `${window.location.origin}/oauth/google-drive`;
-
-  try {
-    const response = await fetch('api/cloud/google-drive/auth/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ redirect_uri: redirectUri }),
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !data || data.ok === false) {
-      const message = data && data.error ? data.error : `Request failed (${response.status})`;
-      throw new Error(message);
-    }
-
-    const authUrl = data.flow && data.flow.authorization_url;
-    if (!authUrl) {
-      throw new Error('Authorization URL missing from response.');
-    }
-
-    const popup = window.open(authUrl, 'wirelessboard-google-drive', 'width=520,height=720');
-    if (!popup) {
-      throw new Error('Popup blocked. Allow popups for this site and try again.');
-    }
-
-    googleDriveState.authWindow = popup;
-    try { popup.focus(); } catch (_) {}
-    setGoogleDriveStatus('Complete the Google window to finish sign-in.', 'info');
-  } catch (err) {
-    setGoogleDriveStatus(`Failed to start Google authorization: ${formatError(err)}`, 'error');
-    throw err;
-  } finally {
-    googleDriveState.saving = false;
-    updateGoogleDriveControlState();
-  }
-}
-
-async function clearGoogleDriveCredentials() {
-  if (googleDriveState.saving) return;
-
-  googleDriveState.saving = true;
-  updateGoogleDriveControlState();
-  setGoogleDriveStatus('Removing Google Drive credentials…', 'info');
-
-  try {
-    const response = await fetch('api/cloud/google-drive/auth/clear', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !data || data.ok === false) {
-      const message = data && data.error ? data.error : `Request failed (${response.status})`;
-      throw new Error(message);
-    }
-
-    await loadGoogleDriveState({ silent: true });
-    setGoogleDriveStatus('Google Drive credentials removed.', 'success');
-  } catch (err) {
-    setGoogleDriveStatus(`Failed to remove Google Drive credentials: ${formatError(err)}`, 'error');
-    throw err;
-  } finally {
-    googleDriveState.saving = false;
-    updateGoogleDriveControlState();
-  }
-}
-
-function ensureGoogleDriveBindings() {
-  const container = document.getElementById('cloud-google-drive');
-  if (!container || container.dataset.bound === 'true') return;
-  container.dataset.bound = 'true';
-
-  ensureGoogleDriveMessageBinding();
-
-  const enabledInput = document.getElementById('google-drive-enabled');
-  if (enabledInput) {
-    enabledInput.addEventListener('change', () => {
-      updateGoogleDriveSettings({ enabled: !!enabledInput.checked }, { successMessage: 'Google Drive provider updated.' })
-        .catch(() => { loadGoogleDriveState({ silent: true }).catch(() => {}); });
-    });
-  }
-
-  const fileInput = document.getElementById('google-drive-client-file');
-  if (fileInput) {
-    fileInput.addEventListener('change', (event) => {
-      handleGoogleDriveClientFile(event).catch(() => {});
-    });
-  }
-
-  const clearClientBtn = document.getElementById('google-drive-client-clear');
-  if (clearClientBtn) {
-    clearClientBtn.addEventListener('click', () => {
-      removeGoogleDriveClient().catch(() => {});
-    });
-  }
-
-  const refreshBtn = document.getElementById('google-drive-refresh');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-      loadGoogleDriveState().catch(() => {});
-    });
-  }
-
-  const authStartBtn = document.getElementById('google-drive-auth-start');
-  if (authStartBtn) {
-    authStartBtn.addEventListener('click', () => {
-      startGoogleDriveAuthorization().catch(() => {});
-    });
-  }
-
-  const authClearBtn = document.getElementById('google-drive-auth-clear');
-  if (authClearBtn) {
-    authClearBtn.addEventListener('click', () => {
-      clearGoogleDriveCredentials().catch(() => {});
-    });
-  }
-
-  const authRefreshBtn = document.getElementById('google-drive-auth-refresh');
-  if (authRefreshBtn) {
-    authRefreshBtn.addEventListener('click', () => {
-      loadGoogleDriveState().catch(() => {});
-    });
-  }
-}
-
 function closePCOView() {
   const pcoView = document.getElementById('pco-settings');
   if (pcoView) pcoView.style.display = 'none';
@@ -3223,9 +2888,6 @@ export function initConfigEditor(force = false) {
   } else {
     renderBackgroundDirectory(backgroundDirectoryState.info);
   }
-
-  ensureGoogleDriveBindings();
-  loadGoogleDriveState({ silent: true }).catch(() => {});
 
   ensureConfigHealthBindings();
   loadConfigHealth();
@@ -4055,11 +3717,7 @@ function handleNotePreview() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('wirelessboard:background-view-opened', () => {
-    try { ensureBackgroundDirectoryBindings(); } catch (_) {}
-    try { loadBackgroundDirectoryState({ silent: true }); } catch (_) {}
-    try { ensureGoogleDriveBindings(); } catch (_) {}
-    try { loadGoogleDriveState({ silent: true }); } catch (_) {}
-    try { scheduleBackgroundFilenameGuide(); } catch (_) {}
+    try { showBackgroundsSection(); } catch (_) {}
   });
 
   window.addEventListener('wirelessboard:slot-name-updated', () => {

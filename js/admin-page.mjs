@@ -366,7 +366,7 @@ export function resetAdminRoutes() {
  * at a time; conflating it with the lock's list would mean each move silently
  * unguarded a section.
  */
-export const IN_PAGE_ITEMS = ['about', 'screens', 'logs'];
+export const IN_PAGE_ITEMS = ['about', 'screens', 'logs', 'backgrounds'];
 
 /**
  * Whether opening `view` should refill the moved section `id`.
