@@ -264,7 +264,6 @@ function updateBattery(slotSelector, data) {
     if (hideChart) {
       const hidden = data.battery === 255;
       slotSelector.querySelectorAll('.spark-row').forEach((row) => {
-        // eslint-disable-next-line no-param-reassign
         row.style.display = hidden ? 'none' : '';
       });
     }

@@ -9,7 +9,7 @@
 import { micboard } from './app.js';
 import { renderDisplayList } from './channelview.js';
 import {
-  buildPages, pagingReason, nextPage, rotationLabel, DEFAULT_DWELL_SECONDS,
+  pagesForBoard, nextPage, rotationLabel, DEFAULT_DWELL_SECONDS,
 } from './rotation.mjs';
 
 const BAR_ID = 'rotation-bar';
@@ -29,6 +29,26 @@ let pageIndex = 0;
 let heldSince = 0;
 let lastInteraction = 0;
 let applied = false;
+
+// ⛔ The slot list currently on the board, so a page whose *contents* changed
+// is redrawn even though its index did not (#215). The driver used to redraw
+// only when `pageIndex` moved, so anything that changes what a page holds --
+// a resize or a card-shape change moving `capacity`, a sync rewriting a group,
+// the operator picking a different group -- left the old cards up while the bar
+// described the new page. Measured on a development board: capacity 4 over
+// twelve channels drew **two** cards.
+let drawn = '';
+
+/** Put a page up, if it is not already up. */
+function showPage(page) {
+  const slots = (page && page.slots) || [];
+  const key = slots.join(',');
+  if (key === drawn) {
+    return;
+  }
+  drawn = key;
+  renderDisplayList(slots);
+}
 
 /** Channels the board would want somebody to look at right now. */
 function criticalSlots() {
@@ -61,48 +81,29 @@ function criticalSlots() {
 // whether every channel fits, arithmetically, before anything is drawn.
 
 /**
- * The pages this board has, and how many channels one screenful holds.
+ * What the board is showing, and how much of it fits.
  *
- * %s `perPage` was always here and never supplied. `buildPages` has split a
- * group into pages since #113 -- comment, behaviour and fourteen test call
- * sites -- but the only production caller passed `micboard.rotationPerPage`,
- * which is read here and written nowhere in the project. It was always
- * `undefined`, so the capacity fell to `Infinity` and a group was never split.
- * Everything needed to page was built; this one number was missing.
+ * ⭐ `capacity` is published by `updateTvLayoutMetrics`, which already computed
+ * it. Deriving it again here would mean two places reading the container's width
+ * and calling `computeLayout`, which is the fault #57 was about -- and they
+ * would disagree the first time one of them was changed.
  *
- * %s A board with no groups still has to page. `buildPages` works from the
- * group list, so a board that never configured one produced an empty page list,
- * `pageCount > 1` failed, and nothing paged -- which would have left the
- * guarantee holding only for boards that happen to use groups. One implicit
- * group of everything on the display list stands in.
+ * ⛔⛔ `displayList` is the Showing selection, and that is the point (#215).
+ * `renderGroup` sets it to `allSlots()` for *All channels* and to the group's own
+ * slots for a group, and `renderDisplayList(page.slots)` never writes it back --
+ * so it is still the whole selection after paging has started. The version this
+ * replaces read `config.groups` instead and never consulted it, which handed a
+ * board showing everything one group's slots in one group's order.
  */
-function pagesNow() {
-  // ⭐ Published by `updateTvLayoutMetrics`, which already computed it. Deriving
-  // it again here would mean two places reading the container's width and
-  // calling `computeLayout`, which is the fault #57 was about -- and they would
-  // disagree the first time one of them was changed.
+function boardState() {
   const capacity = Number(micboard.boardCapacity) > 0
     ? Number(micboard.boardCapacity)
     : Infinity;
+  const shown = (micboard.displayList || []).filter((slot) => Number(slot) > 0);
   const groups = micboard.config && Array.isArray(micboard.config.groups)
     ? micboard.config.groups
     : [];
-  const pages = buildPages(groups, { perPage: capacity });
-  if (pages.length) {
-    return { pages, capacity };
-  }
-
-  const slots = (micboard.displayList || []).filter((slot) => Number(slot) > 0);
-  if (!slots.length) {
-    return { pages: [], capacity };
-  }
-  return {
-    pages: buildPages(
-      [{ group: 0, title: '', slots }],
-      { perPage: capacity },
-    ),
-    capacity,
-  };
+  return { capacity, shown, groups };
 }
 
 /**
@@ -178,16 +179,15 @@ function stopRendering() {
 }
 
 function tick() {
-  const { pages, capacity } = pagesNow();
-  const total = (micboard.displayList || []).filter((slot) => Number(slot) > 0).length;
+  const { capacity, shown, groups } = boardState();
+  const total = shown.length;
 
-  // ⛔ One decider, and it answers *why*. Nothing else in here asks
-  // `micboard.rotation` directly, so the preference and the overflow cannot be
-  // read as contending answers to the same question.
-  const why = pagingReason({
-    rotationPref: micboard.rotation,
-    overflows: Number.isFinite(capacity) && capacity < total,
-    pageCount: pages.length,
+  // ⛔ One decider, and it answers *why* **and what** (#215). Nothing else in
+  // here asks `micboard.rotation` directly, so the preference and the overflow
+  // cannot be read as contending answers to the same question -- and nothing
+  // else chooses the pages, so the reason and the content cannot disagree.
+  const { pages, why } = pagesForBoard({
+    capacity, shown, group: micboard.group, groups, rotationPref: micboard.rotation,
   });
 
   // ⛔ So the view panel can say why the switch is not in force. A board
@@ -200,6 +200,20 @@ function tick() {
   if (!why) {
     // ⛔ Everything fits and the operator did not ask. The board goes back to
     // showing what it was showing and says nothing -- this is not a screensaver.
+    //
+    // ⛔⛔ "Goes back to showing" has to actually redraw (#215). It used to only
+    // take the bar down, so a board that stopped needing to page was left on
+    // whichever page it had reached -- two of twelve channels on screen, no bar,
+    // and nothing anywhere saying ten were missing. That is the one failure this
+    // display cannot afford, and it is the quietest form of it.
+    //
+    // ⚠️ Only on the way out of paging. `tick` runs every second and
+    // `renderDisplayList` rebuilds the board and its charts; doing that on every
+    // idle tick would be a redraw a second for ever.
+    if (applied) {
+      drawn = '';
+      renderDisplayList(micboard.displayList || []);
+    }
     stopRendering();
     applied = false;
     return;
@@ -211,7 +225,7 @@ function tick() {
   if (!applied) {
     applied = true;
     heldSince = Date.now();
-    renderDisplayList(pages[pageIndex].slots);
+    showPage(pages[pageIndex]);
     renderBar(pages, {
       why,
       secondsLeft: (pages[pageIndex] && pages[pageIndex].dwell) || DEFAULT_DWELL_SECONDS,
@@ -234,7 +248,7 @@ function tick() {
     if (step.index !== pageIndex) {
       pageIndex = step.index;
       heldSince = Date.now();
-      renderDisplayList(pages[pageIndex].slots);
+      showPage(pages[pageIndex]);
     }
     renderBar(pages, {
       held: true,
@@ -247,6 +261,8 @@ function tick() {
   }
 
   if (elapsed < currentDwell) {
+    // ⚠️ Still this page's turn, but its contents may have changed under us.
+    showPage(pages[pageIndex]);
     // ⭐ The countdown was computed here all along and never passed on:
     // `elapsed` and `currentDwell` are both above, and `renderBar` only ever
     // received the page name.
@@ -261,7 +277,7 @@ function tick() {
 
   pageIndex = step.index;
   heldSince = Date.now();
-  renderDisplayList(pages[pageIndex].slots);
+  showPage(pages[pageIndex]);
   // ⚠️ The page has just turned, so the countdown starts at this page's own
   // dwell rather than carrying the one that ran out.
   renderBar(pages, {
@@ -287,6 +303,7 @@ export function startRotation() {
   stopRotation();
   pageIndex = 0;
   applied = false;
+  drawn = '';
   heldSince = Date.now();
   // ⛔ Turning the rotation on is not "somebody is using the board". The key
   // press that starts it would otherwise count as interaction and hold the
