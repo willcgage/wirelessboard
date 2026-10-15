@@ -97,7 +97,45 @@
                 aria-label="Close the view panel">&#10005;</button>
       </div>
       <div id="view-panel-body"></div>
-      <p class="view-panel-foot">Saved on this device &middot; press ? for every key</p>
+      <!-- ⛔ Pinned, not scrolled to (#188). The body above scrolls; this foot
+           does not. A route somebody has to scroll to find is a route somebody
+           decides does not exist, which is the fault being fixed rather than a
+           new one to introduce. -->
+      <div class="view-panel-pinned">
+        <!-- ⛔ "press ? for every key" used to be here. #160 retired the
+             bindings; `kbd.js` is Escape only. The line now says what the panel
+             above it actually is, which is the first of the three places the
+             per-device / global boundary is stated (#116, #188). -->
+        <p class="view-panel-foot" id="view-panel-scope"></p>
+        <button type="button" id="admin-door" class="admin-door" data-wb-global>
+          <span class="admin-door__label">Administration</span>
+          <span class="admin-door__detail"></span>
+          <span class="admin-door__scope"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ⛔⛔ The administration overlay (#188). Static markup, like the view
+         panel, so the ids it is filled through exist in the document rather
+         than only in a function -- `dead-ids.test.mjs` requires that of every
+         `getElementById` and is right to.
+
+         ⛔ An overlay rather than a full-screen view (maintainer, 2026-10-14):
+         administration happens mid-service, and the board staying visible
+         behind it is the point. -->
+    <div id="admin-page" class="admin-page">
+      <div class="admin-backdrop" id="admin-page-backdrop"></div>
+      <div class="admin-panel" role="dialog" aria-modal="true" aria-labelledby="admin-page-banner">
+        <div class="admin-head">
+          <h2 class="admin-title">Administration</h2>
+          <button type="button" id="admin-page-close" class="admin-close"
+                  aria-label="Close administration">&times;</button>
+        </div>
+        <!-- ⚠️ The third and loudest statement of the boundary (#116). Filled
+             from `scopeNote`, so there is one phrasing of it in the project. -->
+        <p class="admin-banner" id="admin-page-banner"></p>
+        <div class="admin-body" id="admin-page-body"></div>
+      </div>
     </div>
 
   <div id="hud" class="container collapse">

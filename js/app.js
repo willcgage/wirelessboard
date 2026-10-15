@@ -14,6 +14,8 @@ import {
   isFullscreen, setFullscreen,
 } from './display.js';
 import { drawerBits, drawerModeWith, DRAWER_MODES } from './panel-controls.mjs';
+import { registerAdminRoute } from './admin-page.mjs';
+import { initAdminPage, openAdminPage } from './admin-page.js';
 import { initViewPanel, toggleViewPanel } from './view-panel.js';
 import { setTimeMode } from './signal-view.js';
 import {
@@ -400,24 +402,72 @@ function mapGroups() {
 
   const goExtended = document.getElementById('go-extended');
   if (goExtended) {
-    goExtended.addEventListener('click', () => {
-      if (refuseWhenLocked('slot-edit')) return;
-      slotEditToggle();
+    goExtended.addEventListener('click', openSlotNames);
+  }
+
+  /**
+   * The configuration pane, on a given tab.
+   *
+   * ⭐ Extracted so the menu item and the administration page run the *same*
+   * function rather than two that drift (#188). It keeps the lock refusal, so
+   * the new route cannot be the one that forgets it. The registration below
+   * stays when the menu item goes.
+   */
+  function openConfigPane(tab) {
+    if (refuseWhenLocked('config')) return;
+    // Only two tabs exist -- devices and logs -- so Receivers and Screens both
+    // land on the devices pane. Their value on the rail is the state line.
+    micboard.configTab = tab === 'logs' ? 'logs' : 'devices';
+    initConfigEditor();
+    micboard.url.background = undefined;
+    hideHud();
+    if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
+    resetViews();
+  }
+
+  function openSlotNames() {
+    if (refuseWhenLocked('slot-edit')) return;
+    slotEditToggle();
+    hideHud();
+    resetViews();
+  }
+
+  function openGroupEdit() {
+    if (refuseWhenLocked('group-edit')) return;
+    if (micboard.group !== 0) {
+      groupEditToggle();
       hideHud();
       resetViews();
-    });
+    }
   }
+
+  function toggleDemoMode() {
+    if (refuseWhenLocked('demo')) return;
+    micboard.url.demo = micboard.url.demo === 'true' ? undefined : 'true';
+    updateHash();
+    window.location.reload();
+  }
+
+  // ⛔ One registration per rail item (#188). `admin-page.test.mjs` fails if a
+  // guarded action has no item, and the page itself says so if an item has no
+  // route -- a button that draws and does nothing is the same failure as a
+  // missing one, and harder to notice.
+  registerAdminRoute('receivers', () => openConfigPane('devices'));
+  registerAdminRoute('screens', () => openConfigPane('devices'));
+  registerAdminRoute('logs', () => openConfigPane('logs'));
+  registerAdminRoute('slots', openSlotNames);
+  registerAdminRoute('group', openGroupEdit);
+  registerAdminRoute('backgrounds', openBackground);
+  registerAdminRoute('demo', toggleDemoMode);
+  // ⭐ `showPCOView` guards the lock itself, so the event route is as safe as
+  // the menu item and needs no second check here.
+  registerAdminRoute('pco', () => {
+    window.dispatchEvent(new Event('wirelessboard:open-pco'));
+  });
 
   const goConfig = document.getElementById('go-config');
   if (goConfig) {
-    goConfig.addEventListener('click', () => {
-      if (refuseWhenLocked('config')) return;
-      initConfigEditor();
-      micboard.url.background = undefined;
-      hideHud();
-      if (goBackground) goBackground.setAttribute('aria-expanded', 'false');
-      resetViews();
-    });
+    goConfig.addEventListener('click', () => openConfigPane('devices'));
   }
 
   // ⛔ The one control a board can always reach (#110, #111). It opens the view
@@ -440,6 +490,10 @@ function mapGroups() {
     getGroups: () => micboard.groups || {},
     getGroup: () => micboard.group || 0,
     setGroup: (n) => renderGroup(n),
+    // ⛔ So the door at the foot of the panel can be drawn refused rather than
+    // hidden when the board is locked to display only (#188).
+    getLockState: () => micboard.viewerLock,
+    openAdmin: openAdminPage,
     getScreens: () => (micboard.config && micboard.config.screens) || [],
     getScreenId: () => micboard.screenId || '',
     setScreenId: (id) => {
@@ -489,24 +543,14 @@ function mapGroups() {
   if (goDemo && !goDemo.dataset.bound) {
     goDemo.addEventListener('click', (event) => {
       event.preventDefault();
-      if (refuseWhenLocked('demo')) return;
-      micboard.url.demo = micboard.url.demo === 'true' ? undefined : 'true';
-      updateHash();
-      window.location.reload();
+      toggleDemoMode();
     });
     goDemo.dataset.bound = 'true';
   }
 
   const goGroupEdit = document.getElementById('go-groupedit');
   if (goGroupEdit) {
-    goGroupEdit.addEventListener('click', () => {
-      if (refuseWhenLocked('group-edit')) return;
-      if (micboard.group !== 0) {
-        groupEditToggle();
-        hideHud();
-        resetViews();
-      }
-    });
+    goGroupEdit.addEventListener('click', openGroupEdit);
   }
 
   const backgroundClose = document.getElementById('background-close');
@@ -926,6 +970,21 @@ document.addEventListener('DOMContentLoaded', () => {
   try { bindPcoNav(); bindPcoHandlers(); bindScreenHandlers(); } catch (e) {}
   // Put the resolved view choices on the container before the first layout
   // pass, so a remembered portrait board does not paint as fit-to-page first.
+  // ⛔ The administration overlay (#188). Bound before the first layout pass
+  // for the same reason the gear is: it must not depend on any pane above
+  // having rendered, because it is the route to all of them.
+  try {
+    initAdminPage({
+      getLockState: () => micboard.viewerLock,
+      getViewers: () => micboard.viewers,
+      getFacts: () => ({
+        config: micboard.config,
+        discovered: micboard.discovered,
+        images: micboard.img_list,
+        videos: micboard.mp4_list,
+      }),
+    });
+  } catch (_) {}
   try { applyBoardLayout(); } catch (_) {}
   try { startTvLayoutWatchers(); } catch (_) {}
   // ⚠️ Its own slow timer, not the board payload's. The Live position changes

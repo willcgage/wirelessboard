@@ -158,18 +158,74 @@ test('⛔⛔ the keyboard cannot reach an editor at all', () => {
   assert.ok(!/url\.demo/.test(kbd), 'and nor does it reach demo mode');
 });
 
-test('and nor does a menu item', () => {
-  // The pointer route. Every click handler that opens one of these has to ask
-  // too, or the lock only holds against a keyboard nobody has.
+/**
+ * Every function body in a file, by brace matching.
+ *
+ * ⛔ Brace matching rather than splitting on a delimiter. The previous version
+ * of the guard below split `app.js` on `addEventListener('click'` and read the
+ * next 400 characters, which worked only while every route *was* a click
+ * handler. #188 moved the routes into named functions so the menu and the
+ * administration page could share one implementation, and the guard quietly
+ * stopped finding any of them -- it would have passed while looking at the
+ * wrong shape, which is exactly what [[guards-that-cannot-fail]] is about.
+ */
+function functionBodies(source) {
+  const bodies = [];
+  const re = /function\s+([A-Za-z0-9_$]+)\s*\([^)]*\)\s*\{/g;
+  let match = re.exec(source);
+  while (match) {
+    let depth = 1;
+    let i = match.index + match[0].length;
+    while (i < source.length && depth > 0) {
+      const ch = source[i];
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+      i += 1;
+    }
+    bodies.push({ name: match[1], body: source.slice(match.index, i) });
+    match = re.exec(source);
+  }
+  return bodies;
+}
+
+const LOCK_CHECK = /refuseWhenLocked|isLocked\(|allows\(/;
+
+test('and nor does any pointer route', () => {
+  // Whatever opens one of these -- a menu item, the administration page's route
+  // registry (#188), anything added later -- has to ask the lock, or it only
+  // holds against a keyboard nobody has.
   const app = read('js/app.js');
-  const handlers = app.split('addEventListener(\'click\'');
-  const reaching = handlers.filter((chunk, i) => i > 0
-    && GUARDED_CALLS.some((fn) => chunk.slice(0, 400).includes(`${fn}(`)));
-  assert.ok(reaching.length >= 3, 'expected the menu handlers for config, groups and slot names');
-  reaching.forEach((chunk) => {
-    assert.ok(
-      /locked\(\)|allows\(|refuseWhenLocked/.test(chunk.slice(0, 400)),
-      `a click handler opens an editor without checking the lock: ${chunk.slice(0, 120)}`,
-    );
+  const reaching = functionBodies(app).filter(({ body }) => {
+    const inner = body.slice(body.indexOf('{'));
+    return GUARDED_CALLS.some((fn) => inner.includes(`${fn}(`));
+  });
+
+  assert.ok(
+    reaching.length >= 3,
+    `expected the routes for config, groups and slot names; found ${reaching.length}`,
+  );
+
+  reaching.forEach(({ name, body }) => {
+    assert.ok(LOCK_CHECK.test(body), `${name}() opens an editor without checking the lock`);
+  });
+});
+
+test('⭐ and the demo switch, which no call list can see', () => {
+  // ⚠️ `demo` is not one of `GUARDED_CALLS` -- it is a flag flip and a reload --
+  // so the guard above cannot see it. It is the one guarded action that could
+  // be re-added without a check and leave no trace in the call list.
+  //
+  // ⚠️ Matches the *flip* (`url.demo = micboard.url.demo === ...`), not every
+  // assignment: `readURLParameters` sets the same field from the hash, and the
+  // lock has never guarded the URL. So this covers a pointer route that toggles
+  // demo mode, which is what the administration page adds, and not a new route
+  // that sets it outright -- `admin-page.test.mjs` is what requires `demo` to be
+  // in the lock's set at all.
+  const app = read('js/app.js');
+  const toggles = functionBodies(app)
+    .filter(({ body }) => /url\.demo\s*=\s*micboard\.url\.demo/.test(body.slice(body.indexOf('{'))));
+  assert.ok(toggles.length >= 1, 'expected a function that toggles demo mode');
+  toggles.forEach(({ name, body }) => {
+    assert.ok(LOCK_CHECK.test(body), `${name}() toggles demo mode without checking the lock`);
   });
 });
