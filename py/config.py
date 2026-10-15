@@ -66,28 +66,6 @@ DISCOVERY_MAX_INTERVAL = 900
 DISCOVERY_MIN_TIMEOUT = 100
 DISCOVERY_MAX_TIMEOUT = 5000
 
-GOOGLE_DRIVE_SCOPE_READONLY = 'https://www.googleapis.com/auth/drive.readonly'
-
-DEFAULT_CLOUD_SETTINGS = {
-    'providers': {
-        'google_drive': {
-            'enabled': False,
-            'client': {},
-            'auth': {
-                'credential_id': 'google-drive-default',
-                'has_credentials': False,
-                'scopes': [GOOGLE_DRIVE_SCOPE_READONLY],
-                'updated_at': None,
-            },
-            'cache': {
-                'default': False,
-                'directory': None,
-                'max_age_hours': 168,
-            },
-        },
-    },
-    'slot_sources': {},
-}
 
 BACKGROUND_MODES = ('NONE', 'IMG', 'MP4')
 DEFAULT_BACKGROUND_SETTINGS = {
@@ -477,59 +455,6 @@ def migrate_pco_number_fallback() -> bool:
     return True
 
 
-def ensure_cloud_defaults() -> Dict[str, Any]:
-    cloud_cfg = config_tree.get('cloud')
-    if not isinstance(cloud_cfg, dict):
-        config_tree['cloud'] = copy.deepcopy(DEFAULT_CLOUD_SETTINGS)
-        return copy.deepcopy(config_tree['cloud'])
-
-    providers = cloud_cfg.setdefault('providers', {})
-    if not isinstance(providers, dict):
-        cloud_cfg['providers'] = {}
-        providers = cloud_cfg['providers']
-
-    provider = providers.get('google_drive')
-    if not isinstance(provider, dict):
-        providers['google_drive'] = copy.deepcopy(DEFAULT_CLOUD_SETTINGS['providers']['google_drive'])
-        provider = providers['google_drive']
-
-    provider.setdefault('enabled', False)
-
-    client_cfg = provider.get('client')
-    if not isinstance(client_cfg, dict):
-        provider['client'] = {}
-
-    auth_cfg = provider.get('auth')
-    if not isinstance(auth_cfg, dict):
-        provider['auth'] = copy.deepcopy(DEFAULT_CLOUD_SETTINGS['providers']['google_drive']['auth'])
-    else:
-        auth_cfg.setdefault('credential_id', DEFAULT_CLOUD_SETTINGS['providers']['google_drive']['auth']['credential_id'])
-        auth_cfg.setdefault('has_credentials', False)
-        scopes = auth_cfg.get('scopes')
-        if not isinstance(scopes, list):
-            auth_cfg['scopes'] = copy.deepcopy(DEFAULT_CLOUD_SETTINGS['providers']['google_drive']['auth']['scopes'])
-        auth_cfg.setdefault('updated_at', None)
-
-    cache_cfg = provider.get('cache')
-    if not isinstance(cache_cfg, dict):
-        provider['cache'] = copy.deepcopy(DEFAULT_CLOUD_SETTINGS['providers']['google_drive']['cache'])
-    else:
-        cache_cfg.setdefault('default', False)
-        cache_cfg.setdefault('directory', None)
-        try:
-            cache_cfg['max_age_hours'] = int(cache_cfg.get('max_age_hours', 168) or 168)
-        except (TypeError, ValueError):
-            cache_cfg['max_age_hours'] = 168
-        if cache_cfg['max_age_hours'] < 1:
-            cache_cfg['max_age_hours'] = 1
-
-    slot_sources = cloud_cfg.get('slot_sources')
-    if not isinstance(slot_sources, dict):
-        cloud_cfg['slot_sources'] = {}
-
-    return copy.deepcopy(cloud_cfg)
-
-
 def get_logging_settings() -> Dict[str, Any]:
     ensure_logging_defaults()
     return copy.deepcopy(config_tree.get('logging', {}))
@@ -564,115 +489,14 @@ def update_logging_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_cloud_settings() -> Dict[str, Any]:
-    ensure_cloud_defaults()
     return copy.deepcopy(config_tree.get('cloud', {}))
 
 
-def get_google_drive_settings() -> Dict[str, Any]:
-    ensure_cloud_defaults()
-    provider = config_tree['cloud']['providers']['google_drive']
-    return copy.deepcopy(provider)
-
-
-def update_google_drive_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
-    ensure_cloud_defaults()
-    if not isinstance(payload, dict):
-        raise ValueError('Invalid Google Drive configuration payload')
-
-    provider = config_tree['cloud']['providers']['google_drive']
-
-    if 'enabled' in payload:
-        provider['enabled'] = bool(payload['enabled'])
-
-    if 'client' in payload:
-        client_payload = payload['client']
-        if client_payload is None:
-            provider['client'] = {}
-        elif isinstance(client_payload, dict):
-            provider['client'] = copy.deepcopy(client_payload)
-        else:
-            raise ValueError('google_drive.client must be an object')
-
-    if 'cache' in payload:
-        cache_payload = payload['cache']
-        if cache_payload is None:
-            provider['cache'] = copy.deepcopy(DEFAULT_CLOUD_SETTINGS['providers']['google_drive']['cache'])
-        elif isinstance(cache_payload, dict):
-            cache_cfg = provider.setdefault('cache', {})
-            if not isinstance(cache_cfg, dict):
-                cache_cfg = {}
-            default_flag = cache_payload.get('default')
-            if default_flag is not None:
-                cache_cfg['default'] = bool(default_flag)
-            if 'directory' in cache_payload:
-                directory_val = cache_payload.get('directory')
-                if directory_val:
-                    cache_cfg['directory'] = os.path.abspath(os.path.expanduser(str(directory_val).strip()))
-                else:
-                    cache_cfg['directory'] = None
-            if 'max_age_hours' in cache_payload:
-                max_age_val = cache_payload.get('max_age_hours')
-                if max_age_val is None or max_age_val == '':
-                    raise ValueError('google_drive.cache.max_age_hours must be specified')
-                try:
-                    max_age_int = int(str(max_age_val))
-                except (TypeError, ValueError):
-                    raise ValueError('google_drive.cache.max_age_hours must be an integer')
-                if max_age_int < 1:
-                    max_age_int = 1
-                cache_cfg['max_age_hours'] = max_age_int
-            provider['cache'] = cache_cfg
-        else:
-            raise ValueError('google_drive.cache must be an object or null')
-
-    if 'auth' in payload:
-        auth_payload = payload['auth']
-        if auth_payload is None:
-            provider['auth'] = copy.deepcopy(DEFAULT_CLOUD_SETTINGS['providers']['google_drive']['auth'])
-        elif isinstance(auth_payload, dict):
-            auth_cfg = provider.setdefault('auth', {})
-            if not isinstance(auth_cfg, dict):
-                auth_cfg = {}
-            credential_id = auth_payload.get('credential_id')
-            if credential_id:
-                auth_cfg['credential_id'] = str(credential_id)
-            if 'has_credentials' in auth_payload:
-                auth_cfg['has_credentials'] = bool(auth_payload['has_credentials'])
-            scopes_payload = auth_payload.get('scopes')
-            if isinstance(scopes_payload, (list, tuple)):
-                auth_cfg['scopes'] = [str(scope) for scope in scopes_payload if scope]
-            elif scopes_payload is None:
-                auth_cfg['scopes'] = copy.deepcopy(DEFAULT_CLOUD_SETTINGS['providers']['google_drive']['auth']['scopes'])
-            if 'updated_at' in auth_payload:
-                updated_value = auth_payload['updated_at']
-                auth_cfg['updated_at'] = str(updated_value) if updated_value else None
-            provider['auth'] = auth_cfg
-        else:
-            raise ValueError('google_drive.auth must be an object or null')
-
-    save_current_config()
-    return copy.deepcopy(provider)
-
-
-def update_google_drive_auth_metadata(metadata: Dict[str, Any], *, persist: bool = True) -> Dict[str, Any]:
-    ensure_cloud_defaults()
-    if not isinstance(metadata, dict):
-        raise ValueError('Invalid Google Drive auth metadata payload')
-
-    provider = config_tree['cloud']['providers']['google_drive']
-    provider['auth'] = copy.deepcopy(metadata)
-    if persist:
-        save_current_config()
-    return copy.deepcopy(provider['auth'])
-
-
 def get_slot_media_sources() -> Dict[str, Any]:
-    ensure_cloud_defaults()
     return copy.deepcopy(config_tree['cloud'].get('slot_sources', {}))
 
 
 def update_slot_media_sources(payload: Dict[str, Any], *, persist: bool = True) -> Dict[str, Any]:
-    ensure_cloud_defaults()
     if not isinstance(payload, dict):
         raise ValueError('slot source payload must be an object')
     config_tree['cloud']['slot_sources'] = copy.deepcopy(payload)
@@ -872,7 +696,6 @@ def config():
     logging_init()
     read_json_config(config_file())
     ensure_discovery_defaults()
-    ensure_cloud_defaults()
     ensure_background_defaults()
     settings = ensure_logging_defaults()
     configure_logging(settings)
@@ -1082,7 +905,6 @@ def read_json_config(file):
     config_tree['wirelessboard_version'] = version
     config_tree['micboard_version'] = version
     ensure_discovery_defaults()
-    ensure_cloud_defaults()
     ensure_background_defaults()
     ensure_logging_defaults()
 
