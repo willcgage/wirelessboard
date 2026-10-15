@@ -130,6 +130,49 @@
         <div class="admin-body admin-layout" id="admin-page-body">
           <nav class="admin-rail" id="admin-page-rail" aria-label="Administration sections"></nav>
           <div class="admin-content" id="admin-page-content"></div>
+      <section class="admin-section admin-section--moved" id="admin-section-screens" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Screens &amp; docks</h3>
+          <p class="admin-section__lead">The displays this installation runs on, and what sits
+            underneath them. Measured once, for every board.</p>
+        </div>
+
+        <p class="admin-prose">
+          A board keeps its columns wide enough to line up with the microphones in the dock below
+          it &mdash; a column narrower than a dock position stops pointing at anything. Measure the
+          <strong>diagonal</strong>, the size it was sold as; the resolution is not asked for,
+          because every screen reports its own.
+        </p>
+
+        <div id="screen-list" class="admin-rows"></div>
+
+        <div class="admin-section__head admin-section__head--sub">
+          <h4 class="admin-section__subtitle">Docks</h4>
+          <p class="admin-section__lead">What is on the table below a screen.
+            <strong>Everything down there is a dock</strong>, whether or not it charges: a
+            <strong>charging dock</strong>, a <strong>networked</strong> one that can also be asked
+            what is in it, or a <strong>non-charging dock</strong> where microphones are simply
+            left. All of them are rows of positions and the board treats them the same.</p>
+        </div>
+
+        <p class="admin-prose">
+          Measure the width of <strong>one position</strong>, left to right &mdash; one bay, which
+          is what a column points at. The venue&rsquo;s Shure SBC200 is <strong>3.9in</strong>.
+          &#9888;&#65039; Since the one-row arrangement became a guarantee, this width decides how
+          many columns a board shows.
+        </p>
+
+        <div id="dock-list" class="admin-rows"></div>
+
+        <div class="admin-actions">
+          <button type="button" id="screen-add" class="admin-btn">Add a screen</button>
+          <button type="button" id="dock-add" class="admin-btn">Add a dock</button>
+          <button type="button" id="screen-save" class="admin-btn admin-btn--primary">
+            Save screens &amp; docks
+          </button>
+          <span id="screen-status" class="admin-status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
         </div>
       </div>
     </div>
@@ -819,63 +862,7 @@
               </div>
             </div>
 
-            <!-- The screens in the building, so a board can be told how big
-                 the one it is on actually is. ⛔ The sizes are global because
-                 they describe the building; which screen a device *is* stays
-                 on that device, in its view settings (#170). -->
-            <div class="col-12 col-xl-6" id="cfg-screens-col">
-              <div class="config-header">
-                <h3 class="text-center">Screens</h3>
-              </div>
-              <div class="config-panel p-3 border rounded mb-3">
-                <p class="form-text mt-0">
-                  Describe each display Wirelessboard runs on. A board can then keep its columns
-                  wide enough to line up with the microphones in the dock below it &mdash; a column
-                  narrower than a dock position stops pointing at anything.
-                  <br>&#9888;&#65039; The resolution is not asked for: every screen reports its own.
-                  Measure the <strong>diagonal</strong> &mdash; the size it was sold as.
-                  <br>Each board then picks which screen it is, once, from its own view settings.
-                </p>
-                <div id="screen-list" class="mb-2"></div>
-
-                <!-- ⭐ #203. The position width used to be a field on each screen
-                     row. A dock is not a property of a screen: one dock can sit
-                     under several screens, one screen can have none, and a dock
-                     can be replaced without the screen changing. So it is
-                     described once here and the screens point at it. -->
-                <div class="config-subhead mt-3">
-                  <h5>Dock</h5>
-                </div>
-                <p class="form-text mt-0">
-                  What is on the table below a screen. <strong>Everything down there is a dock</strong>,
-                  whether or not it charges: a <strong>charging dock</strong>, a <strong>networked</strong>
-                  one that can also be asked what is in it, or a <strong>non-charging dock</strong> where
-                  microphones are simply left. All of them are rows of positions and the board treats
-                  them the same &mdash; the kind is so you know which one you are editing.
-                  <br>Measure the width of <strong>one position</strong>, left to right. The
-                  venue&rsquo;s Shure SBC200 is <strong>3.9in</strong>.
-                  <br>&#9888;&#65039; Since the one-row arrangement became a guarantee, this width
-                  decides how many columns a board shows &mdash; a column may not be narrower than
-                  the position it points at.
-                </p>
-                <div id="dock-list" class="mb-2"></div>
-
-                <div class="d-flex flex-wrap gap-2">
-                  <button type="button" id="screen-add" class="btn btn-outline-primary btn-sm">
-                    Add a screen
-                  </button>
-                  <button type="button" id="dock-add" class="btn btn-outline-primary btn-sm">
-                    Add a dock
-                  </button>
-                  <button type="button" id="screen-save" class="btn btn-primary btn-sm">
-                    Save screens &amp; dock
-                  </button>
-                  <span id="screen-status" class="small align-self-center"></span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Groups, and the question the board's own editor cannot answer:
+                        <!-- Groups, and the question the board's own editor cannot answer:
                  is anything in no group at all? A channel in none of them is
                  invisible to anyone viewing groups rather than the combined
                  board, and nothing on the board says so. #114. -->

@@ -5352,8 +5352,14 @@ function renderScreenRows() {
     removeCol.className = 'col-12 col-md-1 d-grid';
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'btn btn-outline-secondary btn-sm';
-    remove.textContent = 'Remove';
+    // ⭐ A cross, as the design draws it, and `aria-label` because a glyph is
+    // not a name. ⛔ The word "Remove" was 71px of text in a 60px column, so it
+    // overflowed the row and put a horizontal scrollbar under the editor once
+    // it moved into the administration page's narrower pane (#222).
+    remove.className = 'admin-row-remove';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', 'Remove this row');
+    remove.title = 'Remove this row';
     remove.addEventListener('click', () => {
       screenRows.splice(index, 1);
       renderScreenRows();
@@ -5471,8 +5477,14 @@ function renderDockRows() {
     removeCol.className = 'col-6 col-md-1 d-grid';
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'btn btn-outline-secondary btn-sm';
-    remove.textContent = 'Remove';
+    // ⭐ A cross, as the design draws it, and `aria-label` because a glyph is
+    // not a name. ⛔ The word "Remove" was 71px of text in a 60px column, so it
+    // overflowed the row and put a horizontal scrollbar under the editor once
+    // it moved into the administration page's narrower pane (#222).
+    remove.className = 'admin-row-remove';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', 'Remove this row');
+    remove.title = 'Remove this row';
     remove.addEventListener('click', () => {
       // ⛔ Never silently. Since #201 this width decides the column count, so
       // taking it away changes what those screens show -- and a board that
@@ -5502,6 +5514,21 @@ function renderDockRows() {
 
     host.appendChild(wrap);
   });
+}
+
+/**
+ * Fill the screens and docks editor from the configuration the board holds.
+ *
+ * ⛔ Exported for #222. The editor's markup moved into the administration page,
+ * and this is the only part of it that was NOT reachable from there: the
+ * handlers are bound on `document` so they work wherever the rows are, but this
+ * ran once, inside the configuration pane's own open. Moved markup with nothing
+ * filling it draws an empty list and reads as "no screens described" -- which is
+ * the state the whole column-floor chain depends on, so it is the one wrong
+ * answer this editor must never give.
+ */
+export function refreshScreensEditor() {
+  applyScreensToForm(micboard.config || {});
 }
 
 function applyScreensToForm(cfg) {

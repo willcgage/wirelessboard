@@ -6,7 +6,7 @@ import path from 'node:path';
 import {
   SECTIONS, allItems, offeredActions, sectionsFor, refusedCount, refusedSummary, stateLine,
   UNGUARDED_ITEMS,
-  IN_PAGE_ITEMS,
+  IN_PAGE_ITEMS, shouldFillSection,
   DOOR_DETAIL, DOOR_SCOPE,
   registerAdminRoute, runAdminRoute, resetAdminRoutes, unroutedItems, adminRouteIds,
 } from './admin-page.mjs';
@@ -342,7 +342,10 @@ test('⛔⛔ there is no bar for the door to be trapped inside', () => {
   // are allowed, so a new one has to be justified here rather than slipping in
   // behind a passing test.
   const navIds = (html.match(/<nav[^>]*>/g) || [])
-    .map((tag) => (/id="([^"]+)"/.exec(tag) || [, '(no id)'])[1]);
+    .map((tag) => {
+      const found = /id="([^"]+)"/.exec(tag);
+      return found ? found[1] : '(no id)';
+    });
   assert.deepEqual(
     navIds,
     ['admin-page-rail'],
@@ -422,13 +425,53 @@ test('⛔ a section the page draws itself is not reported as broken', () => {
 
   // ⛔ But the check must still have teeth: a section that neither registers a
   // route nor is drawn in the page is exactly the failure #188 names.
+  //
+  // ⚠️ This used to assert `>= 8 sections still hand over`, which was a
+  // snapshot of one afternoon rather than an invariant -- #222's whole job is
+  // to make that number fall, so the first section to move broke it.
+  //
+  // ⛔ What is actually invariant is the mechanism: a section that is NOT drawn
+  // in the page is reported when it has no route. Routes are registered by
+  // `app.js` at runtime, so a bare test sees none -- which makes this the
+  // strongest form available here, and it still fails if the exclusion is ever
+  // widened to swallow a section that really is missing.
+  resetAdminRoutes();
   const ids = SECTIONS.flatMap((s) => s.items).map((i) => i.id);
-  const unknown = ids.filter((id) => !IN_PAGE_ITEMS.includes(id));
-  assert.ok(unknown.length >= 8, 'most sections still hand over to an editor');
+  const reported = unroutedItems();
+  for (const id of ids) {
+    assert.equal(
+      reported.includes(id),
+      !IN_PAGE_ITEMS.includes(id),
+      `"${id}" is reported as unrouted when it should not be, or the reverse`,
+    );
+  }
 
   // ⚠️ And the two lists are kept apart on purpose: the lock's list is about
   // what may be READ on a locked board, this one about what is DRAWN here.
   // #222 grows this one section at a time, and conflating them would unguard
   // each section as it moved.
   assert.notEqual(IN_PAGE_ITEMS, UNGUARDED_ITEMS);
+});
+
+test('⛔⛔ a moved editor is filled when it opens, never on a redraw (#180)', () => {
+  // The first version of this refilled on every render. `renderAdminPage` runs
+  // on every `wirelessboard:viewers` event, so a row somebody had just added
+  // vanished about a second later -- measured in the browser, not reasoned
+  // about. ⛔ A stored configuration never contains a half-typed row, which is
+  // the whole of #180 and the reason no screen could be described until #189.
+  assert.equal(shouldFillSection({ view: 'screens', shown: null, id: 'screens' }), true);
+
+  // ⛔ The regression itself: the section is open, the page redraws, and the
+  // editor must NOT be refilled underneath whoever is typing in it.
+  assert.equal(shouldFillSection({ view: 'screens', shown: 'screens', id: 'screens' }), false);
+
+  // Closed sections are never filled, whatever was last shown.
+  assert.equal(shouldFillSection({ view: 'rail', shown: null, id: 'screens' }), false);
+  assert.equal(shouldFillSection({ view: 'about', shown: 'screens', id: 'screens' }), false);
+  assert.equal(shouldFillSection({ view: 'screens', shown: 'screens', id: 'slots' }), false);
+
+  // ⭐ And leaving a section and coming back DOES refill it, which is the part
+  // that makes the trade acceptable: the way to see another board's save is to
+  // reopen the section.
+  assert.equal(shouldFillSection({ view: 'screens', shown: null, id: 'screens' }), true);
 });

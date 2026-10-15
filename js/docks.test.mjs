@@ -73,8 +73,12 @@ test('⛔ the two kinds this replaced are read, and never confused with each oth
   // ⛔ A board that described its docks before this change keeps them, with
   // the same meaning, through a normalise — which is what runs on every save.
   const migrated = normalizeDocks([
-    { id: 'a', name: 'Rack', kind: 'dock', position_inches: 3.9 },
-    { id: 'b', name: 'Table', kind: 'pad', position_inches: 5 },
+    {
+      id: 'a', name: 'Rack', kind: 'dock', position_inches: 3.9,
+    },
+    {
+      id: 'b', name: 'Table', kind: 'pad', position_inches: 5,
+    },
   ]);
   assert.deepEqual(migrated.map((d) => d.kind), ['charging', 'noncharging']);
 });

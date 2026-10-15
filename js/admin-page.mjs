@@ -366,7 +366,30 @@ export function resetAdminRoutes() {
  * at a time; conflating it with the lock's list would mean each move silently
  * unguarded a section.
  */
-export const IN_PAGE_ITEMS = ['about'];
+export const IN_PAGE_ITEMS = ['about', 'screens'];
+
+/**
+ * Whether opening `view` should refill the moved section `id`.
+ *
+ * ⛔⛔ **Only on the transition into it.** The first version of this refilled on
+ * every render, argued for because the configuration can change underneath the
+ * page -- and it reintroduced #180 exactly. `renderAdminPage` runs on every
+ * `wirelessboard:viewers` event, so each one refilled the editor from the
+ * stored configuration, and a row somebody had just added vanished about a
+ * second later. **A stored configuration never contains a half-typed row**,
+ * which is the whole of #180 and the reason no screen could be described at all
+ * until #189.
+ *
+ * ⚠️ The cost is real and accepted: a section left open while another board
+ * saves shows the older list until it is reopened. Same trade #180 settled, and
+ * the right way round -- losing somebody's typing is worse than showing them a
+ * list that is a minute old.
+ *
+ * Pure, so the rule can be checked without a DOM.
+ */
+export function shouldFillSection({ view, shown, id }) {
+  return view === id && shown !== id;
+}
 
 export function unroutedItems() {
   const have = new Set(routes.keys());

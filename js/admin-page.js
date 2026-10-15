@@ -23,6 +23,7 @@
 
 import {
   sectionsFor, stateLine, runAdminRoute, unroutedItems, refusedSummary,
+  IN_PAGE_ITEMS, shouldFillSection,
   DOOR_LABEL, DOOR_DETAIL, DOOR_SCOPE,
 } from './admin-page.mjs';
 import { scopeNote, presenceLabel } from './viewer-scope.mjs';
@@ -88,14 +89,33 @@ function renderBanner() {
   }
 }
 
+/**
+ * In-page sections that are static markup rather than built here.
+ *
+ * ⛔ `about` is NOT one of them: Help is built by `renderHelp` from
+ * `help-content.mjs`, so its copy can be tested. These are editors that moved
+ * out of the configuration page with their ids intact, so `config.js` still
+ * finds its hosts.
+ */
+const MOVED_SECTIONS = IN_PAGE_ITEMS.filter((id) => id !== 'about');
+
+/**
+ * Which moved section is currently filled.
+ *
+ * ⛔ Not derivable from `view`: the point is to tell "the page redrew while this
+ * section was open" from "this section was just opened", and only the second
+ * may refill the editor underneath somebody's hands.
+ */
+let shown = null;
+
 function renderItem(item) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'admin-item';
-  // ⭐ Only meaningful now that the rail survives the choice. `about` is the
-  // one section that renders here rather than handing over, so it is the only
-  // one that can be "current" -- the rest close the page.
-  if (item.id === 'about' && view === 'about') {
+  // ⭐ Only meaningful now that the rail survives the choice. An in-page
+  // section can be current; the ones that still hand over to an old pane
+  // cannot, because choosing them closes this page.
+  if (item.id === view) {
     button.classList.add('is-current');
     button.setAttribute('aria-current', 'page');
   }
@@ -128,16 +148,16 @@ function renderItem(item) {
   }
 
   button.addEventListener('click', () => {
-    // ⭐ A section the overlay draws itself stays in the overlay, so the board
-    // renders in the content pane beside the rail. That is what #222 wants for
-    // all of them.
-    if (item.id === 'about') {
-      view = 'about';
+    // ⭐ A section this page draws itself renders in the content pane beside
+    // the rail, and the rail stays. That is what #222 wants for all of them;
+    // `IN_PAGE_ITEMS` is the list of the ones that have moved.
+    if (IN_PAGE_ITEMS.includes(item.id)) {
+      view = item.id;
       renderAdminPage();
       return;
     }
     // ⚠️ Everything else still opens a pane that takes the screen, so the
-    // overlay closes first -- a dead layer over a live editor otherwise.
+    // page closes first -- a dead layer over a live editor otherwise.
     closeAdminPage();
     runAdminRoute(item.id);
   });
@@ -313,6 +333,51 @@ export function renderAdminPage() {
   const content = document.getElementById('admin-page-content');
   if (content) {
     content.replaceChildren(view === 'about' ? renderHelp() : renderWelcome());
+  }
+
+  // ⛔ The moved sections are static markup, not built here. They live in the
+  // document so `config.js` can find its hosts by id exactly as it always has
+  // -- `renderScreenRows` and the save path were never told they had moved --
+  // so this shows and hides them rather than rendering them.
+  //
+  // ⚠️ `hidden` rather than a class, because the publish skeleton's
+  // `[hidden]{display:none!important}` is the one rule that cannot be lost to
+  // specificity, and a half-hidden editor that still takes clicks is worse
+  // than a visible one.
+  MOVED_SECTIONS.forEach((id) => {
+    const section = document.getElementById(`admin-section-${id}`);
+    if (!section) {
+      return;
+    }
+    const showing = view === id;
+    section.hidden = !showing;
+
+    // ⛔⛔ Filled when the section is OPENED, never on a redraw. This said
+    // "filled on every show, not once" and was argued for on the grounds that
+    // the configuration can change under the page -- and it reintroduced #180
+    // exactly: `renderAdminPage` runs on every `wirelessboard:viewers` event,
+    // each run refilled the editor from the stored configuration, and the row
+    // somebody was typing into vanished about a second after they added it. A
+    // stored configuration never contains a half-typed row.
+    //
+    // ⚠️ The cost is real and accepted: a section left open while another board
+    // saves shows the older list until it is reopened. That is the same trade
+    // #180 settled, and it is the right way round -- losing somebody's typing
+    // is worse than showing them a list that is a minute old.
+    if (shouldFillSection({ view, shown, id })
+        && deps && typeof deps.fillSection === 'function') {
+      deps.fillSection(id);
+    }
+    if (showing) {
+      shown = id;
+    } else if (shown === id) {
+      shown = null;
+    }
+  });
+
+  // The welcome text and a moved section must never both be on screen.
+  if (content) {
+    content.hidden = MOVED_SECTIONS.includes(view);
   }
 }
 

@@ -84,7 +84,10 @@ test('⛔ and the bar it used to restore is really gone', () => {
   // are allowed, so a new one has to be justified here rather than slipping in
   // behind a passing test.
   const navIds = (markup.match(/<nav[^>]*>/g) || [])
-    .map((tag) => (/id="([^"]+)"/.exec(tag) || [, '(no id)'])[1]);
+    .map((tag) => {
+      const found = /id="([^"]+)"/.exec(tag);
+      return found ? found[1] : '(no id)';
+    });
   assert.deepEqual(
     navIds,
     ['admin-page-rail'],
