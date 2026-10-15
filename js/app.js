@@ -13,7 +13,7 @@ import {
   setViewOption, viewOptionValue, setDisplayMode,
   isFullscreen, setFullscreen,
 } from './display.js';
-import { drawerBits, drawerModeWith } from './panel-controls.mjs';
+import { drawerBits, drawerModeWith, DRAWER_MODES } from './panel-controls.mjs';
 import { initViewPanel, toggleViewPanel } from './view-panel.js';
 import { setTimeMode } from './signal-view.js';
 import {
@@ -29,6 +29,7 @@ import {
   resolvePref, readPref, writePref, safeStorage,
   ARRANGEMENT_KEY, CARD_SHAPE_KEY, TYPE_SIZE_KEY, TOP_BAR_KEY, COLUMNS_KEY,
   WASH_KEY,
+  DISPLAY_MODE_KEY, isDisplayMode,
   LIVE_PLACEMENT_KEY,
   ROTATION_KEY,
   VIEWER_LOCK_KEY,
@@ -628,6 +629,24 @@ function readURLParameters() {
     isValid: isWashStyle,
     fallback: 'band',
   });
+  // ⭐⭐ Desk or TV, remembered at last (#216). The hash carries it as
+  // `tvmode=<elinfo>` rather than as a mode of its own, so its *presence* is
+  // the opinion: a board in TV mode writes the parameter and a desk board
+  // writes nothing. An absent parameter therefore means "no opinion" and the
+  // stored value stands, which is the same rule every preference above follows.
+  //
+  // ⛔ Why this matters more than it looks: `displayMode` was the only view
+  // preference never stored, so TV mode lived in the hash alone -- and the hash
+  // is lost when the slot-name editor opens, while Escape is a full page
+  // reload. A wall display came back from a power cut, from Escape, or from
+  // editing a slot name showing the desk layout.
+  micboard.displayMode = resolvePref({
+    hashValue: DRAWER_MODES.includes(micboard.url.tvmode) ? 'tvmode' : undefined,
+    storage,
+    key: DISPLAY_MODE_KEY,
+    isValid: isDisplayMode,
+    fallback: 'deskmode',
+  });
   micboard.rotation = resolvePref({
     hashValue: micboard.url.rotate,
     storage,
@@ -843,8 +862,16 @@ function initialMap(callback) {
         if (['MP4', 'IMG'].indexOf(micboard.url.bgmode) >= 0) {
           setBackground(micboard.url.bgmode);
         }
-        if (['elinfo00', 'elinfo01', 'elinfo10', 'elinfo11'].indexOf(micboard.url.tvmode) >= 0) {
-          setInfoDrawer(micboard.url.tvmode);
+        // ⚠️ `DRAWER_MODES`, not a fourth copy of the list. `readURLParameters`
+        // now reads the same parameter to resolve the display mode (#216), and
+        // two hand-written copies of the same four strings would drift.
+        //
+        // ⛔ `switchToTv: false`. The display mode is resolved from hash-beats-
+        // stored-beats-default above and already on the container; letting this
+        // force TV mode would override a board that had a *stored* desk mode
+        // and a hash from some older link.
+        if (DRAWER_MODES.includes(micboard.url.tvmode)) {
+          setInfoDrawer(micboard.url.tvmode, { switchToTv: false });
         }
         initEditor();
         try { scheduleBackgroundFilenameGuide(); } catch (_) {}

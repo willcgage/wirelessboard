@@ -40,6 +40,24 @@ export const ROTATION_KEY = 'wirelessboard.rotation';
 // ⛔ The one view preference with no hash parameter. A lock a link can switch
 // off would not be an accident guard at all -- see `viewer-lock.mjs` (#116).
 export const VIEWER_LOCK_KEY = 'wirelessboard.viewerLock';
+// ⭐⭐ Desk or TV, remembered like every other look (#216).
+//
+// ⛔ It was the one view preference that was not. `micboard.displayMode` was
+// initialised to `'deskmode'` in app.js and never stored, so TV mode survived
+// only in the URL hash -- and the hash is lost the moment the slot-name editor
+// opens, while Escape, the only way out of several panes, is a full page
+// reload. A wall came back from any of those showing the desk layout, and
+// nothing a person at the board could do put it right except finding the
+// display-mode control again.
+//
+// ⭐ Per device, like the rest of this file: the wall is a television and the
+// FOH laptop watching the same server is not.
+export const DISPLAY_MODE_KEY = 'wirelessboard.displayMode';
+export const DISPLAY_MODES = ['deskmode', 'tvmode'];
+export function isDisplayMode(value) {
+  return DISPLAY_MODES.includes(value);
+}
+
 // ⭐ Which of the configured screens this device is (#170). Per device because
 // it *is* a device fact -- the wall above the dock and the laptop at front of
 // house are different screens, and the laptop has no dock under it at all. The

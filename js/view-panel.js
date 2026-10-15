@@ -133,13 +133,19 @@ function renderSwitch(control) {
 }
 
 /**
- * Desk or TV mode (`T`).
+ * Desk or TV mode.
  *
- * ⚠️ The one row here that is not a stored preference: display mode lives in
- * the hash and in memory, not in `view-prefs`, so it has no descriptor and is
- * written out by hand. It earns the exception because every other control in
- * this panel only acts in TV mode -- a panel that let you set them without
- * showing which mode you were in would explain nothing when they did nothing.
+ * ⚠️ Written out by hand rather than from a descriptor, because this row also
+ * heads the Display group and carries the group and screen pickers beneath it.
+ * It earns the place because every other control in this panel only acts in TV
+ * mode -- a panel that let you set them without showing which mode you were in
+ * would explain nothing when they did nothing.
+ *
+ * ⛔ It *is* a stored preference as of #216, which it was not before: display
+ * mode used to live in the hash and in memory only, so a wall came back from a
+ * power cut, from Escape -- which reloads the page -- or from a visit to the
+ * slot-name editor showing the desk layout. `setDisplayMode` writes it now, so
+ * this button is the operator's choice and it sticks.
  */
 function renderDisplayRow() {
   const section = document.createElement('section');
