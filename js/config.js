@@ -853,6 +853,12 @@ function ensureConfigTabsInitialized() {
   });
 }
 
+/**
+ * ⚠️ One tab now. Logs moved to the administration page (#222), so this chooses
+ * between Devices and Devices -- kept rather than unpicked because the hash
+ * (`#settings=true`) and `micboard.configTab` are read in several places, and
+ * removing a state machine is a separate change from moving a pane out of it.
+ */
 function setConfigTab(tabName, options = {}) {
   const target = tabName === CONFIG_TAB_LOGS ? CONFIG_TAB_LOGS : CONFIG_TAB_DEVICES;
   micboard.configTab = target;
@@ -869,27 +875,63 @@ function setConfigTab(tabName, options = {}) {
   });
 
   const devicesView = logEl('config-devices-view');
-  const logsView = logEl('config-logs-view');
-  if (devicesView) devicesView.classList.toggle('d-none', target !== CONFIG_TAB_DEVICES);
-  if (logsView) logsView.classList.toggle('d-none', target !== CONFIG_TAB_LOGS);
+  if (devicesView) devicesView.classList.remove('d-none');
 
-  if (target === CONFIG_TAB_LOGS) {
-    ensureLogViewerInitialized();
-    if (options.forceReload) {
-      loadLogs({ reset: true }).catch(() => {});
-    }
-  } else {
-    stopLogAutoRefresh(true);
-  }
+  // ⛔ The logs view is not here any more and neither is its timer. Leaving the
+  // `stopLogAutoRefresh` call behind would have been harmless, and wrong: the
+  // configuration page would have been quietly reaching into a section it no
+  // longer owns.
+  //
+  // ⚠️ `options.forceReload` only ever meant "reload the logs", so it has no
+  // reader left. Kept in the signature because `initConfigEditor` passes it.
 
   if (micboard.settingsMode === 'CONFIG') {
     invokeUpdateHash();
   }
 }
 
+/**
+ * The logs section was opened in the administration page (#222).
+ *
+ * ⛔ The handlers bind once; the entries are reloaded on every open. A log
+ * viewer showing what the file held the last time somebody looked is worse
+ * than no viewer, because it reads as "nothing has happened since".
+ */
+export function showLogsSection() {
+  ensureLogViewerInitialized();
+  loadLogs({ reset: true }).catch(() => {});
+}
+
+/**
+ * ...and closed, or the page was dismissed with it open.
+ *
+ * ⛔⛔ This is why `releaseSection` exists at all. The viewer follows the file
+ * on a timer, and the configuration page only ever stopped it by switching to
+ * another tab. Moved into a page that shows and hides sections, nothing was
+ * stopping it -- a wall tablet polling the server about a page nobody is
+ * looking at, indefinitely.
+ */
+export function hideLogsSection() {
+  stopLogAutoRefresh(true);
+}
+
+/**
+ * The element every log-viewer handler is bound through.
+ *
+ * ⛔⛔ This moved with the markup (#222) and the lookups did not, which cost a
+ * round of verification to find: `ensureLogViewerInitialized` returned early
+ * because the old root no longer existed, so NOTHING in the viewer was bound --
+ * no refresh, no live tail, no filters, no download, no purge. The entries
+ * still appeared, because `showLogsSection` calls `loadLogs` directly, so the
+ * section looked completely correct and every control was dead.
+ *
+ * ⚠️ Named once, here, so a future move breaks in one place instead of two.
+ */
+const LOG_VIEWER_ROOT = 'admin-section-logs';
+
 function ensureLogViewerInitialized() {
   if (logViewerState.initialized) return;
-  const container = logEl('config-logs-view');
+  const container = logEl(LOG_VIEWER_ROOT);
   if (!container) return;
   bindLogViewerHandlers();
   logViewerState.initialized = true;
@@ -899,7 +941,7 @@ function ensureLogViewerInitialized() {
 }
 
 function bindLogViewerHandlers() {
-  const container = logEl('config-logs-view');
+  const container = logEl(LOG_VIEWER_ROOT);
   if (!container || container.dataset.logBound === 'true') return;
   container.dataset.logBound = 'true';
 

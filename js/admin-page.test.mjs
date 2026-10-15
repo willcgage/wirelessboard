@@ -6,7 +6,7 @@ import path from 'node:path';
 import {
   SECTIONS, allItems, offeredActions, sectionsFor, refusedCount, refusedSummary, stateLine,
   UNGUARDED_ITEMS,
-  IN_PAGE_ITEMS, shouldFillSection,
+  IN_PAGE_ITEMS, shouldFillSection, shouldReleaseSection,
   DOOR_DETAIL, DOOR_SCOPE,
   registerAdminRoute, runAdminRoute, resetAdminRoutes, unroutedItems, adminRouteIds,
 } from './admin-page.mjs';
@@ -474,4 +474,66 @@ test('⛔⛔ a moved editor is filled when it opens, never on a redraw (#180)', 
   // that makes the trade acceptable: the way to see another board's save is to
   // reopen the section.
   assert.equal(shouldFillSection({ view: 'screens', shown: null, id: 'screens' }), true);
+});
+
+test('⛔⛔ a section that keeps something running is released when it closes', () => {
+  // Logs is why this exists: the viewer follows the file on a timer, and the
+  // configuration page only ever stopped it by switching to another tab.
+  assert.equal(shouldReleaseSection({ view: 'rail', shown: 'logs', id: 'logs' }), true);
+  assert.equal(shouldReleaseSection({ view: 'screens', shown: 'logs', id: 'logs' }), true);
+
+  // ⛔ Not while it is still open. This is the mirror of the #180 fault on the
+  // fill side: the page redraws constantly, and a release on every redraw
+  // would stop the timer under somebody who is watching the log scroll.
+  assert.equal(shouldReleaseSection({ view: 'logs', shown: 'logs', id: 'logs' }), false);
+
+  // ⚠️ And never for a section that was not the one open, so a release never
+  // stops something it did not start.
+  assert.equal(shouldReleaseSection({ view: 'rail', shown: null, id: 'logs' }), false);
+  assert.equal(shouldReleaseSection({ view: 'rail', shown: 'screens', id: 'logs' }), false);
+
+  // ⭐ Fill and release are exact opposites on the same transition, which is
+  // what makes "open" and "close" meaningful rather than two loose callbacks.
+  const leaving = { view: 'rail', shown: 'logs', id: 'logs' };
+  assert.equal(shouldFillSection(leaving), false);
+  assert.equal(shouldReleaseSection(leaving), true);
+  const entering = { view: 'logs', shown: null, id: 'logs' };
+  assert.equal(shouldFillSection(entering), true);
+  assert.equal(shouldReleaseSection(entering), false);
+});
+
+test('⛔⛔ every id a moved pane is bound through still exists in the markup', () => {
+  // The cost of getting this wrong, measured: Logs moved into the
+  // administration page and `bindLogViewerHandlers` kept looking up
+  // `config-logs-view`. It returned early, so NOTHING in the viewer was bound
+  // -- no refresh, no live tail, no filters, no download, no purge -- while
+  // the entries still appeared, because the load is called directly. The
+  // section looked completely correct and every control was dead.
+  //
+  // ⚠️ A move is exactly when this breaks, and a screenshot cannot see it.
+  const html = read('demo.html');
+  const config = read('js/config.js');
+
+  // The roots the viewer binds through, as `config.js` names them.
+  const roots = [...config.matchAll(/const (\w*ROOT) = '([^']+)';/g)].map((m) => m[2]);
+  assert.ok(roots.includes('admin-section-logs'), 'the log viewer declares its root');
+
+  for (const root of roots) {
+    assert.ok(
+      html.includes(`id="${root}"`),
+      `config.js binds through "${root}", which is not in the markup`,
+    );
+  }
+
+  // ⛔ And the ids the moved sections own must each appear exactly once --
+  // twice means the old pane was copied rather than moved, which is how a
+  // board saves from a screen somebody thought was read-only.
+  for (const id of ['screen-list', 'dock-list', 'logs-table', 'log-settings-form']) {
+    const seen = html.split(`id="${id}"`).length - 1;
+    assert.equal(seen, 1, `"${id}" appears ${seen} times; a moved pane was copied`);
+  }
+
+  // The panes really left the configuration page.
+  assert.ok(!html.includes('id="cfg-screens-col"'), 'the screens column is still in Config');
+  assert.ok(!html.includes('id="config-logs-view"'), 'the logs view is still in Config');
 });
