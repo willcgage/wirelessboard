@@ -108,14 +108,20 @@ test('⭐ and it reaches everything the bar used to hold', () => {
   // ⛔ `TOP_BAR_STATES`/`TOP_BAR_SHOWN` were asserted here, for a preference
   // that restored a bar. #188 retired both. What matters now is that the panel
   // this control opens is where the routes went.
-  assert.match(markup, /id="go-hud"/, 'Help must be reachable from the panel');
-  assert.match(markup, /id="go-qr"/, 'and the scannable URL');
-  assert.match(markup, /id="admin-door"/, 'and the door to the administration page');
+  //
+  // ⚠️ `go-hud` and `go-qr` were asserted here too. #225 moved Help and the
+  // scannable URL onto the administration page, so the panel carries one route
+  // out — the door — and the page carries the rest. The chain this guards is
+  // therefore gear → panel → door, and `admin-page.test.mjs` owns what is
+  // behind the door.
+  assert.match(markup, /id="admin-door"/, 'the door to the administration page');
 
-  // All three inside the panel, which is what the gear opens.
+  // Inside the panel, which is what the gear opens.
   const panelAt = markup.indexOf('<div id="view-panel"');
   assert.ok(panelAt > 0);
-  ['id="go-hud"', 'id="go-qr"', 'id="admin-door"'].forEach((needle) => {
-    assert.ok(markup.indexOf(needle) > panelAt, `${needle} must be inside the view panel`);
-  });
+  assert.ok(markup.indexOf('id="admin-door"') > panelAt, 'the door must be inside the view panel');
+
+  // ⛔ And the overlay it opens exists, or the chain ends at a button.
+  assert.match(markup, /id="admin-page"/, 'the administration overlay must be in the markup');
+  assert.match(markup, /id="qr-modal"/, 'and the dialog Help opens for the scannable URL');
 });

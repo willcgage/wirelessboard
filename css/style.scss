@@ -3143,3 +3143,80 @@ body.statusbar-off .rotation-bar {
 .status-chip.is-quiet {
   display: none;
 }
+
+/* Help, drawn inside the administration overlay (#225).
+
+   ⭐ The first section the overlay renders itself rather than handing over to a
+   pane that takes the screen — the pattern #222 wants for all of them, and the
+   reason the overlay was chosen over a full-screen view. */
+.admin-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-back {
+  align-self: flex-start;
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid rgba(215, 215, 215, 0.22);
+  border-radius: 6px;
+  color: var(--color-white);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.admin-back:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.admin-help__version {
+  margin: 0;
+  font-size: 0.66rem;
+  opacity: 0.6;
+}
+
+.admin-help__list {
+  margin: 0 0 6px;
+  padding-left: 1.1rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.admin-help__list li + li {
+  margin-top: 4px;
+}
+
+.admin-help__qr {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(215, 215, 215, 0.25);
+  border-radius: 6px;
+  color: var(--color-white);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+/* ⛔ Said once, at the top of the rail, rather than left to be discovered a tap
+   at a time. The door no longer refuses the whole page — Help is on it and a
+   locked board must still be able to explain itself — so this is where somebody
+   learns that most of what they can see is not theirs to change. */
+.admin-locked-note {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-left: 3px solid var(--color-white);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+/* The door on a locked board: it opens, and says what is behind it is not
+   available. It is no longer disabled — that was the all-or-nothing version. */
+.admin-door.is-locked .admin-door__scope {
+  color: var(--color-white);
+  opacity: 0.8;
+}

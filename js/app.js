@@ -1,4 +1,5 @@
-import { Collapse, Modal } from 'bootstrap';
+// ⚠️ `Collapse` went with the Help overlay (#225); `Modal` is the QR dialog.
+import { Modal } from 'bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import QRCode from 'qrcode';
 import 'whatwg-fetch';
@@ -167,54 +168,25 @@ export function updateNavLinks() {
   }
 }
 
-export function syncHudPane(target) {
-  const hud = document.getElementById('hud');
-  if (!hud) return 'help';
-  const desired = target || hud.dataset.activePane || 'help';
-  const panes = hud.querySelectorAll('[data-hud-pane]');
-  panes.forEach((pane) => {
-    const isActive = pane.dataset.hudPane === desired;
-    pane.classList.toggle('active', isActive);
-    pane.setAttribute('aria-hidden', isActive ? 'false' : 'true');
-    pane.tabIndex = isActive ? 0 : -1;
-  });
-  const menuButtons = hud.querySelectorAll('[data-hud-target]');
-  menuButtons.forEach((button) => {
-    const isActive = button.dataset.hudTarget === desired;
-    button.classList.toggle('active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
-  });
-  hud.dataset.activePane = desired;
-  // ⚠️ Only Help has a control left to describe. The background library's
-  // `aria-expanded` lived on a menu item #188 retired.
-  const goHudBtn = document.getElementById('go-hud');
-  const visible = hud.classList.contains('show');
-  if (goHudBtn) goHudBtn.setAttribute('aria-expanded', visible && desired === 'help' ? 'true' : 'false');
-  return desired;
-}
-
-export function showHudPane(target = 'help', options = {}) {
-  const hud = document.getElementById('hud');
-  if (!hud) return;
-  const hudCollapse = Collapse.getOrCreateInstance(hud, { toggle: false });
-  const wasVisible = hud.classList.contains('show');
-  const current = hud.dataset.activePane || 'help';
-  const desired = syncHudPane(target);
-  if (options.toggleIfVisible && wasVisible && current === desired) {
-    try { hudCollapse.hide(); } catch (e) {}
-    return;
-  }
-  try { hudCollapse.show(); } catch (e) {}
-}
-
-export function hideHud() {
-  const hud = document.getElementById('hud');
-  if (!hud) return;
-  const hudCollapse = Collapse.getOrCreateInstance(hud, { toggle: false });
-  try { hudCollapse.hide(); } catch (e) {}
-  syncHudPane('help');
-}
+// ⛔⛔ `syncHudPane`, `showHudPane` and `hideHud` were here, driving the Help
+// overlay. #225 retired it, for two faults at once:
+//
+//   1. **Nothing closed it.** There was no control on the overlay, Escape
+//      reloads the whole page, and its only toggle was the Help item in the view
+//      panel -- which the panel then closed behind itself. A full-width overlay
+//      that cannot be dismissed is what the maintainer found during testing.
+//   2. **Its content was stale, and one line of it was dangerous.** Three of its
+//      four Quick Start items pointed at a `Menu` #188 had removed, and the last
+//      told an operator to keep Config open in another tab during a service --
+//      which is exactly what blanks the wall, since a save rebuilds every
+//      receiver socket.
+//
+// Help is a section of the administration page now, drawn inside the overlay, so
+// it has a Back control and the overlay’s close. Its text is data in
+// `help-content.mjs`, which is what lets a test fail if it goes stale again.
+//
+// ⚠️ The `hideHud()` calls that sat in every route went with it: there is no
+// overlay left to hide.
 
 /**
  * Refuse an action on a locked device, and say so (#116).
@@ -281,32 +253,11 @@ function refuseWhenLocked(action) {
 }
 
 function mapGroups() {
-  const help = document.getElementById('hud');
-  const goHud = document.getElementById('go-hud');
-  const hudCollapse = help ? Collapse.getOrCreateInstance(help, { toggle: false }) : null;
+  // ⛔ The Help overlay's bindings were here: a `shown.bs.collapse` pair, the
+  // pane-switching buttons, and an initial `syncHudPane`. All of it belonged to
+  // an overlay nothing could close (#225). Help is a section of the
+  // administration page now.
   const inlineCloseBtn = document.getElementById('close-settings-inline');
-
-  if (help && !help.dataset.hudBound) {
-    help.addEventListener('shown.bs.collapse', () => {
-      syncHudPane(help.dataset.activePane);
-    });
-    help.addEventListener('hidden.bs.collapse', () => {
-      syncHudPane(help.dataset.activePane);
-      help.dataset.activePane = help.dataset.activePane || 'help';
-    });
-    help.dataset.hudBound = 'true';
-  }
-  if (help && !help.dataset.hudMenuBound) {
-    const hudButtons = help.querySelectorAll('[data-hud-target]');
-    hudButtons.forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.preventDefault();
-        syncHudPane(button.dataset.hudTarget);
-      });
-    });
-    help.dataset.hudMenuBound = 'true';
-  }
-  syncHudPane(help ? help.dataset.activePane : 'help');
 
   function openBackground() {
     if (refuseWhenLocked('background-library')) return;
@@ -315,8 +266,6 @@ function mapGroups() {
     micboard.url.pco = undefined;
     micboard.url.background = 'true';
     updateHash();
-    hideHud();
-    if (goHud) goHud.setAttribute('aria-expanded', 'false');
     resetViews();
     try {
       window.dispatchEvent(new Event('wirelessboard:background-view-opened'));
@@ -357,14 +306,6 @@ function mapGroups() {
       }
     }
   }
-  if (goHud && hudCollapse) {
-    goHud.addEventListener('click', (event) => {
-      event.preventDefault();
-      showHudPane('help', { toggleIfVisible: true });
-      resetViews();
-    });
-  }
-
   if (inlineCloseBtn) {
     inlineCloseBtn.addEventListener('click', (event) => {
       event.preventDefault();
@@ -384,11 +325,9 @@ function mapGroups() {
       if (settings) settings.style.display = 'none';
       if (pcoView) pcoView.style.display = 'none';
       if (backgroundView) backgroundView.style.display = 'none';
-      hideHud();
       resetViews();
     });
   }
-  // Removed explicit HUD close handler; handled centrally via hideHud()
 
   /**
    * The configuration pane, on a given tab.
@@ -405,14 +344,12 @@ function mapGroups() {
     micboard.configTab = tab === 'logs' ? 'logs' : 'devices';
     initConfigEditor();
     micboard.url.background = undefined;
-    hideHud();
     resetViews();
   }
 
   function openSlotNames() {
     if (refuseWhenLocked('slot-edit')) return;
     slotEditToggle();
-    hideHud();
     resetViews();
   }
 
@@ -420,7 +357,6 @@ function mapGroups() {
     if (refuseWhenLocked('group-edit')) return;
     if (micboard.group !== 0) {
       groupEditToggle();
-      hideHud();
       resetViews();
     }
   }
@@ -506,17 +442,10 @@ function mapGroups() {
     viewPanelButton.dataset.bound = 'true';
   }
 
-  // ⛔ The three that had no pointer route at all before #160.
-  const goQr = document.getElementById('go-qr');
-  if (goQr && !goQr.dataset.bound) {
-    goQr.addEventListener('click', (event) => {
-      event.preventDefault();
-      generateQR();
-      Modal.getOrCreateInstance('#qr-modal').toggle();
-      hideHud();
-    });
-    goQr.dataset.bound = 'true';
-  }
+  // ⛔ The `#go-qr` binding was here. The scannable URL moved onto the
+  // administration page with Help (#225), where it is a button the overlay
+  // draws and `showScannableUrl` opens the dialog for. The dialog itself
+  // (`#qr-modal`) is unchanged.
 
   const backgroundClose = document.getElementById('background-close');
   if (backgroundClose) {
@@ -540,7 +469,6 @@ function mapGroups() {
       element.addEventListener('click', (e) => {
         const target = parseInt(e.target.id[9], 10);
         renderGroup(target);
-        hideHud();
         resetViews();
       });
     });
@@ -773,44 +701,10 @@ function displayListChooser() {
   }
 }
 
-function ensureHudVersion() {
-  const hud = document.getElementById('hud');
-  if (!hud) return;
-
-  let versionRow = hud.querySelector('[data-role="hud-version"]');
-  if (!versionRow) {
-    versionRow = document.createElement('div');
-    versionRow.className = 'row hud-version';
-    versionRow.dataset.role = 'hud-version';
-    const col = document.createElement('div');
-    col.className = 'col';
-    versionRow.appendChild(col);
-    const firstRow = hud.querySelector('.row');
-    if (firstRow) {
-      hud.insertBefore(versionRow, firstRow);
-    } else if (hud.firstChild) {
-      hud.insertBefore(versionRow, hud.firstChild);
-    } else {
-      hud.appendChild(versionRow);
-    }
-  }
-
-  let versionText = versionRow.querySelector('#hud-version-text');
-  if (!versionText) {
-    versionText = document.createElement('p');
-    versionText.id = 'hud-version-text';
-    versionText.className = 'text-muted small mb-3';
-    let col = versionRow.querySelector('.col');
-    if (!col) {
-      col = document.createElement('div');
-      col.className = 'col';
-      versionRow.appendChild(col);
-    }
-    col.appendChild(versionText);
-  }
-
-  versionText.textContent = `Wirelessboard version ${VERSION}`;
-}
+// ⛔ `ensureHudVersion` was here. It wrote the build number into the Help
+// overlay, which #225 retired. The version is still shown -- Help renders it
+// from `getVersion`, passed to `initAdminPage` -- so the figure did not go with
+// the function.
 
 function initialMap(callback) {
   fetch(dataURL)
@@ -924,13 +818,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const s = document.querySelector('.settings');
     const p = document.getElementById('pco-settings');
     const b = document.getElementById('background-settings');
-    const h = document.getElementById('hud');
     if (s) s.style.display = 'none';
     if (p) p.style.display = 'none';
     if (b) b.style.display = 'none';
-    if (h) h.classList.remove('show');
   } catch (_) {}
-  try { ensureHudVersion(); } catch (_) {}
   keybindings();
   // Bind PCO navbar and handlers
   try { bindPcoNav(); bindPcoHandlers(); bindScreenHandlers(); } catch (e) {}
@@ -943,6 +834,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initAdminPage({
       getLockState: () => micboard.viewerLock,
       getViewers: () => micboard.viewers,
+      // ⚠️ Help shows the build number, which the retired overlay used to carry.
+      getVersion: () => `Wirelessboard ${VERSION}`,
+      // The QR dialog is not part of the overlay; Help only asks for it.
+      showScannableUrl: () => {
+        generateQR();
+        Modal.getOrCreateInstance('#qr-modal').show();
+      },
       getFacts: () => ({
         config: micboard.config,
         discovered: micboard.discovered,
@@ -974,11 +872,10 @@ document.addEventListener('DOMContentLoaded', () => {
   try { scheduleBackgroundFilenameGuide(); } catch (_) {}
 
   if (micboard.url.demo === 'true' && micboard.url.settings !== 'true' && micboard.url.settings !== 'logs' && micboard.url.pco !== 'true') {
-    // Show HUD only once on initial load
-    setTimeout(() => {
-      const hudEl = document.getElementById('hud');
-      if (hudEl) { try { Collapse.getOrCreateInstance(hudEl, { toggle: false }).show(); } catch (e) {} }
-    }, 100);
+    // ⛔ Demo mode used to pop the Help overlay open on the first load, to
+    // explain itself. #225 retired that overlay -- nothing closed it, so the
+    // demo board opened with a panel the viewer could not dismiss. Help is on
+    // the administration page now, which is one tap from the gear.
     initialMap();
   } else {
     initialMap(initLiveData);

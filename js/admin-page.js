@@ -22,16 +22,19 @@
  */
 
 import {
-  sectionsFor, stateLine, runAdminRoute, unroutedItems, pageRefused,
+  sectionsFor, stateLine, runAdminRoute, unroutedItems, refusedSummary,
   DOOR_LABEL, DOOR_DETAIL, DOOR_SCOPE,
 } from './admin-page.mjs';
 import { scopeNote, presenceLabel } from './viewer-scope.mjs';
 import { refusalNote } from './viewer-lock.mjs';
+import { HELP_SECTIONS } from './help-content.mjs';
 
 const PAGE_ID = 'admin-page';
 
 let deps = null;
 let lastFocus = null;
+// Which of the overlay's two states is showing: the rail, or one section.
+let view = 'rail';
 
 export function isAdminPageOpen() {
   const el = document.getElementById(PAGE_ID);
@@ -118,8 +121,15 @@ function renderItem(item) {
   }
 
   button.addEventListener('click', () => {
-    // ⚠️ Closed first. The routes open panes that take the screen today, and an
-    // overlay left on top of one is a dead layer over a live editor.
+    // ⭐ A section the overlay draws itself stays in the overlay, so the board
+    // is still visible behind it. That is what #222 wants for all of them.
+    if (item.id === 'about') {
+      view = 'about';
+      renderAdminPage();
+      return;
+    }
+    // ⚠️ Everything else still opens a pane that takes the screen, so the
+    // overlay closes first -- a dead layer over a live editor otherwise.
     closeAdminPage();
     runAdminRoute(item.id);
   });
@@ -129,6 +139,18 @@ function renderItem(item) {
 function renderRail() {
   const rail = document.createElement('div');
   rail.className = 'admin-rail';
+
+  // ⭐ Said once, at the top, rather than left to be discovered a tap at a time.
+  // The door no longer refuses the whole page (Help is on it, and a locked board
+  // must still be able to explain itself), so this is where somebody learns that
+  // most of what they can see is not available to them.
+  const locked = refusedSummary(lockState());
+  if (locked) {
+    const note = document.createElement('p');
+    note.className = 'admin-locked-note';
+    note.textContent = locked;
+    rail.appendChild(note);
+  }
 
   sectionsFor({ lockState: lockState() }).forEach((section) => {
     const group = document.createElement('section');
@@ -158,6 +180,67 @@ function renderRail() {
 }
 
 /** Redraw the rail, so the state lines and the refusals follow the board. */
+/**
+ * Help, rendered inside the overlay.
+ *
+ * ⭐ The first section that does not hand over to an old pane, which is the
+ * pattern #222 wants for all of them: the board stays visible behind it, which
+ * is why the overlay was chosen over a full-screen view.
+ *
+ * ⛔ Reachable on a locked board, which is the whole reason Help is on this
+ * page rather than in the view panel -- see the `about` item in
+ * `admin-page.mjs`. A locked wall tablet must still be able to explain itself.
+ */
+function renderHelp() {
+  const wrap = document.createElement('div');
+  wrap.className = 'admin-section';
+
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'admin-back';
+  back.textContent = '\u2190 Administration';
+  back.addEventListener('click', () => { view = 'rail'; renderAdminPage(); });
+  wrap.appendChild(back);
+
+  const version = document.createElement('p');
+  version.className = 'admin-help__version';
+  version.textContent = (deps && typeof deps.getVersion === 'function' && deps.getVersion()) || '';
+  if (version.textContent) {
+    wrap.appendChild(version);
+  }
+
+  // ⭐ The scannable URL lives with Help, which is where the original design
+  // put it ("Scannable URL and Help fold into About & help"). It left the view
+  // panel with Help and would otherwise have had nowhere at all.
+  //
+  // ⚠️ Not guarded, like Help: showing somebody the address of the board they
+  // are standing in front of changes nothing.
+  if (deps && typeof deps.showScannableUrl === 'function') {
+    const qr = document.createElement('button');
+    qr.type = 'button';
+    qr.className = 'admin-help__qr';
+    qr.textContent = 'Scannable URL';
+    qr.addEventListener('click', () => deps.showScannableUrl());
+    wrap.appendChild(qr);
+  }
+
+  HELP_SECTIONS.forEach((section) => {
+    const heading = document.createElement('p');
+    heading.className = 'admin-group__title';
+    heading.textContent = section.title;
+    wrap.appendChild(heading);
+    const list = document.createElement('ul');
+    list.className = 'admin-help__list';
+    section.items.forEach((line) => {
+      const li = document.createElement('li');
+      li.textContent = line;
+      list.appendChild(li);
+    });
+    wrap.appendChild(list);
+  });
+  return wrap;
+}
+
 export function renderAdminPage() {
   const page = document.getElementById(PAGE_ID);
   if (!page) {
@@ -166,7 +249,7 @@ export function renderAdminPage() {
   renderBanner();
   const body = document.getElementById('admin-page-body');
   if (body) {
-    body.replaceChildren(renderRail());
+    body.replaceChildren(view === 'about' ? renderHelp() : renderRail());
   }
 }
 
@@ -176,6 +259,7 @@ export function openAdminPage() {
     return;
   }
   lastFocus = document.activeElement;
+  view = 'rail';
   renderAdminPage();
   page.classList.add('is-open');
   // So the board behind cannot be scrolled out from under the overlay.
@@ -232,17 +316,15 @@ export function initAdminPage(options = {}) {
     window.addEventListener('wirelessboard:config-loaded', () => {
       if (isAdminPageOpen()) renderAdminPage();
     });
-    // ⛔ Locked while the page is open: close it. The door is where the
-    // refusal is stated, so a page that stays open behind a refused door is a
-    // locked board still showing every global setting -- and leaving the items
-    // to redraw as refused would be a half-refused page nobody designed.
+    // ⛔⛔ Locked while the page is open: **re-render**, do not close.
+    //
+    // It used to close, because the door was all-or-nothing and a page open
+    // behind a refused door made no sense. The door opens on a locked board
+    // now -- Help is on this page and a locked wall tablet must still be able
+    // to explain itself (#187) -- so what the lock refuses, it refuses on the
+    // item, and the page redraws to show that.
     window.addEventListener('wirelessboard:view-changed', () => {
-      if (!isAdminPageOpen()) {
-        return;
-      }
-      if (pageRefused(lockState())) {
-        closeAdminPage();
-      } else {
+      if (isAdminPageOpen()) {
         renderAdminPage();
       }
     });

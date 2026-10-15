@@ -60,9 +60,29 @@ export const SECTIONS = [
       // a board-wide data switch and an argument exists for Setup. Noted as
       // open on #188 rather than settled quietly.
       { id: 'demo', label: 'Demo mode', action: 'demo' },
+      // ⛔⛔ No action, and that is the whole point of it being here.
+      //
+      // Help lived in the view panel because this page was refused outright
+      // when the board was locked, and Help is the one screen somebody reads
+      // when they do not yet know how the board works (#187). The maintainer
+      // asked for it on this page, so the *gating* moved rather than the
+      // guarantee: the door opens even when locked, and the six guarded items
+      // refuse themselves. `sectionsFor` has rendered per-item refusals since
+      // #221; the all-or-nothing door is what made them unreachable.
+      { id: 'about', label: 'Help & about', action: null },
     ],
   },
 ];
+
+/**
+ * Items that carry no guarded action, listed on purpose.
+ *
+ * ⛔ An allowlist, not a rule. "Anything may be unguarded" is how a global
+ * setting ends up reachable on a locked wall tablet; naming the exceptions
+ * means a new one cannot arrive by accident, and `admin-page.test.mjs` fails if
+ * an item outside this list has no action.
+ */
+export const UNGUARDED_ITEMS = ['about'];
 
 /** Every item, flattened, in reading order. */
 export function allItems() {
@@ -76,9 +96,12 @@ export function allItems() {
  * guarded action missing from here is a setting that became unreachable, and an
  * action here that the lock does not guard is a setting the lock would let a
  * wall tablet change.
+ *
+ * ⚠️ Items with no action are skipped, and only the ones named in
+ * `UNGUARDED_ITEMS` are allowed to have none.
  */
 export function offeredActions() {
-  return [...new Set(allItems().map((item) => item.action))].sort();
+  return [...new Set(allItems().map((item) => item.action).filter(Boolean))].sort();
 }
 
 /**
@@ -98,9 +121,34 @@ export function sectionsFor({ lockState } = {}) {
   }));
 }
 
-/** Whether the whole page is refused -- which is every item at once. */
-export function pageRefused(lockState) {
-  return allItems().every((item) => !allows(lockState, item.action));
+/**
+ * How many of the page's items a locked board refuses.
+ *
+ * ⛔⛔ This replaced `pageRefused`, which gated the **door**. That was the
+ * all-or-nothing version: locked meant the door would not open, so the per-item
+ * refusals below were effectively unreachable, and Help could not live on this
+ * page at all without becoming unreachable with them (#187).
+ *
+ * The door now always opens. What the lock refuses, it refuses on the item, and
+ * `refusedCount` is what the page uses to say so once at the top instead of
+ * leaving somebody to discover it a tap at a time.
+ */
+export function refusedCount(lockState) {
+  return allItems().filter((item) => !allows(lockState, item.action)).length;
+}
+
+/**
+ * The line the page shows when some of it is refused.
+ *
+ * ⚠️ Says where to undo it. A refusal that does not is a dead end with an
+ * explanation.
+ */
+export function refusedSummary(lockState) {
+  const n = refusedCount(lockState);
+  if (!n) {
+    return null;
+  }
+  return `${n} of these are locked to display only. Unlock this board in the gear, under On screen.`;
 }
 
 function count(value) {

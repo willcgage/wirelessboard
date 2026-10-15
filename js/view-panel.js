@@ -21,7 +21,8 @@ import {
 import { BOARD_CONTROLS, groupChoices } from './panel-controls.mjs';
 import { screenChoices, describeScreenChoice } from './display-geometry.mjs';
 import { scopeNote } from './viewer-scope.mjs';
-import { pageRefused, DOOR_DETAIL, DOOR_SCOPE } from './admin-page.mjs';
+import { DOOR_DETAIL, DOOR_SCOPE } from './admin-page.mjs';
+import { isLocked } from './viewer-lock.mjs';
 
 /**
  * Both tables, in one panel (#160).
@@ -321,21 +322,27 @@ function renderAdminDoor() {
   const scope = door.querySelector('.admin-door__scope');
   if (detail) detail.textContent = DOOR_DETAIL;
 
-  const refused = pageRefused(board.getLockState());
-  door.classList.toggle('is-refused', refused);
-  door.disabled = refused;
+  // ⛔⛔ The door opens on a locked board, and that is a deliberate reversal.
+  //
+  // It used to be disabled outright: locked meant the page would not open at
+  // all. Help now lives on that page, and a locked wall tablet must still be
+  // able to explain itself (#187) — so the lock refuses what it has always
+  // refused, on the items, and the door is no longer a gate.
+  //
+  // ⚠️ The door still *says* so, because somebody who taps it expecting to
+  // change a receiver should learn why before they go looking.
+  const locked = isLocked(board.getLockState());
+  door.classList.toggle('is-locked', locked);
+  door.disabled = false;
   if (scope) {
-    scope.textContent = refused
-      ? 'Locked to display only — unlock it above'
+    scope.textContent = locked
+      ? 'Display only — Help is readable, the rest is locked'
       : DOOR_SCOPE;
   }
 
   if (!door.dataset.bound) {
     door.dataset.bound = 'true';
     door.addEventListener('click', () => {
-      if (pageRefused(board.getLockState())) {
-        return;
-      }
       closeViewPanel();
       board.openAdmin();
     });
