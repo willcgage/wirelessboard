@@ -200,9 +200,13 @@ test('and nor does any pointer route', () => {
     return GUARDED_CALLS.some((fn) => inner.includes(`${fn}(`));
   });
 
+  // ⚠️ Two, not three: slot naming is a section the administration page draws
+  // itself now, so nothing in app.js calls an editor for it. It is still
+  // refused at the rail -- `slot-edit` remains in GUARDED_ACTIONS, and
+  // admin-page.test.mjs checks the item both ways.
   assert.ok(
-    reaching.length >= 3,
-    `expected the routes for config, groups and slot names; found ${reaching.length}`,
+    reaching.length >= 2,
+    `expected the routes for the configuration editor and groups; found ${reaching.length}`,
   );
 
   reaching.forEach(({ name, body }) => {

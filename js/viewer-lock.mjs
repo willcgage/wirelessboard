@@ -46,8 +46,17 @@ export const GUARDED_ACTIONS = {
   demo: 'demo mode',
 };
 
-/** The functions a locked device must not reach, for the drift guard. */
-export const GUARDED_CALLS = ['initConfigEditor', 'groupEditToggle', 'slotEditToggle'];
+/**
+ * The functions a locked device must not reach, for the drift guard.
+ *
+ * ⚠️ `slotEditToggle` was here until the slot-name editor was replaced by a
+ * table in the administration page. It is **not** a gap in the guard: the
+ * action `slot-edit` is still in `GUARDED_ACTIONS` above, so the rail refuses
+ * the Slots item on a locked board exactly as before — what changed is that
+ * reaching it no longer means calling a function that takes the board over.
+ * A section the page draws itself is guarded at the item, not at a call.
+ */
+export const GUARDED_CALLS = ['initConfigEditor', 'groupEditToggle'];
 
 export function isLocked(state) {
   return state === 'on';

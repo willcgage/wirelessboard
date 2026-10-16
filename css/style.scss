@@ -3185,6 +3185,89 @@ body.live-strip-bottom .rotation-bar {
 }
 
 // ---------------------------------------------------------------------------
+// The Slots table, inside the administration page (#222)
+//
+// ⛔ A table, because twelve names are twelve rows somebody reads down -- which
+// is how a list of names is actually checked. The editor this replaces drew
+// them as twelve cards and took the board to do it.
+// ---------------------------------------------------------------------------
+.slots-table {
+  width: 100%;
+  border-collapse: collapse;
+  // ⚠️ Digits in the Slot column line up, so a missing slot is visible.
+  font-variant-numeric: tabular-nums;
+
+  th,
+  td {
+    text-align: left;
+    vertical-align: middle;
+    padding: 4px 8px;
+  }
+
+  thead th {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(215, 215, 215, 0.55);
+    border-bottom: 1px solid rgba(215, 215, 215, 0.16);
+  }
+
+  tbody tr {
+    border-top: 1px solid rgba(215, 215, 215, 0.07);
+  }
+
+  // ⛔ A slot with no receiver behind it is dimmed, never hidden. It still has
+  // somebody's name on it, and hiding it is how #186 got filed twice.
+  tbody tr.is-offline {
+    background: rgba(220, 73, 58, 0.06);
+  }
+}
+
+.slots-col-slot { width: 52px; }
+.slots-col-state { width: 96px; }
+.slots-col-clear { width: 56px; }
+
+.slots-cell--slot {
+  font-weight: 600;
+  color: rgba(215, 215, 215, 0.8);
+}
+
+.slots-cell--reports {
+  font-size: 0.76rem;
+  color: rgba(215, 215, 215, 0.6);
+}
+
+// ⛔ The word is always present and this only tints it -- status is never
+// colour alone, for the same reason the card's chip carries a glyph and a word.
+.slots-cell--state {
+  font-size: 0.78rem;
+
+  // ⚠️ The board's own status tokens, used as ink here rather than as a fill.
+  // They read on this pane because it is dark; `#69B578` is 2.2:1 on white and
+  // must not be reused as text on a light ground (#176).
+  &.is-ok { color: var(--color-green, #69B578); }
+  &.is-warn { color: var(--color-yellow, #EF9D51); }
+  &.is-bad { color: var(--color-red, #DC493A); }
+  &.is-idle { color: rgba(215, 215, 215, 0.5); }
+}
+
+.slots-cell.is-idle {
+  color: rgba(215, 215, 215, 0.45);
+  font-style: italic;
+}
+
+.slots-cell--clear {
+  text-align: center;
+}
+
+.slots-paste {
+  // Room for a handful of names without becoming a document editor.
+  max-width: 42rem;
+  margin-bottom: 4px;
+}
+
+// ---------------------------------------------------------------------------
 // The log viewer, inside the administration page (#222)
 // ---------------------------------------------------------------------------
 

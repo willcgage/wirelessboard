@@ -135,7 +135,10 @@ test('⛔⛔ a callback is passed, never the result of calling it', () => {
   // this is the likeliest reason it would have failed there.
   //
   // ⚠️ The shape, not the file: any `postJSON(..., someFn())` is the same bug.
-  for (const file of ['js/extended.js', 'js/config.js', 'js/data.js', 'js/app.js']) {
+  // ⭐ `extended.js` was the file that had it and is gone -- slot names are a
+  // table in the administration page now -- so the list follows the save path
+  // to `slots-table.js` rather than shrinking.
+  for (const file of ['js/slots-table.js', 'js/config.js', 'js/data.js', 'js/app.js']) {
     const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
     assert.doesNotMatch(
       src,

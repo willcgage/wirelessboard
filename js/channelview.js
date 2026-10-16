@@ -26,7 +26,7 @@ function infoToggle() {
   const cols = document.getElementsByClassName('col-sm');
   Array.from(cols).forEach((element) => {
     element.addEventListener('click', (e) => {
-      if (window.innerWidth <= 980 && micboard.settingsMode !== 'EXTENDED') {
+      if (window.innerWidth <= 980) {
         const id = e.currentTarget.querySelector('.info-drawer');
         if (id.style.display === 'none' || id.style.display === '') {
           id.style.display = 'block';
@@ -203,16 +203,21 @@ function updateStatus(slotSelector, data) {
   slotSelector.querySelector('div.electrode').className = 'electrode';
   slotSelector.querySelector('div.electrode').classList.add(data.status);
 
-  if (micboard.settingsMode !== 'EXTENDED') {
-    // ⛔ `hidden`, not an inline `display`. Setting `display: block` here wrote
-    // an inline style that beats every stylesheet rule, so a mode wanting the
-    // chartzone laid out differently -- Rack lays it along the strip -- could
-    // never have it. The attribute says "not shown" and leaves *how* it is
-    // shown to CSS, which is the whole distinction.
-    const quiet = data.status === 'RX_COM_ERROR';
-    slotSelector.querySelector('.chartzone').hidden = quiet;
-    slotSelector.querySelector('.errorzone').hidden = !quiet;
-  }
+  // ⛔ `hidden`, not an inline `display`. Setting `display: block` here wrote
+  // an inline style that beats every stylesheet rule, so a mode wanting the
+  // chartzone laid out differently -- Rack lays it along the strip -- could
+  // never have it. The attribute says "not shown" and leaves *how* it is shown
+  // to CSS, which is the whole distinction.
+  //
+  // ⭐ Unconditional now. This used to be skipped while `settingsMode` was
+  // `'EXTENDED'`, because the slot-name editor drew two text boxes inside each
+  // card and needed the zones left as it had set them. That editor is gone --
+  // slot names are a table in the administration page and the board is never
+  // borrowed (`slots-table.js`) -- so there is no mode in which a card should
+  // not say whether its receiver is answering.
+  const quiet = data.status === 'RX_COM_ERROR';
+  slotSelector.querySelector('.chartzone').hidden = quiet;
+  slotSelector.querySelector('.errorzone').hidden = !quiet;
 }
 
 function updateIP(slotSelector, data) {
