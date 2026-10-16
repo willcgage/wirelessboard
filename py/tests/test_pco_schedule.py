@@ -275,7 +275,7 @@ class TestWatchIsOptIn:
         # ⚠️ It is one more request on the path an operator is waiting on. The
         # same rule the folder walk follows.
         monkeypatch.setattr(pco, '_select_plan', lambda *a, **k: (34, '77', None))
-        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: ({'data': [], 'included': []}, None))
         monkeypatch.setattr(pco, '_configured_slots', lambda: [])
 
         def explode(*_a, **_k):
@@ -290,7 +290,7 @@ class TestWatchIsOptIn:
 
     def test_a_watching_sync_captures_the_stamp(self, monkeypatch):
         monkeypatch.setattr(pco, '_select_plan', lambda *a, **k: (34, '77', None))
-        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: ({'data': [], 'included': []}, None))
         monkeypatch.setattr(pco, '_configured_slots', lambda: [])
         monkeypatch.setattr(pco, 'plan_updated_at', lambda *a, **k: 'stamp-1')
 

@@ -141,7 +141,7 @@ class TestItAgreesWithASync:
 
         monkeypatch.setattr(pco, '_select_plan', spy)
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: plan_detail(short_dates='Oct 12'))
-        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: ({'data': [], 'included': []}, None))
 
         pco.next_plan()
         pco.resolve_sync(pco.get_pco_config())

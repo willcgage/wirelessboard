@@ -194,17 +194,57 @@ test('⛔ but a LOADED configuration with no Planning Center block says so', () 
   assert.equal(stateLine('pco-connection', {}), null);
 });
 
-test('receivers count what was found and the channels behind them', () => {
-  const facts = { discovered: [{ channels: 4 }, { channels: 4 }, { channels: 1 }] };
-  assert.equal(stateLine('receivers', facts), '3 found, 9 channels');
+test('receivers count the receivers this board has, not the scan', () => {
+  // ⭐ A receiver is an address. Four slots on one box is one receiver.
+  const config = { slots: [
+    { ip: '10.0.0.61', type: 'qlxd' },
+    { ip: '10.0.0.61', type: 'qlxd' },
+    { ip: '10.0.0.62', type: 'ulxd' },
+  ] };
+  assert.equal(stateLine('receivers', { config, discovered: [] }), '2 receivers, 3 channels');
+  assert.equal(
+    stateLine('receivers', { config: { slots: [{ ip: '10.0.0.61', type: 'qlxd' }] }, discovered: [] }),
+    '1 receiver, 1 channel');
 });
 
-test('a receiver that did not say how many channels it has is not counted as zero', () => {
-  // `discovered[i].channels` is absent for models whose channel count has
-  // never been observed -- `slxd` is empty on purpose (#144). The receiver is
-  // still found.
-  assert.equal(stateLine('receivers', { discovered: [{}, {}] }), '2 found');
-  assert.equal(stateLine('receivers', { discovered: [] }), '0 found');
+test('⛔ a working board never reads "0 found" because the scan was empty', () => {
+  // The venue photographed "Receivers -- 0 found" on a board monitoring twelve
+  // live channels. Discovery is multicast and does not reach every network;
+  // the receivers were configured by address and working the whole time.
+  const facts = {
+    config: { slots: [{ ip: '10.100.50.61', type: 'ulxd' }, { ip: '10.100.50.62', type: 'ulxd' }] },
+    discovered: [],
+  };
+  const line = stateLine('receivers', facts);
+  assert.equal(line, '2 receivers, 2 channels');
+  assert.ok(!line.includes('0'), 'nothing here is zero');
+});
+
+test('slots with no receiver behind them are not receivers', () => {
+  // `offline` slots carry no address, and 1.16.0 saved receiver slots with no
+  // IP at all -- neither is a box this board talks to.
+  const config = { slots: [
+    { ip: '10.0.0.61', type: 'qlxd' },
+    { type: 'offline' },
+    { type: 'slxd' },
+    { ip: '', type: 'ulxd' },
+  ] };
+  assert.equal(stateLine('receivers', { config, discovered: [] }), '1 receiver, 1 channel');
+});
+
+test('with nothing configured, the scan is what is worth saying', () => {
+  const empty = { slots: [] };
+  assert.equal(
+    stateLine('receivers', { config: empty, discovered: [{}, {}] }), '2 found, none added yet');
+  assert.equal(stateLine('receivers', { config: empty, discovered: [] }), 'None configured');
+});
+
+test('a board that has not been told anything yet says nothing', () => {
+  // ⛔ Printing a count before the first /data.json states a fact the board
+  // does not have, on the screen an administrator uses to judge whether
+  // something is wrong.
+  assert.equal(stateLine('receivers', {}), null);
+  assert.equal(stateLine('receivers', { discovered: [] }), null);
 });
 
 test('screens and slots report what is described and what is named', () => {

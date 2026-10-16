@@ -3,7 +3,7 @@ import datetime
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import requests
 
@@ -963,24 +963,10 @@ def list_people_for_plan(plan_id: str, service_type_value=None, force: bool = Fa
     if _short_circuit_missing(plan_id, force):
         return {"ok": False, "error": PLAN_GONE_ERROR}
 
-    plan_people = None
-    stid = None
-    if service_type_value is not None:
-        stid = _resolve_service_type_id(service_type_value, headers)
-    if stid:
-        plan_people = _get_plan_people_with_service(stid, plan_id, headers)
+    stid = _resolve_service_type_id(service_type_value, headers) if service_type_value is not None else None
+    plan_people, failure = _fetch_plan_people(stid, plan_id, headers)
     if not plan_people:
-        # Try generic, then robust fallback across all service types
-        plan_people = _get_plan_people_any(plan_id, headers)
-    if not plan_people:
-        # Only a 404 is worth a second look; anything else stays a plain failure
-        # and costs no extra request.
-        if _LAST_HTTP_ERROR == 404:
-            if _plan_is_really_gone(plan_id, headers):
-                _remember_missing_plan(plan_id)
-                return {"ok": False, "error": PLAN_GONE_ERROR}
-            return {"ok": False, "error": PLAN_PEOPLE_UNREADABLE_ERROR}
-        return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
+        return {"ok": False, "error": _plan_people_error(failure, plan_id, headers)}
 
     _forget_missing_plan(plan_id)
 
@@ -1151,18 +1137,9 @@ def list_teams_for_plan(plan_id: str, service_type_value=None, force: bool = Fal
         return {"ok": False, "error": PLAN_GONE_ERROR}
 
     stid = _resolve_service_type_id(service_type_value, headers) if service_type_value is not None else None
-    plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
+    plan_people, failure = _fetch_plan_people(stid, plan_id, headers)
     if not plan_people:
-        plan_people = _get_plan_people_any(plan_id, headers)
-    if not plan_people:
-        # Same rule as the people lookup: the sweep's trailing 404 is not
-        # evidence about the plan, so ask the plan itself before condemning it.
-        if _LAST_HTTP_ERROR == 404:
-            if _plan_is_really_gone(plan_id, headers):
-                _remember_missing_plan(plan_id)
-                return {"ok": False, "error": PLAN_GONE_ERROR}
-            return {"ok": False, "error": PLAN_PEOPLE_UNREADABLE_ERROR}
-        return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
+        return {"ok": False, "error": _plan_people_error(failure, plan_id, headers)}
 
     _forget_missing_plan(plan_id)
 
@@ -1396,9 +1373,31 @@ def _person_display_name(p_item: Dict[str, Any]) -> str:
     return f"{first} {last}".strip()
 
 
+class PlanPeopleFailure(NamedTuple):
+    """Which request failed, and how -- as opposed to which one failed last.
+
+    ⛔ `_LAST_HTTP_ERROR` is one global, overwritten by every request. The
+    fallback sweep below tries three endpoints against *every* service type, so
+    by the time it gives up that global holds the status of a probe aimed at a
+    service type nobody asked about. Reporting it told the venue "Planning
+    Center returned 400" for a plan whose own scoped request had failed for an
+    entirely different reason, and the real status was never shown anywhere.
+
+    ⭐ The first failure is the one worth reporting: it is the request the
+    board actually meant to make. The rest are guesses.
+    """
+
+    where: str
+    status: Optional[int]
+
+
 def _get_plan_people_any(plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
-    """Try to fetch plan_people for a plan id using generic path first,
-    then fall back to checking all service_types for a scoped path.
+    """Try the generic path, then sweep every service type.
+
+    ⚠️ Three requests per service type, and an account can have twenty-odd of
+    them, so this is slow as well as blunt. Nothing here reports *why* it
+    failed -- see `PlanPeopleFailure` for why that question is answered by the
+    caller instead.
     """
     # Try generic path first
     data = _get_plan_people(plan_id, headers)
@@ -2191,12 +2190,87 @@ def _select_plan(
     return (nxt[0], nxt[1], None)
 
 
-def _fetch_plan_people(stid: Optional[int], plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
-    """Prefer the service-scoped plan_people path to avoid redirects and 404s."""
-    plan_people = _get_plan_people_with_service(stid, plan_id, headers) if stid else None
-    if not plan_people:
-        plan_people = _get_plan_people_any(plan_id, headers)
-    return plan_people
+def _fetch_plan_people(
+    stid: Optional[int],
+    plan_id: str,
+    headers: Dict[str, str],
+) -> Tuple[Optional[Dict[str, Any]], Optional[PlanPeopleFailure]]:
+    """Prefer the service-scoped plan_people path to avoid redirects and 404s.
+
+    Returns ``(payload, first_failure)`` -- see `PlanPeopleFailure` for why the
+    *first* failure is the one reported.
+    """
+    failure = None
+
+    if stid:
+        # ⭐ The request the board actually meant to make. Its status is read
+        # here, before the sweep below overwrites `_LAST_HTTP_ERROR` dozens of
+        # times, because this is the one an operator can act on.
+        scoped = _get_plan_people_with_service(stid, plan_id, headers)
+        if scoped:
+            return (scoped, None)
+        failure = PlanPeopleFailure(
+            'service_types/{}/plans/{}/plan_people'.format(stid, plan_id), _LAST_HTTP_ERROR)
+
+    plan_people = _get_plan_people_any(plan_id, headers)
+    if plan_people:
+        return (plan_people, None)
+
+    if failure is None:
+        # ⚠️ Without a service type there is no single request to blame: the
+        # generic path IS the sweep's first step, and re-running it to read its
+        # status would cost a request on an already-failing path. So the
+        # trailing status is all there is -- say so, rather than pinning it on
+        # an endpoint that may not be the one that produced it.
+        failure = PlanPeopleFailure(
+            'the plan_people sweep (no service type set, so every one was tried)',
+            _LAST_HTTP_ERROR)
+
+    return (None, failure)
+
+
+def _plan_people_error(
+    failure: Optional[PlanPeopleFailure],
+    plan_id: str,
+    headers: Dict[str, str],
+) -> str:
+    """Turn a failed roster read into something an operator can act on.
+
+    ⛔ Three call sites used to do three different things with the same
+    failure: the people list and the sync both asked whether a 404 meant the
+    plan was gone, and the worked example -- the one surface whose whole job is
+    to explain what a sync would do -- reported a bare status and nothing else.
+    """
+    status = failure.status if failure else None
+
+    if status == 404:
+        if _plan_is_really_gone(plan_id, headers):
+            _remember_missing_plan(plan_id)
+            return PLAN_GONE_ERROR
+        return PLAN_PEOPLE_UNREADABLE_ERROR
+
+    if status in (401, 403):
+        return (
+            'Planning Center rejected these credentials ({}). PCO credentials are kept '
+            'in this computer\'s system keyring rather than in config.json, so a token '
+            'entered on another machine does not carry across -- re-enter the PAT here. '
+            'If it was entered on this machine, check it has not been revoked in PCO.'
+        ).format(status)
+
+    if status is not None:
+        # ⭐ Name the request. "Planning Center returned 400" on its own sent
+        # the venue looking at the plan, when the status belonged to whichever
+        # probe the fallback sweep happened to end on.
+        return (
+            'Unable to fetch plan people -- Planning Center returned {} for {}. '
+            'The full exchange, including Planning Center\'s own message, is in '
+            'Logs.'
+        ).format(status, failure.where)
+
+    return (
+        'Unable to fetch plan people. Planning Center could not be reached, or the '
+        'request timed out. See Logs.'
+    )
 
 
 def _flatten_plan_people(
@@ -2370,9 +2444,9 @@ def resolve_sync(
     category = mapping.get('note_category') or 'Mic / IEM Assignments'
     team_filters = [t.strip().lower() for t in (mapping.get('team_name_filter') or []) if t and t.strip()]
 
-    plan_people = _fetch_plan_people(stid, plan_id, headers)
+    plan_people, failure = _fetch_plan_people(stid, plan_id, headers)
     if not plan_people:
-        return {"ok": False, "error": _fetch_error("Unable to fetch plan people")}
+        return {"ok": False, "error": _plan_people_error(failure, plan_id, headers)}
 
     people = _dedupe_people(_flatten_plan_people(plan_people, category, team_filters))
     resolved, unmatched = resolve_assignments(people, options)
@@ -2690,9 +2764,9 @@ def notes_for_plan(plan_id_override: Optional[str] = None, source_override: Opti
         return (collected, None)
 
     def _collect_person_notes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        plan_people = _fetch_plan_people(stid, plan_id, headers)
+        plan_people, failure = _fetch_plan_people(stid, plan_id, headers)
         if not plan_people:
-            return ([], "Unable to fetch plan people")
+            return ([], _plan_people_error(failure, plan_id, headers))
 
         collected: List[Dict[str, Any]] = []
         for person in _flatten_plan_people(plan_people, category, team_filters):
