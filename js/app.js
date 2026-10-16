@@ -274,13 +274,13 @@ function mapGroups() {
     const mb = document.getElementById('micboard');
     const pcoView = document.getElementById('pco-settings');
     const wantPCO = (micboard.settingsMode === 'PCO' || micboard.url.pco === 'true');
-    if (wantPCO) {
-      if (mb) mb.style.display = 'none';
-      if (pcoView) pcoView.style.display = 'block';
-    } else {
-      if (pcoView) pcoView.style.display = 'none';
-      if (mb) mb.style.display = 'grid';
-    }
+    // ⛔ `hidden`, not an inline `display`. Writing `display: grid` here put an
+    // inline style on the board that beat every stylesheet rule -- so Rack
+    // could not lay its channels out as a list however the stylesheet asked
+    // (#233). The base rule already says `grid`; what this has to decide is
+    // whether the board is on screen, not how it is arranged.
+    if (mb) mb.hidden = wantPCO;
+    if (pcoView) pcoView.style.display = wantPCO ? 'block' : 'none';
   }
 
   /**

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 ### Added
+- **Desk mode is now Rack, the FOH strip** (#233). It was the wall card stretched to full width, and
+  at that shape the band, the name and the status chip overlapped. Each channel is now one row:
+  device id, status, person, runtime, AF and RF as percentages each with a small trend beside the
+  number, then frequency, offset and battery. ⛔ No photographs — a face is how the room identifies
+  somebody, not how the operator does. **This is what a board shows by default**, so it is what a new
+  installation looked like.
 - **The administration rail names the dock list.** The item is **Screens & docks**, and its state
   line counts what is underneath a screen — `3 screens, 1 dock`, or `3 screens described` when
   there is nothing below them. The dock list has existed since 2.0.0-beta.5 but had no route of its
@@ -28,6 +34,9 @@
   so no board's columns change.
 
 ### Fixed
+- **A trend no longer spans the card.** It was `flex: 1 1 auto` — about 370px of a 420px card — and
+  stretched, so the same signal drew a different shape at every card width. It is now a fixed 92px,
+  unstretched, and sits *after* its number: label, value, then the line that glosses it.
 - **Administration is full screen**, as the design drew it, replacing the centred overlay over a
   dimmed board. A 760px card had no room for two panes, so the section rail had to reflow into a
   grid and every destination replaced it; full screen restores the fixed rail with a content area

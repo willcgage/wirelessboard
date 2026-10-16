@@ -64,7 +64,7 @@ function initSlotEdit() {
       return;
     }
 
-    slotSelector.querySelector('.chartzone').style.display = 'none';
+    slotSelector.querySelector('.chartzone').hidden = true;
     slotSelector.querySelector('.errorzone').style.display = 'block';
     slotSelector.querySelector('.diversity').style.display = 'none';
     slotSelector.querySelector('.editzone').style.display = 'block';
