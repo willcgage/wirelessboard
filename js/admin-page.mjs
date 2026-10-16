@@ -55,7 +55,13 @@ export const SECTIONS = [
       // 2026-10-15.
       { id: 'screens', label: 'Screens & docks', action: 'config' },
       { id: 'slots', label: 'Slots', action: 'slot-edit' },
-      { id: 'group', label: 'This group', action: 'group-edit' },
+      // ⛔ `This group` folded into `Groups` when the configuration page was
+      // retired (#222, settled 2026-10-15). Two rail items both saying "group"
+      // -- one the list, one the group this screen happens to be showing --
+      // could not be told apart from their labels. ⭐ The shown group is now a
+      // marked ROW in the list, which costs one more click to edit and buys
+      // one door instead of two.
+      { id: 'groups', label: 'Groups', action: 'group-edit' },
       { id: 'backgrounds', label: 'Backgrounds', action: 'background-library' },
     ],
   },
@@ -366,7 +372,9 @@ export function resetAdminRoutes() {
  * at a time; conflating it with the lock's list would mean each move silently
  * unguarded a section.
  */
-export const IN_PAGE_ITEMS = ['about', 'screens', 'logs', 'backgrounds'];
+export const IN_PAGE_ITEMS = [
+  'about', 'screens', 'logs', 'backgrounds', 'receivers', 'groups',
+];
 
 /**
  * Whether opening `view` should refill the moved section `id`.

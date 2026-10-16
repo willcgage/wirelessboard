@@ -22,7 +22,7 @@ import { setTimeMode } from './signal-view.js';
 import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, bindScreenHandlers,
   configureConfigModule, scheduleBackgroundFilenameGuide, refreshScreensEditor,
-  showLogsSection, hideLogsSection, showBackgroundsSection,
+  showLogsSection, hideLogsSection, showBackgroundsSection, showConfigHealth,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
@@ -258,52 +258,29 @@ function mapGroups() {
   // pane-switching buttons, and an initial `syncHudPane`. All of it belonged to
   // an overlay nothing could close (#225). Help is a section of the
   // administration page now.
-  const inlineCloseBtn = document.getElementById('close-settings-inline');
 
   // Ensure single-view visibility helper
+  /**
+   * ⛔ Two views now, not three. The configuration pane was retired by #222 --
+   * everything it held is a section of the administration page, which is an
+   * overlay and hides nothing underneath it. So this chooses between Planning
+   * Center and the board.
+   *
+   * ⚠️ The log auto-refresh stop that used to live in the `wasConfig` branch
+   * is not lost: the administration page releases a section when it closes,
+   * which is what actually stops that timer now.
+   */
   function resetViews() {
     const mb = document.getElementById('micboard');
-    const settings = document.querySelector('.settings');
     const pcoView = document.getElementById('pco-settings');
     const wantPCO = (micboard.settingsMode === 'PCO' || micboard.url.pco === 'true');
-    const wantCFG = (micboard.settingsMode === 'CONFIG' || micboard.url.settings === 'true' || micboard.url.settings === 'logs');
-    const wasConfig = micboard.settingsMode === 'CONFIG';
     if (wantPCO) {
       if (mb) mb.style.display = 'none';
-      if (settings) settings.style.display = 'none';
       if (pcoView) pcoView.style.display = 'block';
-    } else if (wantCFG) {
-      if (mb) mb.style.display = 'none';
-      if (pcoView) pcoView.style.display = 'none';
-      if (settings) settings.style.display = 'block';
     } else {
       if (pcoView) pcoView.style.display = 'none';
-      if (settings) settings.style.display = 'none';
       if (mb) mb.style.display = 'grid';
-      if (wasConfig && typeof micboard.stopLogAutoRefresh === 'function') {
-        try { micboard.stopLogAutoRefresh(true); } catch (e) {}
-      }
     }
-  }
-  if (inlineCloseBtn) {
-    inlineCloseBtn.addEventListener('click', (event) => {
-      event.preventDefault();
-      if (typeof micboard.stopLogAutoRefresh === 'function') {
-        try { micboard.stopLogAutoRefresh(true); } catch (_) {}
-      }
-      micboard.settingsMode = 'NONE';
-      micboard.url.settings = undefined;
-      micboard.url.pco = undefined;
-      micboard.url.background = undefined;
-      updateHash();
-      const mb = document.getElementById('micboard');
-      const settings = document.querySelector('.settings');
-      const pcoView = document.getElementById('pco-settings');
-      if (mb) mb.style.display = 'grid';
-      if (settings) settings.style.display = 'none';
-      if (pcoView) pcoView.style.display = 'none';
-      resetViews();
-    });
   }
 
   /**
@@ -314,28 +291,11 @@ function mapGroups() {
    * the new route cannot be the one that forgets it. The registration below
    * stays when the menu item goes.
    */
-  function openConfigPane(tab) {
-    if (refuseWhenLocked('config')) return;
-    // Only two tabs exist -- devices and logs -- so Receivers and Screens both
-    // land on the devices pane. Their value on the rail is the state line.
-    micboard.configTab = tab === 'logs' ? 'logs' : 'devices';
-    initConfigEditor();
-    micboard.url.background = undefined;
-    resetViews();
-  }
 
   function openSlotNames() {
     if (refuseWhenLocked('slot-edit')) return;
     slotEditToggle();
     resetViews();
-  }
-
-  function openGroupEdit() {
-    if (refuseWhenLocked('group-edit')) return;
-    if (micboard.group !== 0) {
-      groupEditToggle();
-      resetViews();
-    }
   }
 
   function toggleDemoMode() {
@@ -349,10 +309,7 @@ function mapGroups() {
   // guarded action has no item, and the page itself says so if an item has no
   // route -- a button that draws and does nothing is the same failure as a
   // missing one, and harder to notice.
-  registerAdminRoute('receivers', () => openConfigPane('devices'));
-  registerAdminRoute('screens', () => openConfigPane('devices'));
   registerAdminRoute('slots', openSlotNames);
-  registerAdminRoute('group', openGroupEdit);
   registerAdminRoute('demo', toggleDemoMode);
   // ⭐ `showPCOView` guards the lock itself, so the event route is as safe as
   // the menu item and needs no second check here.
@@ -809,6 +766,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (id === 'screens') refreshScreensEditor();
         if (id === 'logs') showLogsSection();
         if (id === 'backgrounds') showBackgroundsSection();
+        // ⚠️ Both fill the same editors: the discovered list, the slot rows and
+        // the group summary are rendered together by one pass.
+        if (id === 'receivers' || id === 'groups') initConfigEditor(true);
       },
       // ⛔ The other edge, and the reason it exists: the log viewer follows the
       // file on a timer. A section that is hidden, or a page that is closed,
@@ -816,6 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
       releaseSection: (id) => {
         if (id === 'logs') hideLogsSection();
       },
+      onPageOpen: () => showConfigHealth(),
       getLockState: () => micboard.viewerLock,
       getViewers: () => micboard.viewers,
       // ⚠️ Help shows the build number, which the retired overlay used to carry.

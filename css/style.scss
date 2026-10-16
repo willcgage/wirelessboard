@@ -3090,7 +3090,12 @@ body.live-strip-bottom .rotation-bar {
 }
 
 // The remove control is a fixed 44px square whatever else is on the row.
-.admin-section--moved .row > .d-grid {
+//
+// ⚠️ `.col-md-1` and not just `.d-grid`. Written broadly this also caught the
+// "Add receiver" column, which is a `d-grid` holding a 75px text button -- it
+// was squeezed to 44px and hung 11px out of the section. Every remove column
+// is `col-md-1`; nothing else on these rows is.
+.admin-section--moved .row > .col-md-1.d-grid {
   flex: 0 0 44px;
 }
 

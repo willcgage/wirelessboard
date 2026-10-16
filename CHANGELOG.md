@@ -9,6 +9,8 @@
   there.
 
 ### Removed
+- **The group list no longer tells you to press a key.** Its empty state read "Open a group from the
+  bar and press E" — a menu bar retired in this release and a keyboard removed in 1.16.
 - **Google Drive backgrounds are gone** (#83). The feature never put a file on a board: nothing
   called the fetch, so a fully authorized account still showed nothing, and authorization could not
   even start in the desktop app. Its settings UI, its five API routes and its module are removed —
@@ -43,6 +45,13 @@
   section is open and stops when the section is left or the page is closed.
 - **Backgrounds opens inside Administration** too (#222, three of six panes). `#background=true`,
   which named a view of its own, now opens Administration on Backgrounds.
+- **Receivers and Groups open inside Administration, and the configuration page is gone** (#222).
+  Discovery, the discovered-device list and the channel-to-slot table are one **Receivers** section;
+  the group list is its own **Groups** section. Nothing micboard-era is left behind the gear.
+- **The recovery banner moved onto Administration.** It lived on the configuration page, which
+  nothing opens any more — and it is the only way back from a configuration that will not load.
+- **`This group` folded into `Groups`.** Two rail items both about groups could not be told apart
+  from their labels; the group a screen is showing is a row in the list.
 
 ## [2.0.0-beta.5] - 2026-10-14
 

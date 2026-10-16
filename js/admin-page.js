@@ -416,6 +416,14 @@ export function openAdminPage(section) {
   }
   lastFocus = document.activeElement;
   view = IN_PAGE_ITEMS.includes(section) ? section : 'rail';
+
+  // ⛔ Before anything is drawn. The recovery banner is a condition of the
+  // whole board, not of a section, and somebody arriving here because the
+  // board is behaving strangely must meet it however they arrived.
+  if (deps && typeof deps.onPageOpen === 'function') {
+    deps.onPageOpen();
+  }
+
   renderAdminPage();
   page.classList.add('is-open');
   // So the board behind cannot be scrolled out from under the overlay.
