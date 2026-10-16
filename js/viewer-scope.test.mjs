@@ -80,8 +80,12 @@ const ROOT = path.join(import.meta.dirname, '..');
 const read = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8').replace(/\r\n/g, '\n');
 
 test('both sides of the line say which side they are on', () => {
-  assert.match(read('demo.html'), /id="config-scope-note"/, 'the config pane needs a scope note');
-  assert.match(read('js', 'config.js'), /scopeNote\('global'/, 'and it should say "every board"');
+  // ⚠️ Repointed, not relaxed. #116 is about the boundary being STATED, not
+  // about which surface states it. The configuration pane carried the global
+  // half until #222 retired it; the administration page carries it now, in a
+  // banner that is the first thing on that page.
+  assert.match(read('demo.html'), /id="admin-page-banner"/, 'the global side needs somewhere to say it');
+  assert.match(read('js', 'admin-page.js'), /scopeNote\('global'\)/, 'and it should say "every board"');
   assert.match(read('js', 'view-panel.js'), /scopeNote\('device'\)/, 'the panel should say "this device"');
 });
 
@@ -101,5 +105,12 @@ test('⚠️ the note follows the count rather than printing one stale sentence'
   // unknown on the first pass -- which is exactly what happened when this was
   // first wired, and the note sat there saying nothing about who else was on.
   assert.match(read('js', 'data.js'), /wirelessboard:viewers/, 'data.js should announce changes');
-  assert.match(read('js', 'config.js'), /addEventListener\('wirelessboard:viewers'/, 'and the note should follow them');
+  // ⚠️ The surface that listens moved with the note (#222). The
+  // administration page redraws its banner on every viewers event, which is
+  // the same guarantee the configuration pane used to give.
+  assert.match(
+    read('js', 'admin-page.js'),
+    /addEventListener\('wirelessboard:viewers'/,
+    'and the note should follow them',
+  );
 });

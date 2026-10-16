@@ -595,7 +595,7 @@ function renderDiscoveryHint(container) {
   if (hint.showManualHint) {
     const jump = document.createElement('button');
     jump.type = 'button';
-    jump.className = 'btn btn-sm btn-outline-secondary mt-2';
+    jump.className = 'admin-btn';
     jump.textContent = 'Add a manual CIDR range';
     jump.addEventListener('click', () => {
       const field = document.getElementById('discovery-subnets');
@@ -771,8 +771,6 @@ function renderPcoCredentialStatus(authMeta = {}) {
   }
 }
 
-const CONFIG_TAB_DEVICES = 'devices';
-const CONFIG_TAB_LOGS = 'logs';
 const LOG_PAGE_SIZE = 200;
 const LOG_AUTO_REFRESH_INTERVAL = 5000;
 const DEFAULT_LOG_SETTINGS = {
@@ -828,64 +826,6 @@ function logEl(id) {
   return document.getElementById(id);
 }
 
-function ensureConfigTabsInitialized() {
-  const container = document.getElementById('config-tabs');
-  if (!container || container.dataset.tabsBound === 'true') return;
-  container.dataset.tabsBound = 'true';
-  const buttons = container.querySelectorAll('[data-config-tab]');
-  buttons.forEach((btn) => {
-    btn.addEventListener('click', (event) => {
-      event.preventDefault();
-      const target = btn.getAttribute('data-config-tab');
-      setConfigTab(target);
-    });
-  });
-}
-
-/**
- * ⚠️ One tab now. Logs moved to the administration page (#222), so this chooses
- * between Devices and Devices -- kept rather than unpicked because the hash
- * (`#settings=true`) and `micboard.configTab` are read in several places, and
- * removing a state machine is a separate change from moving a pane out of it.
- */
-function setConfigTab(tabName, options = {}) {
-  const target = tabName === CONFIG_TAB_LOGS ? CONFIG_TAB_LOGS : CONFIG_TAB_DEVICES;
-  micboard.configTab = target;
-  if (micboard && micboard.url) {
-    micboard.url.settings = target === CONFIG_TAB_LOGS ? 'logs' : 'true';
-  }
-
-  const buttons = document.querySelectorAll('[data-config-tab]');
-  buttons.forEach((btn) => {
-    const isActive = btn.getAttribute('data-config-tab') === target;
-    btn.classList.toggle('btn-secondary', isActive);
-    btn.classList.toggle('btn-outline-secondary', !isActive);
-    btn.classList.toggle('active', isActive);
-  });
-
-  const devicesView = logEl('config-devices-view');
-  if (devicesView) devicesView.classList.remove('d-none');
-
-  // ⛔ The logs view is not here any more and neither is its timer. Leaving the
-  // `stopLogAutoRefresh` call behind would have been harmless, and wrong: the
-  // configuration page would have been quietly reaching into a section it no
-  // longer owns.
-  //
-  // ⚠️ `options.forceReload` only ever meant "reload the logs", so it has no
-  // reader left. Kept in the signature because `initConfigEditor` passes it.
-
-  if (micboard.settingsMode === 'CONFIG') {
-    invokeUpdateHash();
-  }
-}
-
-/**
- * The logs section was opened in the administration page (#222).
- *
- * ⛔ The handlers bind once; the entries are reloaded on every open. A log
- * viewer showing what the file held the last time somebody looked is worse
- * than no viewer, because it reads as "nothing has happened since".
- */
 export function showLogsSection() {
   ensureLogViewerInitialized();
   loadLogs({ reset: true }).catch(() => {});
@@ -2638,31 +2578,6 @@ function closePCOView() {
  * browser, while everything on this page is the server's and lands on every
  * connected board at once.
  */
-function renderConfigScopeNote() {
-  const note = document.getElementById('config-scope-note');
-  if (!note) {
-    return;
-  }
-  note.textContent = scopeNote('global', micboard.viewers);
-
-  // ⚠️ The config view opens before the first payload lands, so the count is
-  // not known yet when this first runs. Follow it rather than printing one
-  // stale sentence and leaving it there.
-  if (!note.dataset.bound) {
-    note.dataset.bound = 'true';
-    window.addEventListener('wirelessboard:viewers', () => {
-      note.textContent = scopeNote('global', micboard.viewers);
-    });
-  }
-}
-
-/**
- * The groups panel (#114).
- *
- * ⭐ Built with createElement rather than innerHTML: these strings are people's
- * names arriving from PCO and from a hand-edited config.json, and one of them
- * will eventually contain an apostrophe or an angle bracket.
- */
 function renderGroupSummary() {
   const holder = document.getElementById('groups-summary');
   if (!holder) {
@@ -2680,7 +2595,14 @@ function renderGroupSummary() {
   if (!rows.length) {
     const empty = document.createElement('p');
     empty.className = 'text-muted small';
-    empty.textContent = 'No groups yet. Open a group from the bar and press E to put channels in one.';
+    // ⛔⛔ This said "Open a group from the bar and press E to put channels in
+    // one." Both halves were dead: the menu bar was retired by #188, and the
+    // keyboard shortcuts were removed outright by #160 -- `kbd.js` is Escape
+    // and nothing else, and two tests fail if a key comes back. One sentence
+    // pointing at two controls that do not exist is the whole of what #222 is
+    // about.
+    empty.textContent = 'No groups yet. Channels not in a group still show on '
+      + 'All channels, and never on a page of their own.';
     holder.appendChild(empty);
   }
 
@@ -2860,6 +2782,25 @@ function renderGroupSummary() {
   holder.appendChild(orphans);
 }
 
+/**
+ * The recovery banner, shown whenever the administration page opens.
+ *
+ * ⛔⛔ This is the only interface back from a configuration that will not load.
+ * It lived on the configuration page, whose own comment said it was reachable
+ * "because the board starts anyway" -- an assumption that died the moment
+ * Receivers left and nothing opened that page any more. A damaged
+ * configuration is a condition of the whole board, so it belongs on the page
+ * shell rather than inside any one section: inside a section it would be
+ * reachable only by choosing that section, which is the same trap again.
+ *
+ * ⚠️ 1.7.0 is the reason. A CIDR save left `config.json` holding `{}`, the
+ * server would not start, and there was no interface left to repair it from.
+ */
+export function showConfigHealth() {
+  ensureConfigHealthBindings();
+  loadConfigHealth();
+}
+
 export function initConfigEditor(force = false) {
   if (micboard && typeof micboard === 'object') {
     micboard.stopLogAutoRefresh = stopLogAutoRefresh;
@@ -2868,31 +2809,14 @@ export function initConfigEditor(force = false) {
     return;
   }
 
-  micboard.settingsMode = 'CONFIG';
-  micboard.url.background = undefined;
-  invokeUpdateHash();
-  const mb = document.getElementById('micboard');
-  if (mb) mb.style.display = '';
-  const pcoView = document.getElementById('pco-settings');
-  if (pcoView) pcoView.style.display = 'none';
-  const settings = document.querySelector('.settings');
-  if (settings) settings.style.display = 'block';
-
-  ensureConfigTabsInitialized();
-  if (!micboard.configTab) micboard.configTab = CONFIG_TAB_DEVICES;
-  setConfigTab(micboard.configTab, { forceReload: force });
-
-  ensureBackgroundDirectoryBindings();
-  if (force || !backgroundDirectoryState.info) {
-    loadBackgroundDirectoryState({ silent: true });
-  } else {
-    renderBackgroundDirectory(backgroundDirectoryState.info);
-  }
-
-  ensureConfigHealthBindings();
-  loadConfigHealth();
-
-  renderConfigScopeNote();
+  // ⛔ The view juggling that was here is gone with the page it drove (#222):
+  // `settingsMode = 'CONFIG'`, showing `.settings`, hiding the PCO view, the
+  // tab strip, and a hash write. Receivers is a section of the administration
+  // page now, and that page decides what is on screen.
+  //
+  // ⚠️ Everything below stays. It holds #150 -- before the first payload there
+  // is no way to tell an empty board from an unloaded one, and saving those
+  // blanks writes `slots: []` and wipes a configured board.
   renderGroupSummary();
 
   // Render slot list (replacement for missing renderSlotList)

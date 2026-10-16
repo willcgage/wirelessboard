@@ -127,8 +127,179 @@
         <!-- ⚠️ The third and loudest statement of the boundary (#116). Filled
              from `scopeNote`, so there is one phrasing of it in the project. -->
         <p class="admin-banner" id="admin-page-banner"></p>
+        <div id="config-health-banner" class="alert alert-danger" role="alert" hidden>
+          <h5 class="alert-heading">This board started without a usable configuration</h5>
+          <p id="config-health-detail" class="mb-2"></p>
+          <p class="mb-3 small">
+            Nothing has been written to the configuration file — it is exactly as it was found.
+            Saving from this page will overwrite it.
+          </p>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-light" id="config-restore-backup">
+              Restore last working configuration
+            </button>
+            <button type="button" class="btn btn-outline-light" id="config-reset-defaults">
+              Reset to defaults
+            </button>
+          </div>
+          <div id="config-health-status" class="small mt-2" role="status" aria-live="polite"></div>
+        </div>
         <div class="admin-body admin-layout" id="admin-page-body">
           <nav class="admin-rail" id="admin-page-rail" aria-label="Administration sections"></nav>
+      <section class="admin-section admin-section--moved" id="admin-section-receivers" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Receivers</h3>
+          <p class="admin-section__lead">How the board finds receivers, what it found,
+            and which channel feeds which slot. ⭐ Discovery is here because it is not a
+            setting of its own &mdash; it is how this list gets filled.</p>
+        </div>
+
+          <div class="row gy-4">
+
+            <div class="col-12 col-xl-6" id="cfg-discovered-col">
+              <div class="admin-section__head admin-section__head--sub"><h4 class="admin-section__subtitle">Discovery</h4></div>
+
+              <div id="discovery-settings-panel" class="config-panel p-3 border rounded mb-3">
+                <form id="discovery-settings-form" class="row g-3">
+                  <div class="col-12">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" id="discovery-auto">
+                      <label class="form-check-label" for="discovery-auto">Automatic subnets</label>
+                    </div>
+                    <small class="form-text text-muted">Include the active interface's IPv4 subnet.</small>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label" for="discovery-subnets">Manual CIDR ranges</label>
+                    <textarea class="form-control" id="discovery-subnets" rows="4" placeholder="10.10.10.0/24&#10;192.168.40.32/27"></textarea>
+                    <small class="form-text text-muted">One network per line. Leave blank to scan automatic subnets only.</small>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="discovery-scan-interval">Scan interval (seconds)</label>
+                    <input type="number" class="form-control" id="discovery-scan-interval" min="15" max="900" step="5" placeholder="60">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="discovery-timeout">Probe timeout (ms)</label>
+                    <input type="number" class="form-control" id="discovery-timeout" min="100" max="5000" step="50" placeholder="750">
+                  </div>
+                </form>
+                <div id="dcid-warning" class="alert alert-warning small mt-3 d-none" role="alert"></div>
+                <div id="discovery-status" class="small text-muted mt-2"></div>
+              </div>
+              <div class="admin-section__head admin-section__head--sub"><h4 class="admin-section__subtitle">Discovered Devices</h4></div>
+
+              <div id="discovered_list"></div>
+              <div class="config-footer">
+                <div class="row">
+                  <div class="col d-grid gap-2">
+                    <button id="add-discovered" class="admin-btn admin-btn--danger">Add All Discovered Devices</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+                        <!-- Groups, and the question the board's own editor cannot answer:
+                 is anything in no group at all? A channel in none of them is
+                 invisible to anyone viewing groups rather than the combined
+                 board, and nothing on the board says so. #114. -->
+            
+
+            <div class="col-12 col-xl-6" id="cfg-slot-col">
+              <div class="admin-section__head admin-section__head--sub"><h4 class="admin-section__subtitle">Slot Configuration</h4></div>
+              <div id="editor_holder"></div>
+              <div class="config-footer">
+                <div class="row">
+
+                </div>
+
+                <div class="row">
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="admin-btn admin-btn--danger" id="clear-id">Clear IDs</button>
+                  </div>
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="admin-btn admin-btn--danger" id="clear-name">Clear Extended Names</button>
+                  </div>
+                </div>
+                <div class="row mt-2">
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="admin-btn" id="clear-device-names">Clear Device Names</button>
+                  </div>
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="admin-btn" id="read-device-names">Read Device Names</button>
+                  </div>
+                </div>
+                <div class="row mt-2">
+                  <div class="col">
+                    <div id="device-name-status" class="small text-muted d-none"></div>
+                  </div>
+                </div>
+                <!-- ⛔ The channel count is asked for, not inferred. A model
+                     string decides it, not the type: "axtd" is both AD4D at two
+                     channels and AD4Q at four, and the tables for SLX-D are
+                     empty because those model strings have never been seen. -->
+                <div class="row g-2 align-items-end mt-3 pt-3 border-top">
+                  <div class="col-12">
+                    <strong class="small">Add a receiver by hand</strong>
+                    <div class="form-text">
+                      For a receiver discovery cannot see &mdash; on another VLAN, or not yet
+                      switched on. Discovered receivers already know their channel count.
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-12">
+                    <label for="manual-rx-ip" class="form-label text-light small">IP</label>
+                    <input type="text" class="form-control form-control-sm" id="manual-rx-ip" placeholder="e.g. 192.168.1.50">
+                  </div>
+                  <div class="col-md-4 col-8">
+                    <label for="manual-rx-type" class="form-label text-light small">Model</label>
+                    <select class="form-select form-select-sm" id="manual-rx-type">
+                      <option value=""></option>
+                      <option value="axtd">Axient Digital (AD4D / AD4Q)</option>
+                      <option value="ulxd">ULX-D</option>
+                      <option value="qlxd">QLX-D</option>
+                      <option value="slxdplus">SLX-D+</option>
+                      <option value="slxd">SLX-D</option>
+                      <option value="uhfr">UHF-R</option>
+                      <option value="p10t">PSM 1000 (IEM)</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2 col-4">
+                    <label for="manual-rx-channels" class="form-label text-light small">Channels</label>
+                    <input type="number" class="form-control form-control-sm" id="manual-rx-channels" min="1" max="16" value="1">
+                  </div>
+                  <div class="col-md-2 col-12 d-grid">
+                    <button type="button" class="admin-btn" id="add-receiver">Add receiver</button>
+                  </div>
+                  <div class="col-12">
+                    <span id="manual-rx-status" class="small"></span>
+                  </div>
+                </div>
+
+                <div class="row mt-2">
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="admin-btn admin-btn--primary" id="add-config-row">Add Row</button>
+                  </div>
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="admin-btn" id="clear-config">Clear All</button>
+                  </div>
+                  <div class="col d-grid gap-2">
+                    <button type="button" class="admin-btn admin-btn--primary" id="save">Save Config</button>
+                  </div>
+                </div>
+                <div id="config-save-status" class="small text-muted mt-2" role="status" aria-live="polite"></div>
+              </div>
+
+            </div>
+          </div>
+      </section>
+      <section class="admin-section admin-section--moved" id="admin-section-groups" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Groups</h3>
+          <p class="admin-section__lead">Named sets of channels, and the order the board
+            cycles them in. ⚠️ The group this screen is showing is one of these &mdash;
+            editing it is a row in this list, not a door of its own.</p>
+        </div>
+
+              <div id="groups-summary" class="groups-summary"></div>
+      </section>
           <div class="admin-content" id="admin-page-content"></div>
       <section class="admin-section admin-section--moved" id="admin-section-screens" hidden>
         <div class="admin-section__head">
@@ -826,7 +997,7 @@
           <div class="d-grid gap-1">
             <button type="button" class="btn btn-success btn-lg" id="editorSave">Save</button>
             <button type="button" class="btn btn-warning btn-lg" id="editorClose">Close</button>
-            <button type="button" class="btn btn-danger btn-lg" id="editorClear">Clear</button>
+            <button type="button" class="admin-btn admin-btn--danger" id="editorClear">Clear</button>
           </div>
         </div>
       </div>
@@ -838,198 +1009,6 @@
         <h1>Connection Error!</h1>
   <p>Could not connect to the wirelessboard server. Please refresh the page.</p>
       </div>
-      <div class="settings">
-        <!-- Which side of the line this pane is on (#116). View preferences are
-             this device's; everything here is the server's, so a save reaches
-             the wall display, the FOH laptop and anyone's phone at once. -->
-        <p id="config-scope-note" class="config-scope-note"></p>
-        <!-- Shown only when config.json did not load cleanly. The board starts
-             anyway so this panel is reachable, but starting is not fixing, and
-             nothing writes to the file while it is in this state -- so the way
-             out has to be stated here rather than left in the log. -->
-        <div id="config-health-banner" class="alert alert-danger" role="alert" hidden>
-          <h5 class="alert-heading">This board started without a usable configuration</h5>
-          <p id="config-health-detail" class="mb-2"></p>
-          <p class="mb-3 small">
-            Nothing has been written to the configuration file — it is exactly as it was found.
-            Saving from this page will overwrite it.
-          </p>
-          <div class="d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-light" id="config-restore-backup">
-              Restore last working configuration
-            </button>
-            <button type="button" class="btn btn-outline-light" id="config-reset-defaults">
-              Reset to defaults
-            </button>
-          </div>
-          <div id="config-health-status" class="small mt-2" role="status" aria-live="polite"></div>
-        </div>
-
-        <div class="row mb-3" id="config-tabs">
-          <div class="col d-flex flex-wrap gap-2 align-items-center">
-            <div class="btn-group" role="group" aria-label="Settings sections">
-              <button type="button" class="btn btn-secondary config-tab" id="config-tab-devices" data-config-tab="devices">Devices</button>
-            </div>
-            <!-- The handler for this has existed in app.js since the import; the
-                 button never did, so leaving this view meant pressing Escape —
-                 which reloads the whole page — or picking another view from the
-                 Menu. The Background and Planning Center panes both have their
-                 own Close, and this is the same control for this one. -->
-            <button type="button" class="btn btn-outline-secondary ms-auto" id="close-settings-inline">Close</button>
-          </div>
-        </div>
-
-        <div id="config-devices-view" class="config-view">
-          <div class="row gy-4">
-
-            <div class="col-12 col-xl-6" id="cfg-discovered-col">
-              <div class="config-header">
-                <h3 class="text-center">Discovery</h3>
-              </div>
-
-              <div id="discovery-settings-panel" class="config-panel p-3 border rounded mb-3">
-                <form id="discovery-settings-form" class="row g-3">
-                  <div class="col-12">
-                    <div class="form-check form-switch">
-                      <input class="form-check-input" type="checkbox" id="discovery-auto">
-                      <label class="form-check-label" for="discovery-auto">Automatic subnets</label>
-                    </div>
-                    <small class="form-text text-muted">Include the active interface's IPv4 subnet.</small>
-                  </div>
-                  <div class="col-12">
-                    <label class="form-label" for="discovery-subnets">Manual CIDR ranges</label>
-                    <textarea class="form-control" id="discovery-subnets" rows="4" placeholder="10.10.10.0/24&#10;192.168.40.32/27"></textarea>
-                    <small class="form-text text-muted">One network per line. Leave blank to scan automatic subnets only.</small>
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <label class="form-label" for="discovery-scan-interval">Scan interval (seconds)</label>
-                    <input type="number" class="form-control" id="discovery-scan-interval" min="15" max="900" step="5" placeholder="60">
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <label class="form-label" for="discovery-timeout">Probe timeout (ms)</label>
-                    <input type="number" class="form-control" id="discovery-timeout" min="100" max="5000" step="50" placeholder="750">
-                  </div>
-                </form>
-                <div id="dcid-warning" class="alert alert-warning small mt-3 d-none" role="alert"></div>
-                <div id="discovery-status" class="small text-muted mt-2"></div>
-              </div>
-
-              <div class="config-header">
-                <h3 class="text-center">Discovered Devices</h3>
-              </div>
-
-              <div id="discovered_list"></div>
-              <div class="config-footer">
-                <div class="row">
-                  <div class="col d-grid gap-2">
-                    <button id="add-discovered" class="btn btn-danger">Add All Discovered Devices</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-                        <!-- Groups, and the question the board's own editor cannot answer:
-                 is anything in no group at all? A channel in none of them is
-                 invisible to anyone viewing groups rather than the combined
-                 board, and nothing on the board says so. #114. -->
-            <div class="col-12 col-xl-6" id="cfg-groups-col">
-              <div class="config-header">
-                <h3 class="text-center">Groups</h3>
-              </div>
-              <div id="groups-summary" class="groups-summary"></div>
-            </div>
-
-            <div class="col-12 col-xl-6" id="cfg-slot-col">
-              <div class="config-header">
-                <h3 class="text-center">Slot Configuration</h3>
-              </div>
-              <div id="editor_holder"></div>
-              <div class="config-footer">
-                <div class="row">
-
-                </div>
-
-                <div class="row">
-                  <div class="col d-grid gap-2">
-                    <button type="button" class="btn btn-secondary btn-warning" id="clear-id">Clear IDs</button>
-                  </div>
-                  <div class="col d-grid gap-2">
-                    <button type="button" class="btn btn-secondary btn-warning" id="clear-name">Clear Extended Names</button>
-                  </div>
-                </div>
-                <div class="row mt-2">
-                  <div class="col d-grid gap-2">
-                    <button type="button" class="btn btn-secondary" id="clear-device-names">Clear Device Names</button>
-                  </div>
-                  <div class="col d-grid gap-2">
-                    <button type="button" class="btn btn-outline-info" id="read-device-names">Read Device Names</button>
-                  </div>
-                </div>
-                <div class="row mt-2">
-                  <div class="col">
-                    <div id="device-name-status" class="small text-muted d-none"></div>
-                  </div>
-                </div>
-                <!-- ⛔ The channel count is asked for, not inferred. A model
-                     string decides it, not the type: "axtd" is both AD4D at two
-                     channels and AD4Q at four, and the tables for SLX-D are
-                     empty because those model strings have never been seen. -->
-                <div class="row g-2 align-items-end mt-3 pt-3 border-top">
-                  <div class="col-12">
-                    <strong class="small">Add a receiver by hand</strong>
-                    <div class="form-text">
-                      For a receiver discovery cannot see &mdash; on another VLAN, or not yet
-                      switched on. Discovered receivers already know their channel count.
-                    </div>
-                  </div>
-                  <div class="col-md-4 col-12">
-                    <label for="manual-rx-ip" class="form-label text-light small">IP</label>
-                    <input type="text" class="form-control form-control-sm" id="manual-rx-ip" placeholder="e.g. 192.168.1.50">
-                  </div>
-                  <div class="col-md-4 col-8">
-                    <label for="manual-rx-type" class="form-label text-light small">Model</label>
-                    <select class="form-select form-select-sm" id="manual-rx-type">
-                      <option value=""></option>
-                      <option value="axtd">Axient Digital (AD4D / AD4Q)</option>
-                      <option value="ulxd">ULX-D</option>
-                      <option value="qlxd">QLX-D</option>
-                      <option value="slxdplus">SLX-D+</option>
-                      <option value="slxd">SLX-D</option>
-                      <option value="uhfr">UHF-R</option>
-                      <option value="p10t">PSM 1000 (IEM)</option>
-                    </select>
-                  </div>
-                  <div class="col-md-2 col-4">
-                    <label for="manual-rx-channels" class="form-label text-light small">Channels</label>
-                    <input type="number" class="form-control form-control-sm" id="manual-rx-channels" min="1" max="16" value="1">
-                  </div>
-                  <div class="col-md-2 col-12 d-grid">
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="add-receiver">Add receiver</button>
-                  </div>
-                  <div class="col-12">
-                    <span id="manual-rx-status" class="small"></span>
-                  </div>
-                </div>
-
-                <div class="row mt-2">
-                  <div class="col d-grid gap-2">
-                    <button type="button" class="btn btn-outline-primary" id="add-config-row">Add Row</button>
-                  </div>
-                  <div class="col d-grid gap-2">
-                    <button type="button" class="btn btn-outline-secondary" id="clear-config">Clear All</button>
-                  </div>
-                  <div class="col d-grid gap-2">
-                    <button type="button" class="btn btn-success" id="save">Save Config</button>
-                  </div>
-                </div>
-                <div id="config-save-status" class="small text-muted mt-2" role="status" aria-live="polite"></div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-              </div>
   <template id="column-template">
       <div class="col-sm">
         <!-- Device, then person, then position. The line that used to sit at the
@@ -1230,7 +1209,7 @@
 
         <div class="col col-md-1 col-12 del-btn cfg-row-form d-grid gap-2">
           <label class="form-label d-none d-md-block">&nbsp;</label>
-          <button type="button" class="btn float-right btn-danger"><span aria-hidden="true">&times;</span></button>
+          <button type="button" class="admin-row-remove" aria-label="Remove this slot" title="Remove this slot"><span aria-hidden="true">&times;</span></button>
         </div>
 
       </div>

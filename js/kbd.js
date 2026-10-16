@@ -13,8 +13,10 @@
  * back is worse than any keyboard-free principle.
  *
  * ⚠️ Before adding anything here, read #160. A key that does something no
- * control does is the state this work exists to leave behind — the panel or
- * the Menu is where it goes.
+ * control does is the state this work exists to leave behind — the gear panel
+ * or the administration page is where it goes. (This said "the Menu", which
+ * #188 retired; a note telling the next person to put a control somewhere
+ * that no longer exists is its own small version of the same fault.)
  */
 
 import { micboard, updateHash } from './app.js';

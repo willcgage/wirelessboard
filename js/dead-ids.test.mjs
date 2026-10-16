@@ -107,9 +107,18 @@ test('every intentional exception is still referenced somewhere', () => {
   );
 });
 
-test('the settings pane has the close control its handler expects', () => {
-  // The specific gap #44 turned up: app.js has bound a handler for this since
-  // the import, and the button was never in the markup, so the only way out of
-  // this view was Escape -- which reloads the whole page.
-  assert.ok(markupIds().has('close-settings-inline'));
+test('⛔ the page with the editors has the close control its handler expects', () => {
+  // #44's gap, kept pointed at the surface that can still have it. The
+  // configuration pane this guarded was retired by #222 and its close button
+  // went with it -- but the failure it describes is not about that pane: a
+  // handler bound to a control that is not in the markup leaves Escape as the
+  // only way out, and Escape reloads the whole board.
+  assert.ok(markupIds().has('admin-page-close'));
+
+  // ⛔⛔ And the way back from a configuration that will not load, which moved
+  // onto the same page for the same reason: the page that held it is gone,
+  // and in 1.7.0 there was no interface left to repair a board from.
+  for (const id of ['config-health-banner', 'config-restore-backup', 'config-reset-defaults']) {
+    assert.ok(markupIds().has(id), `${id} is the recovery path and must be in the markup`);
+  }
 });
