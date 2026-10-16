@@ -327,8 +327,10 @@
         </div>
 
         <p class="admin-prose">
-          Measure the width of <strong>one position</strong>, left to right &mdash; one bay, which
-          is what a column points at. The venue&rsquo;s Shure SBC200 is <strong>3.9in</strong>.
+          Measure the width of <strong>one position</strong>, left to right &mdash; what a column
+          points at. &#9940; <strong>Not one bay</strong>: an SBC200 has two bays, front and back,
+          and they line up with a single slot &mdash; the microphone in front, that performer&rsquo;s
+          IEM behind it. The venue&rsquo;s Shure SBC200 is <strong>3.9in</strong>.
           &#9888;&#65039; Since the one-row arrangement became a guarantee, this width decides how
           many columns a board shows.
         </p>
@@ -342,6 +344,57 @@
             Save screens &amp; docks
           </button>
           <span id="screen-status" class="admin-status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+      <section class="admin-section admin-section--moved" id="admin-section-slots" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Slots</h3>
+          <p class="admin-section__lead">Who is on each channel. The person is the only thing typed
+            here &mdash; the receiver reports everything else, and the device id is an override for
+            when it is wrong.</p>
+        </div>
+
+        <p class="admin-prose">
+          Planning Center writes this same field when it is connected, so typing it by hand is
+          <strong>not a fallback</strong>: it is what a board without Planning Center uses
+          permanently, and what any board uses for somebody a plan does not name.
+          &#9888;&#65039; The <strong>&times;</strong> on a row is the deliberate way to take
+          somebody off a slot &mdash; an empty box clears a name, so a stray delete should not be
+          the way it happens.
+        </p>
+
+        <div class="table-responsive">
+          <table class="slots-table">
+            <thead>
+              <tr>
+                <th scope="col" class="slots-col-slot">Slot</th>
+                <th scope="col">Receiver reports</th>
+                <th scope="col">Device id</th>
+                <th scope="col">Person</th>
+                <th scope="col" class="slots-col-state">State</th>
+                <th scope="col" class="slots-col-clear">Clear</th>
+              </tr>
+            </thead>
+            <tbody id="slots-rows"></tbody>
+          </table>
+        </div>
+
+        <div class="admin-section__head admin-section__head--sub">
+          <h4 class="admin-section__subtitle">Paste a list of names</h4>
+          <p class="admin-section__lead">One per line, in slot order. Fills the boxes above and
+            <strong>does not save</strong>, so a paste can be read back and corrected before it
+            reaches any board.</p>
+        </div>
+
+        <textarea id="slots-paste" class="form-control form-control-sm slots-paste" rows="4"
+          aria-label="A list of names, one per line, in slot order"></textarea>
+
+        <div class="admin-actions">
+          <button type="button" id="slots-fill-from-list" class="admin-btn">Fill from list</button>
+          <button type="button" id="slots-save" class="admin-btn admin-btn--primary">
+            Save slots
+          </button>
+          <span id="slots-status" class="admin-status" role="status" aria-live="polite"></span>
         </div>
       </section>
       <section class="admin-section admin-section--moved" id="admin-section-logs" hidden>
@@ -1091,65 +1144,10 @@
             <p class="rxinfo"></p>
           </div>
 
-          <div class="editzone">
-            <div class="row">
-              <div class="col">
-                <input type="text" class="form-control ext-id" aria-label="Default" aria-describedby="inputGroup-sizing-default" autocomplete="off" placeholder="ID">
-              </div>
-              <div class="col">
-                <input type="text" class="form-control ext-name" aria-label="Default" aria-describedby="inputGroup-sizing-default" autocomplete="off" placeholder="Name">
-              </div>
-            </div>
-          </div>
 
           <div class="diversity">
             <div class="diversity-bar"></div>
             <div class="diversity-bar"></div>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <template id="save-template">
-      <div class="col-sm" id="paste-box">
-        <div class="row">
-          <div class="col">
-            <textarea class="form-control" id="bulkbox" rows="3"></textarea>
-          </div>
-        </div>
-        <div class="row">
-          <div class="col d-grid gap-2">
-            <button type="button" class="btn btn-success" id="bulk-name-loader">Load Bulk Names</button>
-          </div>
-        </div>
-      </div>
-      <div class="col-sm" id="save-box">
-        <div class="row">
-          <div class="col d-grid gap-2">
-            <button type="button" class="btn btn-success" id="slotSave">Save</button>
-          </div>
-        </div>
-
-        <div class="row">
-          <!-- ⛔ Bulk paste was reachable only through Shift+N, which is gone
-               with the rest of the bindings (#160). -->
-          <div class="col d-grid gap-2">
-            <button type="button" class="btn btn-outline-secondary" id="show-paste-box">Paste a list of names</button>
-          </div>
-        </div>
-
-        <div class="row">
-          <!-- Distinct ids on purpose. This template is cloned into #micboard,
-               which already contains the settings page's own clear-id and
-               clear-name buttons. Sharing the ids put two live elements with
-               the same id in the document, and getElementById returns the first
-               in order — so these buttons got no handler at all, while the
-               settings ones collected a second one on every open. -->
-          <div class="col d-grid gap-2">
-            <button type="button" class="btn btn-secondary btn-warning" id="slot-edit-clear-id">Clear IDs</button>
-          </div>
-          <div class="col d-grid gap-2">
-            <button type="button" class="btn btn-secondary btn-warning" id="slot-edit-clear-name">Clear Extended Names</button>
           </div>
         </div>
       </div>

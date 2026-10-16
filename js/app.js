@@ -7,7 +7,7 @@ import 'whatwg-fetch';
 import { renderGroup } from './channelview.js';
 import { initLiveData } from './data.js';
 import { groupEditToggle, initEditor } from './dnd.js';
-import { slotEditToggle } from './extended.js';
+import { initSlotsTable, refreshSlotsTable } from './slots-table.js';
 import { keybindings } from './kbd.js';
 import {
   setBackground, setInfoDrawer, applyBoardLayout,
@@ -292,12 +292,6 @@ function mapGroups() {
    * stays when the menu item goes.
    */
 
-  function openSlotNames() {
-    if (refuseWhenLocked('slot-edit')) return;
-    slotEditToggle();
-    resetViews();
-  }
-
   function toggleDemoMode() {
     if (refuseWhenLocked('demo')) return;
     micboard.url.demo = micboard.url.demo === 'true' ? undefined : 'true';
@@ -309,7 +303,9 @@ function mapGroups() {
   // guarded action has no item, and the page itself says so if an item has no
   // route -- a button that draws and does nothing is the same failure as a
   // missing one, and harder to notice.
-  registerAdminRoute('slots', openSlotNames);
+  // ⭐ No route for `slots`: it is drawn in the content pane like Screens and
+  // Logs, so the rail renders it in place rather than handing over. The editor
+  // that used to take the whole board is gone with it (`slots-table.js`).
   registerAdminRoute('demo', toggleDemoMode);
   // ⭐ `showPCOView` guards the lock itself, so the event route is as safe as
   // the menu item and needs no second check here.
@@ -764,6 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // on screen; `config.js` knows what goes in it.
       fillSection: (id) => {
         if (id === 'screens') refreshScreensEditor();
+        if (id === 'slots') refreshSlotsTable();
         if (id === 'logs') showLogsSection();
         if (id === 'backgrounds') showBackgroundsSection();
         // ⚠️ Both fill the same editors: the discovered list, the slot rows and
@@ -822,6 +819,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   } catch (_) {}
   try { scheduleBackgroundFilenameGuide(); } catch (_) {}
+  // ⭐ Bound once, like the other moved sections: the markup is static and sits
+  // in the document whether or not it is on screen, so binding per fill would
+  // stack a handler per visit (the 1.7.0 listener fault).
+  try { initSlotsTable(); } catch (_) {}
 
   if (micboard.url.demo === 'true' && micboard.url.settings !== 'true' && micboard.url.settings !== 'logs' && micboard.url.pco !== 'true') {
     // ⛔ Demo mode used to pop the Help overlay open on the first load, to

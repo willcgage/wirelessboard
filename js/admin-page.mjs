@@ -373,7 +373,7 @@ export function resetAdminRoutes() {
  * unguarded a section.
  */
 export const IN_PAGE_ITEMS = [
-  'about', 'screens', 'logs', 'backgrounds', 'receivers', 'groups',
+  'about', 'screens', 'slots', 'logs', 'backgrounds', 'receivers', 'groups',
 ];
 
 /**
