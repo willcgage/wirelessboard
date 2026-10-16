@@ -183,7 +183,7 @@ def test_the_plan_itself_is_what_decides(monkeypatch, creds):
     """`_plan_is_really_gone` asks about the plan, and reads only that answer."""
     asked = []
 
-    def fake_get(url, _headers, params=None):
+    def fake_get(url, _headers, params=None, **_kwargs):
         asked.append(url)
         pco._LAST_HTTP_ERROR = 404
         return None
@@ -193,7 +193,7 @@ def test_the_plan_itself_is_what_decides(monkeypatch, creds):
     assert asked == ['{}/plans/89808074'.format(pco.BASE_URL)], (
         'the plan resource is the only thing worth asking')
 
-    def found(url, _headers, params=None):
+    def found(url, _headers, params=None, **_kwargs):
         asked.append(url)
         pco._LAST_HTTP_ERROR = None
         return {'data': {'id': '89808074'}}
