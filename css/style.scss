@@ -2055,6 +2055,58 @@ a:link, a:visited, a:hover, a:active {
   border-style: dashed;
 }
 
+/* The channel picker (#243).
+
+   ⚠️ Collapsed by default. Twelve channels across four groups is
+   forty-eight checkboxes, and the list's own job -- which groups exist, in what
+   order, and what is in none of them -- would be buried under the control for
+   changing it. */
+.groups-summary .group-membership {
+  margin-top: 0.35rem;
+}
+
+.groups-summary .group-pick-toggle {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+}
+
+/* ⭐ Columns, so a board with a dozen channels does not become a dozen rows
+   of scrolling on a touch display. `auto-fill` rather than a fixed count: the
+   administration pane is 236px narrower than the window and this sits inside
+   it, so a hard column count would overflow on the narrow case. */
+.groups-summary .group-pick-list {
+  margin-top: 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.1rem 0.75rem;
+}
+
+.groups-summary .group-pick {
+  min-width: 0;
+}
+
+/* ⚠️ 22px touch targets were the finding behind the view panel's rework;
+   this control is used on the same wall tablet, so the row is padded to reach
+   a usable height rather than left at the checkbox's own size. */
+.groups-summary .group-pick .form-check-input {
+  margin-top: 0.45rem;
+}
+
+.groups-summary .group-pick .form-check-label {
+  font-size: 0.85rem;
+  padding: 0.3rem 0;
+  overflow-wrap: anywhere;
+}
+
+/* Which other groups already hold this channel. Quieter than the name: it is
+   context for a decision, not the thing being chosen. */
+.groups-summary .group-pick-also {
+  opacity: 0.6;
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
 /* The view panel (#111).
 
    A sheet in the corner above the board rather than a full-screen modal: the

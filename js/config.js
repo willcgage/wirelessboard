@@ -7,6 +7,9 @@ import {
   backgroundNameForSlot, backgroundFilenames, findBackgroundFile, backgroundKey,
 } from './background-key.mjs';
 import { summariseGroups, unassignedSlots, slotLabel } from './group-summary.mjs';
+import {
+  storedNumbers, toggleMembership, membershipRows, membershipPayload, membershipSummary,
+} from './group-membership.mjs';
 import { DEFAULT_DWELL_SECONDS } from './rotation.mjs';
 import { scopeNote, globalChangeWarning } from './viewer-scope.mjs';
 import {
@@ -2743,20 +2746,7 @@ function renderGroupSummary() {
 
     card.appendChild(rotation);
 
-    const members = document.createElement('p');
-    members.className = 'group-members';
-    members.textContent = row.count ? names(row.slots) : 'No channels in this group';
-    if (!row.count) members.classList.add('is-empty');
-    card.appendChild(members);
-
-    // A group pointing at a slot that no longer exists. Deleting a slot does
-    // not visit every group, so these accumulate silently.
-    if (row.missing.length) {
-      const stale = document.createElement('p');
-      stale.className = 'group-missing';
-      stale.textContent = `Missing slots: ${row.missing.join(', ')}`;
-      card.appendChild(stale);
-    }
+    card.appendChild(buildMembershipPicker(row, groups, slots));
 
     holder.appendChild(card);
   });
@@ -2786,6 +2776,129 @@ function renderGroupSummary() {
   }
   orphans.appendChild(detail);
   holder.appendChild(orphans);
+}
+
+/**
+ * The control that puts a channel into a group (#243).
+ *
+ * ⛔ Until this existed there was no way to do it anywhere in the product:
+ * `js/dnd.js` was the only writer of a group's `slots`, and #223 retired the
+ * menu-bar button that was its only caller. A group could be created and named
+ * and would always be empty.
+ *
+ * ⛔⛔ **Nothing here re-renders on input.** A tick posts, updates the one
+ * summary line in place and stops. Redrawing the list would take the focus off
+ * the box the operator just used and, on a touch display, scroll the row they
+ * were working in out from under them -- the fault the Slots table was rebuilt
+ * to remove, arrived at twice before by rendering on every change.
+ *
+ * ⚠️ Collapsed by default. A board with twelve channels and four groups would
+ * otherwise open as forty-eight checkboxes, and the list's own job -- which
+ * groups exist, in what order, and what is in none of them -- would be buried
+ * under the control for changing it.
+ */
+function buildMembershipPicker(row, groups, slots) {
+  const wrap = document.createElement('div');
+  wrap.className = 'group-membership';
+
+  const rows = membershipRows({
+    groupNumber: row.group, groups, slots, label: slotLabel,
+  });
+
+  const summary = document.createElement('p');
+  summary.className = 'group-members';
+  const paint = () => {
+    summary.textContent = membershipSummary(rows);
+    summary.classList.toggle('is-empty', !rows.some((r) => r.checked));
+  };
+  paint();
+  wrap.appendChild(summary);
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'btn btn-outline-secondary btn-sm group-pick-toggle';
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.textContent = 'Choose channels';
+  wrap.appendChild(toggle);
+
+  const list = document.createElement('div');
+  list.className = 'group-pick-list';
+  list.hidden = true;
+  list.setAttribute('role', 'group');
+  list.setAttribute('aria-label', `Channels in ${row.title}`);
+  wrap.appendChild(list);
+
+  toggle.addEventListener('click', () => {
+    list.hidden = !list.hidden;
+    toggle.setAttribute('aria-expanded', String(!list.hidden));
+    toggle.textContent = list.hidden ? 'Choose channels' : 'Done choosing';
+  });
+
+  // ⛔ The stored list, not the resolved one. A group may name a slot that no
+  // longer exists, and rebuilding membership from what renders would delete
+  // those strays silently -- on a save the operator thought was about one tick.
+  let numbers = storedNumbers(groups[row.group] ?? groups[String(row.group)]);
+
+  if (!rows.length) {
+    const none = document.createElement('p');
+    none.className = 'small text-muted mb-0';
+    none.textContent = 'This board has no channels yet. Add them under Slots.';
+    list.appendChild(none);
+  }
+
+  rows.forEach((item) => {
+    const line = document.createElement('div');
+    line.className = 'form-check group-pick';
+
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'form-check-input';
+    box.id = `group-${row.group}-slot-${item.slot}`;
+    box.checked = item.checked;
+
+    const label = document.createElement('label');
+    label.className = 'form-check-label';
+    label.htmlFor = box.id;
+    label.textContent = item.label;
+
+    // ⭐ Which other groups already hold this channel, so moving one out of
+    // the wrong group does not mean opening every other group to find it.
+    if (item.elsewhere.length) {
+      const also = document.createElement('span');
+      also.className = 'group-pick-also';
+      also.textContent = ` also in ${item.elsewhere.join(', ')}`;
+      label.appendChild(also);
+    }
+
+    box.addEventListener('change', () => {
+      const wanted = box.checked;
+      const next = toggleMembership(numbers, item.slot, wanted);
+      postJSON('api/group', membershipPayload(row.group, next), () => {
+        numbers = next;
+        item.checked = wanted;
+        // ⚠️ The local copy, so reopening the section before the next payload
+        // arrives shows what was just done rather than what was there before.
+        const entry = groups[row.group] ?? groups[String(row.group)];
+        if (entry) entry.slots = next.slice();
+        paint();
+      });
+    });
+
+    line.appendChild(box);
+    line.appendChild(label);
+    list.appendChild(line);
+  });
+
+  // A group pointing at a slot that no longer exists. Shown, never silently
+  // dropped: it is the only evidence the group has gone stale.
+  if (row.missing.length) {
+    const stale = document.createElement('p');
+    stale.className = 'group-missing';
+    stale.textContent = `Missing slots: ${row.missing.join(', ')}`;
+    wrap.appendChild(stale);
+  }
+
+  return wrap;
 }
 
 /**
