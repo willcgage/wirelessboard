@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import {
   STATUS_WORDS, STATUS_TONES, slotRows, deviceLabel, reportLine,
   namesFromPaste, applyNames, slotPayload, saveSummary, tableSummary,
+  positionCount,
 } from './slots-table.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -22,7 +23,12 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CONFIG = {
   slots: [
     {
-      slot: 1, type: 'ulxd4q', channel: 1, extended_id: 'HH-1', extended_name: 'Christian Nuckels',
+      slot: 1,
+      type: 'ulxd4q',
+      channel: 1,
+      extended_id: 'HH-1',
+      extended_name: 'Christian Nuckels',
+      extended_position: 'Vocal 1',
     },
     { slot: 2, type: 'ulxd4q', channel: 2, extended_name: 'Brandon Lee' },
     { slot: 3, type: 'ulxd4q', channel: 3 },
@@ -259,4 +265,85 @@ test('every status the board can sort by has a word and a tone', () => {
     assert.ok(STATUS_WORDS[status], `no State word for ${status}`);
     assert.ok(STATUS_TONES[status], `no tone for ${status}`);
   });
+});
+
+// ---------------------------------------------------------------------------
+// The position (#238)
+// ---------------------------------------------------------------------------
+
+test('a row carries the stored position', () => {
+  const rows = slotRows({ config: CONFIG, transmitters: TX });
+  assert.equal(rows[0].position, 'Vocal 1');
+  assert.equal(rows[1].position, '', 'a slot with no position is empty, not undefined');
+  assert.equal(positionCount(rows), 1);
+});
+
+test('⛔ editing the position sends only that key', () => {
+  const rows = slotRows({ config: CONFIG, transmitters: TX });
+  rows[1].position = 'Vocal 2';
+  const payload = slotPayload(rows);
+  assert.deepEqual(payload, [{ slot: 2, extended_position: 'Vocal 2' }]);
+  assert.ok(!('extended_name' in payload[0]), 'the person was not edited');
+});
+
+test('⭐ clearing a position sends an empty string, which is the deliberate clear', () => {
+  const rows = slotRows({ config: CONFIG, transmitters: TX });
+  rows[0].position = '';
+  assert.deepEqual(slotPayload(rows), [{ slot: 1, extended_position: '' }]);
+});
+
+test('the person and the position are independent edits', () => {
+  const rows = slotRows({ config: CONFIG, transmitters: TX });
+  rows[0].person = 'Ada';
+  rows[0].position = 'Speaker';
+  assert.deepEqual(slotPayload(rows), [
+    { slot: 1, extended_name: 'Ada', extended_position: 'Speaker' },
+  ]);
+});
+
+test('whitespace alone is not a position change either', () => {
+  const rows = slotRows({ config: CONFIG, transmitters: TX });
+  rows[0].position = '  Vocal 1  ';
+  assert.deepEqual(slotPayload(rows), []);
+});
+
+test('⛔ a pasted list of names never touches the positions', () => {
+  // The paste box fills people. A list of names landing in the position column
+  // would put somebody's name where a role belongs -- and the next sync would
+  // match on it.
+  const rows = slotRows({ config: CONFIG, transmitters: TX });
+  const filled = applyNames(rows, 'Ada\nGrace');
+  assert.equal(filled[0].position, 'Vocal 1');
+  assert.equal(filled[0].person, 'Ada');
+  assert.deepEqual(slotPayload(filled).map((u) => Object.keys(u).sort()), [
+    ['extended_name', 'slot'], ['extended_name', 'slot'],
+  ]);
+});
+
+test('⛔ the Position column is in the markup, between Person and State', () => {
+  // The order the mockup settled: what the receiver reports, the override, the
+  // person, their position, then the state.
+  const html = readFileSync(join(HERE, '..', 'demo.html'), 'utf8');
+  const table = html.slice(html.indexOf('<table class="slots-table">'), html.indexOf('</thead>'));
+  // ⚠️ `<th[ >]`, not `<th`: `<thead>` matches the loose form and contributes an
+  // empty first column. This project has hit that one twice.
+  const heads = Array.from(table.matchAll(/<th[ >][^>]*>([^<]*)</g)).map((m) => m[1].trim());
+  assert.deepEqual(heads, ['Slot', 'Receiver reports', 'Device id', 'Person', 'Position', 'State', 'Clear']);
+});
+
+test('⛔⛔ the position is NOT drawn on the card', () => {
+  // #206 removed a `Vocal 1` line that had been invented from a CSS grid area
+  // named `position`, which holds the device id. Storing the real thing must
+  // not quietly put that line back -- whether a card ever shows it is a
+  // separate decision, and this is the guard that keeps it separate.
+  const view = readFileSync(join(HERE, 'channelview.js'), 'utf8');
+  assert.ok(
+    !view.includes('extended_position'),
+    'the card reads extended_position -- #206 all over again',
+  );
+});
+
+test('⛔ and that guard can fail', () => {
+  const planted = "slot.querySelector('.position').innerHTML = data.extended_position;";
+  assert.ok(planted.includes('extended_position'), 'the check would have missed it');
 });

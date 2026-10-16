@@ -16,10 +16,18 @@
  * where it belongs"* — so this is a cost the design accepts, not an open
  * question, and a thumbnail is not to be offered again.
  *
- * ⛔ **Position is not here yet.** Planning Center writes a position as well as
- * a person ("Bob Roberts — Vocal 1") but `pco.py` reads the team position only
- * to decide *which* slot somebody belongs to and then writes just the name, so
- * nothing stores it. The column needs a field on the slot first.
+ * ⭐ **Position is here** (#238). Planning Center writes both halves of a plan
+ * row — "Bob Roberts — Vocal 1" — and the board used to keep only the person:
+ * `pco.py` read the team position to decide *which* slot somebody belonged to
+ * and then threw it away. It is stored as `extended_position` now.
+ *
+ * ⛔ **A sync overwrites it**, and hand-editing fills the gaps in between —
+ * settled with the maintainer. ⚠️ But a plan that names *no* position leaves a
+ * typed one alone: an absent answer is not an answer of "nobody".
+ *
+ * ⛔ And it is **not on the card**. #206 removed a *Vocal 1* line that had been
+ * invented from a CSS grid area named `position`, which holds the device id.
+ * Storing the real thing must not quietly put that line back.
  */
 
 /**
@@ -169,6 +177,9 @@ export function slotRows({ config, transmitters } = {}) {
     const device = deviceLabel(live);
     const person = text(entry.extended_name);
     const deviceId = text(entry.extended_id);
+    // ⭐ #238: the position a plan scheduled somebody under. Planning Center
+    // reads it to decide which slot somebody belongs to, and now stores it.
+    const position = text(entry.extended_position);
 
     rows.push({
       slot,
@@ -181,11 +192,13 @@ export function slotRows({ config, transmitters } = {}) {
       }),
       deviceId,
       person,
+      position,
       status: text(live.status) || 'UNASSIGNED',
       // ⛔ What was loaded, kept so a save can send only what changed. See
       // `slotPayload`.
       wasDeviceId: deviceId,
       wasPerson: person,
+      wasPosition: position,
     });
   });
 
@@ -256,6 +269,10 @@ export function slotPayload(rows) {
       update.extended_name = text(row.person);
       changed = true;
     }
+    if (text(row.position) !== text(row.wasPosition)) {
+      update.extended_position = text(row.position);
+      changed = true;
+    }
     if (changed) {
       out.push(update);
     }
@@ -273,6 +290,11 @@ export function saveSummary(rows) {
 }
 
 /** The line under the table: what is configured and how much of it is named. */
+/** How many rows carry a position, for the line under the table. */
+export function positionCount(rows) {
+  return (Array.isArray(rows) ? rows : []).filter((row) => text(row.position)).length;
+}
+
 export function tableSummary(rows) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) {

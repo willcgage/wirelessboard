@@ -64,6 +64,8 @@ function stateCell(row) {
  * on input would replace the input being typed into, so the field would lose
  * focus on every keystroke — the same trap `renderScreenRows` documents.
  */
+const FIELD_LABELS = { person: 'Person', deviceId: 'Device id', position: 'Position' };
+
 function editCell(row, key, placeholder) {
   const cell = document.createElement('td');
   cell.className = 'slots-cell';
@@ -74,7 +76,7 @@ function editCell(row, key, placeholder) {
   if (placeholder) {
     input.placeholder = placeholder;
   }
-  input.setAttribute('aria-label', `${key === 'person' ? 'Person' : 'Device id'} on slot ${row.slot}`);
+  input.setAttribute('aria-label', `${FIELD_LABELS[key] || key} on slot ${row.slot}`);
   input.dataset.slotsField = key;
   input.dataset.slot = String(row.slot);
   input.addEventListener('input', () => {
@@ -129,7 +131,7 @@ function renderRows() {
   if (!rows.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.className = 'slots-cell text-muted';
     td.textContent = 'No slots configured. Add receivers first, then come back.';
     tr.appendChild(td);
@@ -161,6 +163,8 @@ function renderRows() {
 
     tr.appendChild(editCell(row, 'deviceId', row.device || '—'));
     tr.appendChild(editCell(row, 'person', 'nobody assigned'));
+    // ⭐ #238. Typed here, and overwritten by the next sync that names it.
+    tr.appendChild(editCell(row, 'position', 'no position'));
     tr.appendChild(stateCell(row));
     tr.appendChild(clearCell(row));
 

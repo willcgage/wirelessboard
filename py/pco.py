@@ -269,7 +269,9 @@ def _apply_assignments(
     options: Dict[str, Any],
     skip_slots: Optional[set] = None,
 ) -> int:
-    """Write ``extended_name`` onto every resolved slot. Returns slots changed.
+    """Write ``extended_name`` and ``extended_position`` onto resolved slots.
+
+    Returns the number of slots changed.
 
     Device names (live or manually entered) are preserved exactly as-is so PCO
     can never overwrite a channel label.  ``extended_id`` is left alone unless
@@ -287,6 +289,10 @@ def _apply_assignments(
     for entry in resolved:
         ext_name = entry.get('name') or ''
         label = entry.get('label') or ''
+        # ⭐ The position the plan scheduled them under -- "Vocal 1" (#238).
+        # Read on every sync to decide *which* slot somebody belongs to, and
+        # until now thrown away immediately afterwards.
+        position = entry.get('position') or ''
         for match in entry.get('_matches') or []:
             slot = match['slot']
             if slot.get('slot') in skip:
@@ -301,6 +307,16 @@ def _apply_assignments(
                 changed = True
             if slot.get('extended_name') != ext_name:
                 slot['extended_name'] = ext_name
+                changed = True
+
+            # ⛔ A sync OWNS this field: the maintainer settled that Planning
+            # Center overwrites it each time, with hand-editing allowed in
+            # between (#238). So a plan that names a position replaces whatever
+            # is stored -- but a plan that names none leaves the typed value
+            # alone rather than clearing it, because an absent answer is not an
+            # answer of "nobody".
+            if position and slot.get('extended_position') != position:
+                slot['extended_position'] = position
                 changed = True
 
             # Restore preserved device naming to prevent accidental overwrite.

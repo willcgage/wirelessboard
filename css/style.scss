@@ -3231,6 +3231,8 @@ body.live-strip-bottom .rotation-bar {
 }
 
 .slots-col-slot { width: 52px; }
+// ⭐ #238. Narrower than Person: a position is "Vocal 1", a name is not.
+.slots-col-position { width: 128px; }
 .slots-col-state { width: 96px; }
 .slots-col-clear { width: 56px; }
 

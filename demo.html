@@ -355,9 +355,12 @@
         </div>
 
         <p class="admin-prose">
-          Planning Center writes this same field when it is connected, so typing it by hand is
+          Planning Center writes <strong>both</strong> of these when it is connected &mdash; a plan
+          says &ldquo;Bob Roberts &mdash; Vocal 1&rdquo;. Typing them by hand is
           <strong>not a fallback</strong>: it is what a board without Planning Center uses
           permanently, and what any board uses for somebody a plan does not name.
+          &#9888;&#65039; A sync <strong>overwrites</strong> a row it names, and leaves one it does
+          not name exactly as you typed it.
           &#9888;&#65039; The <strong>&times;</strong> on a row is the deliberate way to take
           somebody off a slot &mdash; an empty box clears a name, so a stray delete should not be
           the way it happens.
@@ -371,6 +374,7 @@
                 <th scope="col">Receiver reports</th>
                 <th scope="col">Device id</th>
                 <th scope="col">Person</th>
+                <th scope="col" class="slots-col-position">Position</th>
                 <th scope="col" class="slots-col-state">State</th>
                 <th scope="col" class="slots-col-clear">Clear</th>
               </tr>

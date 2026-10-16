@@ -725,6 +725,16 @@ def config_mix(slots):
             elif 'extended_name' in current:
                 slot['extended_name'] = current['extended_name']
 
+            # The position a plan scheduled somebody under -- "Vocal 1" (#238).
+            # ⛔ Here for the same reason as the two above: a key only
+            # `update_slot` knows about is wiped by the next save from the
+            # receivers editor, which sends whole slots.
+            if 'extended_position' in slot:
+                if not slot['extended_position']:
+                    slot.pop('extended_position', None)
+            elif 'extended_position' in current:
+                slot['extended_position'] = current['extended_position']
+
             if 'chan_name_raw' in current:
                 slot['chan_name_raw'] = current['chan_name_raw']
             elif 'chan_name_raw' in slot:
@@ -1230,6 +1240,7 @@ def update_slot(data):
 
     has_extended_id = 'extended_id' in data
     has_extended_name = 'extended_name' in data
+    has_extended_position = 'extended_position' in data
     has_chan_name = 'chan_name_raw' in data
 
     if has_extended_id:
@@ -1245,6 +1256,16 @@ def update_slot(data):
             slot_cfg['extended_name'] = value
         else:
             slot_cfg.pop('extended_name', None)
+
+    # ⛔ The position Planning Center scheduled somebody under (#238). Absent
+    # means "not editing this", empty means "clear it" -- the same partial shape
+    # as everything else here, and as `update_group` (#114).
+    if has_extended_position:
+        value = data.get('extended_position')
+        if value:
+            slot_cfg['extended_position'] = value
+        else:
+            slot_cfg.pop('extended_position', None)
 
     if has_chan_name:
         value = data.get('chan_name_raw')
