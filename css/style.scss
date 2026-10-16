@@ -3274,6 +3274,200 @@ body.live-strip-bottom .rotation-bar {
 }
 
 // ---------------------------------------------------------------------------
+// Planning Center: chips, cards, consequences and the worked example (#179)
+//
+// ⭐ "Choices read as consequences, not as field names." A 260px scrolling list
+// of checkboxes and a three-line dropdown are both legible and both make an
+// administrator guess; these are the same choices, said out loud.
+// ---------------------------------------------------------------------------
+.pco-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 4px;
+}
+
+.pco-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  // ⛔ 44px is the wall-tablet target the rest of this page uses.
+  min-height: 44px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(215, 215, 215, 0.22);
+  border-radius: 999px;
+  color: rgba(215, 215, 215, 0.8);
+  font-size: 0.8rem;
+  cursor: pointer;
+
+  // ⛔ Never state by colour alone: a chosen chip is filled AND the border
+  // changes AND `aria-pressed` says so to anything that is not looking.
+  &[aria-pressed='true'] {
+    background: rgba(0, 100, 148, 0.5);
+    border-color: rgba(79, 163, 209, 0.65);
+    color: var(--color-white);
+    font-weight: 600;
+  }
+
+  &:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+  &[aria-pressed='true']:hover:not(:disabled) { background: rgba(0, 100, 148, 0.7); }
+
+  &.is-saved { cursor: default; }
+}
+
+.pco-chip__meta {
+  font-size: 0.72rem;
+  color: rgba(215, 215, 215, 0.55);
+}
+
+.pco-chip[aria-pressed='true'] .pco-chip__meta { color: rgba(255, 255, 255, 0.75); }
+
+.pco-chip-note {
+  font-size: 0.78rem;
+  color: rgba(215, 215, 215, 0.55);
+}
+
+.pco-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 0 4px;
+}
+
+.pco-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  // A card is a paragraph wide, not a column: three of these side by side on a
+  // narrow pane would be three columns of two-word lines.
+  flex: 1 1 15rem;
+  min-width: 0;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(215, 215, 215, 0.2);
+  border-radius: 8px;
+  text-align: left;
+  color: rgba(215, 215, 215, 0.8);
+  cursor: pointer;
+
+  &[aria-checked='true'] {
+    background: rgba(0, 100, 148, 0.22);
+    border-color: rgba(79, 163, 209, 0.65);
+    color: var(--color-white);
+  }
+
+  &:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); }
+}
+
+.pco-card__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.pco-card__tag {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(105, 181, 120, 0.25);
+  color: #8FD69C;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+
+  &.is-legacy {
+    background: rgba(215, 215, 215, 0.12);
+    color: rgba(215, 215, 215, 0.6);
+  }
+}
+
+.pco-card__does { font-size: 0.76rem; line-height: 1.5; }
+
+// ⭐ The line that makes it a card rather than a longer dropdown.
+.pco-card__when {
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: rgba(215, 215, 215, 0.6);
+  font-style: italic;
+}
+
+// ⛔ The consequence of a switch, not its field name. The amber rule marks the
+// two that can take something off the board.
+.pco-consequence {
+  margin-top: 2px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: rgba(215, 215, 215, 0.6);
+
+  &.is-takes-away {
+    padding-left: 8px;
+    border-left: 2px solid rgba(239, 157, 81, 0.6);
+    color: rgba(215, 215, 215, 0.75);
+  }
+}
+
+.pco-example {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(215, 215, 215, 0.14);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.pco-example__headline {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-white);
+}
+
+.pco-example__context {
+  margin: 2px 0 8px;
+  font-size: 0.74rem;
+  color: rgba(215, 215, 215, 0.55);
+}
+
+.pco-example__subhead {
+  margin: 10px 0 2px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(215, 215, 215, 0.75);
+}
+
+.pco-example__rows {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: rgba(215, 215, 215, 0.8);
+
+  // ⛔ A miss is shown with the same weight as a match: the row that teaches
+  // somebody their rule is wrong is always a miss.
+  &.is-unmatched { color: rgba(239, 157, 81, 0.9); }
+}
+
+.pco-example__warnings {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+
+  li { color: rgba(239, 157, 81, 0.9); }
+  // Taking a name off a slot cannot be undone by syncing again.
+  li.is-clear { color: #E8705F; }
+}
+
+.pco-example__note {
+  font-size: 0.76rem;
+  color: rgba(215, 215, 215, 0.6);
+
+  &.is-error { color: #E8705F; }
+}
+
+// ---------------------------------------------------------------------------
 // The log viewer, inside the administration page (#222)
 // ---------------------------------------------------------------------------
 

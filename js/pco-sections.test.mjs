@@ -273,3 +273,41 @@ test('every declared control is one the panel actually has', () => {
     });
   });
 });
+
+test('⛔⛔ every control is inside the body the gate disables, not merely in the section', () => {
+  // Found on the running board, not here. The automatic-sync switch and the
+  // worked example's button had been appended AFTER `#<section>-body`, so the
+  // connection gate -- which walks the controls inside that body -- never
+  // reached them: on a board with no credentials both were live, and the
+  // example's button would have fired a Planning Center request.
+  //
+  // ⭐ Checked by position rather than by matching nested <div>s, which is what
+  // made the first attempt at this check wrong: the Save button is always the
+  // last thing in a section, so "after the body opens and before the Save" is
+  // exactly the gated region.
+  const html = readFileSync(join(HERE, '..', 'demo.html'), 'utf8');
+
+  PCO_SECTIONS.forEach((section) => {
+    const sectionAt = html.indexOf(`id="admin-section-${section.id}"`);
+    const bodyAt = html.indexOf(`id="${section.id}-body"`, sectionAt);
+    const saveAt = html.indexOf(`id="${section.id}-save"`, sectionAt);
+    assert.ok(bodyAt > sectionAt, `${section.id} has no gated body`);
+    assert.ok(saveAt > bodyAt, `${section.id}'s Save is not after its body`);
+
+    section.controls.forEach((controlId) => {
+      const at = html.indexOf(`id="${controlId}"`, sectionAt);
+      assert.ok(at > bodyAt, `${controlId} sits before ${section.id}-body, outside the gate`);
+      assert.ok(at < saveAt, `${controlId} sits after ${section.id}-save, outside the gate`);
+    });
+  });
+});
+
+test('⛔ and that guard can fail', () => {
+  // Planted: the fault as it actually was -- the control after the Save.
+  const planted = '<div id="pco-matching-body"></div><button id="pco-matching-save"></button><input id="pco-auto-sync">';
+  const bodyAt = planted.indexOf('id="pco-matching-body"');
+  const saveAt = planted.indexOf('id="pco-matching-save"');
+  const at = planted.indexOf('id="pco-auto-sync"');
+  assert.ok(at > bodyAt, 'it is after the body, which is why the weaker check passed');
+  assert.ok(!(at < saveAt), 'but it is after the Save, which is what this catches');
+});

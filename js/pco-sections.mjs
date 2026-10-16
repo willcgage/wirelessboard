@@ -64,7 +64,7 @@ export const PCO_SECTIONS = [
     id: 'pco-matching',
     label: 'Matching',
     owns: ['services', 'mapping'],
-    controls: ['pco-service-type-id', 'pco-team-filter', 'pco-note-category', 'pco-note-source', 'pco-strategy', 'pco-number-fallback', 'pco-seed-extended-id', 'pco-clear-unmatched', 'pco-auto-sync'],
+    controls: ['pco-service-type-id', 'pco-team-filter', 'pco-note-category', 'pco-note-source', 'pco-strategy', 'pco-number-fallback', 'pco-seed-extended-id', 'pco-clear-unmatched', 'pco-auto-sync', 'pco-example-run'],
     needsConnection: true,
   },
   {
