@@ -462,19 +462,62 @@
                   <div class="form-text">
                     Narrows the plan list above. Left on &ldquo;All&rdquo;, every service
                     type&rsquo;s plans are mixed together. ⚠️ Saved with the rest of Setup.
-                  </div>
+                            <!-- ⛔⛔ Here, not under Calendar & automation, because `auto_sync` is a
+                 MAPPING key: it is read through `effective_mapping`, which is what
+                 lets one rule set sync itself while another stays manual. The
+                 section that sends `mapping` owns every leaf in it, and a control
+                 whose Save does not carry it would look like it had saved. -->
+            <!-- ⛔ Off by default, and the wording has to carry the cost: this
+                 is the one setting that lets the board rewrite itself with
+                 nobody present (#140). -->
+            <div class="form-check mt-3">
+              <input type="checkbox" class="form-check-input" id="pco-auto-sync">
+              <label class="form-check-label" for="pco-auto-sync">
+                Re-sync by itself when the plan changes
+              </label>
+              <div class="form-text">
+                Without this, the bar appears and waits for somebody to press Sync. With it on, the
+                board syncs the change itself &mdash; including, if &ldquo;Clear slots this plan
+                does not fill&rdquo; is also on, <strong>taking people off slots while nobody is
+                watching</strong>. A slot two people both claim is never guessed at: it is left
+                exactly as it is and flagged for a person. Needs the checkbox above.
+                <br>⭐ A rule set can turn this on or off for its own kind of plan &mdash; Youth
+                automatic, the main service by hand.
+              </div>
+            </div>
+
+        <div class="admin-section__head admin-section__head--sub">
+          <h4 class="admin-section__subtitle">What this would do to the next plan</h4>
+          <p class="admin-section__lead">&#11088; The rules above, resolved against a real plan.
+            Setting a rule is guesswork until you can see the result.</p>
+        </div>
+
+        <!-- ⛔⛔ Uses `api/pco/preview`, which already existed for Preview Sync: async,
+             resolved on the single PCO worker, and it writes NOTHING. A worked example that
+             fetched a plan on the Tornado loop would freeze every board for the length of
+             the call -- the fault that has bitten this project three times (#73, #74, #79).
+             ⚠️ It costs real API calls, so it runs when somebody asks. -->
+        <div class="pco-example">
+          <div id="pco-example-body" class="pco-example__body"></div>
+          <div class="admin-actions">
+            <button type="button" id="pco-example-run" class="admin-btn">Check against the next plan</button>
+            <span id="pco-example-note" class="pco-example__note" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+  </div>
                 </div>
               </div>
             <h5 class="pco-step-heading mt-4">Teams that need mics</h5>
             <div class="form-row mt-2">
               <div class="form-group col-md-8 col-12">
                 <label class="form-label" id="pco-teams-label">Teams</label>
-                <div id="pco-team-choices" class="border rounded p-2" role="group" aria-labelledby="pco-teams-label" style="max-height: 260px; overflow-y: auto;">
-                  <span class="text-muted small">Choose a plan above to list its teams.</span>
+                <div id="pco-team-choices" class="pco-chips" role="group" aria-labelledby="pco-teams-label">
+                  <span class="pco-chip-note">Choose a plan above to list its teams.</span>
                 </div>
                 <div class="form-text">
-                  Only people on the ticked teams are considered. Read from the
-                  selected plan, so the names always match Planning Center exactly.
+                  Only people on the chosen teams are considered &mdash; with none chosen, every team
+                  gets through, including camera and production crew competing for microphone slots.
+                  Read from the selected plan, so the names always match Planning Center exactly.
                 </div>
                 <!-- Source of truth for the saved config; the boxes above write here. -->
                 <input type="hidden" id="pco-team-filter" name="pco-team-filter">
@@ -504,8 +547,14 @@
             <h5 class="pco-step-heading mt-4">How positions match slots</h5>
             <div class="form-row mt-2">
               <div class="form-group col-md-6 col-12">
-                <label for="pco-strategy" class="form-label">Assignment Source</label>
-                <select id="pco-strategy" class="form-select" aria-label="Assignment source">
+                <span class="form-label" id="pco-strategy-label">How somebody reaches a slot</span>
+                <!-- ⭐ Named cards, not three lines in a dropdown (#179). Drawn by
+                     `renderStrategyCards` from `pco-strategies.mjs`, so the copy is data a
+                     test can hold to `py/pco.py`'s SUPPORTED_STRATEGIES. The select stays as
+                     the stored value, hidden: everything that reads the mapping already
+                     reads it. -->
+                <div id="pco-strategy-cards" class="pco-cards" role="radiogroup" aria-labelledby="pco-strategy-label"></div>
+                <select id="pco-strategy" class="form-select" aria-label="Assignment source" hidden>
                   <option value="position_or_note">Team position, then note category</option>
                   <option value="position">Team position only</option>
                   <option value="note_or_brackets">Note category, then [ID] in name (legacy)</option>
@@ -556,29 +605,6 @@
           <button type="button" id="pco-matching-save" class="admin-btn admin-btn--primary">Save matching</button>
           <span id="pco-matching-status" class="admin-status" role="status" aria-live="polite"></span>
         </div>
-            <!-- ⛔⛔ Here, not under Calendar & automation, because `auto_sync` is a
-                 MAPPING key: it is read through `effective_mapping`, which is what
-                 lets one rule set sync itself while another stays manual. The
-                 section that sends `mapping` owns every leaf in it, and a control
-                 whose Save does not carry it would look like it had saved. -->
-            <!-- ⛔ Off by default, and the wording has to carry the cost: this
-                 is the one setting that lets the board rewrite itself with
-                 nobody present (#140). -->
-            <div class="form-check mt-3">
-              <input type="checkbox" class="form-check-input" id="pco-auto-sync">
-              <label class="form-check-label" for="pco-auto-sync">
-                Re-sync by itself when the plan changes
-              </label>
-              <div class="form-text">
-                Without this, the bar appears and waits for somebody to press Sync. With it on, the
-                board syncs the change itself &mdash; including, if &ldquo;Clear slots this plan
-                does not fill&rdquo; is also on, <strong>taking people off slots while nobody is
-                watching</strong>. A slot two people both claim is never guessed at: it is left
-                exactly as it is and flagged for a person. Needs the checkbox above.
-                <br>⭐ A rule set can turn this on or off for its own kind of plan &mdash; Youth
-                automatic, the main service by hand.
-              </div>
-            </div>
       </section>
       <section class="admin-section admin-section--moved" id="admin-section-pco-rulesets" hidden>
         <div class="admin-section__head">

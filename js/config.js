@@ -32,6 +32,8 @@ import {
   PCO_SECTIONS, payloadFor, sectionAvailable, NOT_CONNECTED_NOTE,
   isConnected as isPcoConnected,
 } from './pco-sections.mjs';
+import { workedExample, NOT_RUN_YET } from './pco-example.mjs';
+import { STRATEGIES, CONSEQUENCES, CONSEQUENCE_KEYS } from './pco-strategies.mjs';
 import { assignNumbers } from './slot-numbering.mjs';
 import {
   channelsToAdd, allChannelsToAdd, addLabel,
@@ -3348,9 +3350,16 @@ function syncTeamFilterFromChoices() {
   const host = document.getElementById('pco-team-choices');
   const hidden = document.getElementById('pco-team-filter');
   if (!host || !hidden) return;
-  const boxes = Array.from(host.querySelectorAll('input[type="checkbox"][data-team]'));
-  if (!boxes.length) return;
-  hidden.value = boxes.filter((b) => b.checked).map((b) => b.dataset.team).join(', ');
+  // ⭐ Chips, not a 260px scrolling list of checkboxes (#179). A chip carries
+  // its own state in `aria-pressed`, which is what a screen reader announces
+  // and what this reads back -- so the control and the saved value cannot
+  // disagree about which teams are on.
+  const chips = Array.from(host.querySelectorAll('[data-team]'));
+  if (!chips.length) return;
+  hidden.value = chips
+    .filter((chip) => chip.getAttribute('aria-pressed') === 'true')
+    .map((chip) => chip.dataset.team)
+    .join(', ');
 }
 
 /**
@@ -3365,9 +3374,9 @@ function renderPcoTeamChoices(teams) {
   if (!Array.isArray(teams)) {
     const saved = currentTeamFilter();
     host.innerHTML = saved.length
-      ? `<div class="small text-muted mb-1">Saved filter (choose a plan to edit):</div>${
-        saved.map((n) => `<div class="pco-team-row">• ${escapeHtml(n)}</div>`).join('')}`
-      : '<span class="text-muted small">Choose a plan above to list its teams.</span>';
+      ? `<div class="pco-chip-note">Saved — choose a plan to edit:</div>${
+        saved.map((n) => `<span class="pco-chip is-saved">${escapeHtml(n)}</span>`).join('')}`
+      : '<span class="pco-chip-note">Choose a plan above to list its teams.</span>';
     return;
   }
 
@@ -3376,17 +3385,17 @@ function renderPcoTeamChoices(teams) {
     return;
   }
 
-  host.innerHTML = teams.map((t, i) => {
-    const id = `pco-team-cb-${i}`;
+  // ⭐ One chip per team, pressed or not. The count rides on the chip because
+  // "Vocals — 4 people" is the thing that tells somebody they ticked the right
+  // one; the positions stay in the title, where they were.
+  host.innerHTML = teams.map((t) => {
     const positions = (t.positions || []).join(', ');
-    return `<div class="form-check pco-team-row">
-      <input class="form-check-input" type="checkbox" id="${id}"
-             data-team="${escapeHtml(t.name)}"${t.selected ? ' checked' : ''}>
-      <label class="form-check-label" for="${id}" title="${escapeHtml(positions)}">
-        ${escapeHtml(t.name)}
-        <span class="pco-team-meta">— ${t.people} ${t.people === 1 ? 'person' : 'people'}</span>
-      </label>
-    </div>`;
+    const on = t.selected ? 'true' : 'false';
+    return `<button type="button" class="pco-chip" data-team="${escapeHtml(t.name)}"
+      aria-pressed="${on}" title="${escapeHtml(positions)}">
+      <span class="pco-chip__name">${escapeHtml(t.name)}</span>
+      <span class="pco-chip__meta">${t.people} ${t.people === 1 ? 'person' : 'people'}</span>
+    </button>`;
   }).join('');
 
   // No boxes ticked means no filter, which lets every team through -- including
@@ -3712,6 +3721,11 @@ function fillPcoSection(sectionId) {
       break;
     case 'pco-matching':
       applyPcoMappingToForm(pco.mapping || {});
+      renderStrategyCards();
+      applyConsequenceCopy();
+      // ⛔ "Not run yet" is not "nothing matched" -- opposite findings, and the
+      // empty state has to be the first one.
+      setExampleNote(NOT_RUN_YET, null);
       loadPcoServiceTypes();
       loadPcoTeams();
       break;
@@ -3743,6 +3757,229 @@ function applyPcoLiveToForm(pcoCfg) {
 }
 
 export { savePcoSection, fillPcoSection, applyPcoGate };
+
+/**
+ * The three assignment strategies, as named cards (#179).
+ *
+ * ⛔ The `<select>` is still the stored value and still what `pcoSectionValues`
+ * reads -- it is simply hidden. Replacing the control outright would have meant
+ * touching every path that reads the mapping, for a change that is about how a
+ * choice is *presented*.
+ */
+function renderStrategyCards() {
+  const host = document.getElementById('pco-strategy-cards');
+  const select = document.getElementById('pco-strategy');
+  if (!host || !select) return;
+  const chosen = select.value || DEFAULT_PCO_STRATEGY;
+
+  host.replaceChildren();
+  STRATEGIES.forEach((strategy) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'pco-card';
+    card.dataset.strategy = strategy.id;
+    card.setAttribute('role', 'radio');
+    card.setAttribute('aria-checked', strategy.id === chosen ? 'true' : 'false');
+    if (strategy.id === chosen) card.classList.add('is-chosen');
+
+    const title = document.createElement('span');
+    title.className = 'pco-card__title';
+    title.textContent = strategy.title;
+    if (strategy.recommended) {
+      const tag = document.createElement('span');
+      tag.className = 'pco-card__tag';
+      tag.textContent = 'usual choice';
+      title.appendChild(tag);
+    }
+    if (strategy.legacy) {
+      const tag = document.createElement('span');
+      tag.className = 'pco-card__tag is-legacy';
+      tag.textContent = 'legacy';
+      title.appendChild(tag);
+    }
+    card.appendChild(title);
+
+    const does = document.createElement('span');
+    does.className = 'pco-card__does';
+    does.textContent = strategy.does;
+    card.appendChild(does);
+
+    // ⭐ The line that makes it a card rather than a longer dropdown: when to
+    // pick this one.
+    const when = document.createElement('span');
+    when.className = 'pco-card__when';
+    when.textContent = strategy.when;
+    card.appendChild(when);
+
+    host.appendChild(card);
+  });
+}
+
+function chooseStrategy(id) {
+  const select = document.getElementById('pco-strategy');
+  if (!select || !STRATEGIES.some((s) => s.id === id)) return;
+  select.value = id;
+  renderStrategyCards();
+}
+
+/**
+ * Switch labels that say what they do to the board, not what they are called.
+ *
+ * ⛔ `clear_unmatched` is the one that can take a name off a slot, and the
+ * label has to carry that -- it removes a name somebody put there by hand, for
+ * the visiting speaker Planning Center was never told about.
+ */
+function applyConsequenceCopy() {
+  CONSEQUENCE_KEYS.forEach((key) => {
+    const entry = CONSEQUENCES[key];
+    // ⛔ The element id is named in the data, never derived from the config
+    // key. `position_number_fallback` is `pco-number-fallback` in the markup,
+    // so deriving it silently skipped that one switch -- found by counting the
+    // notes on the running page, not by any test.
+    const input = document.getElementById(entry.control);
+    if (!input) return;
+    const label = input.parentElement && input.parentElement.querySelector('label');
+    if (label) label.textContent = entry.label;
+
+    let note = input.parentElement && input.parentElement.querySelector('.pco-consequence');
+    if (!note && input.parentElement) {
+      note = document.createElement('div');
+      note.className = 'pco-consequence';
+      input.parentElement.appendChild(note);
+    }
+    if (note) {
+      note.textContent = entry.consequence;
+      note.classList.toggle('is-takes-away', entry.severity === 'takes-away');
+    }
+
+    // ⛔ One explanation, not two. The original `.form-text` said the same
+    // thing in field-name terms; its caveats have been folded into the
+    // consequence copy above rather than dropped, so this retires it instead of
+    // leaving a reader to reconcile two paragraphs about one switch.
+    const original = input.parentElement && input.parentElement.querySelector('.form-text');
+    if (original) original.hidden = true;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The worked example (#179)
+// ---------------------------------------------------------------------------
+
+function setExampleNote(message, tone) {
+  const host = document.getElementById('pco-example-note');
+  if (!host) return;
+  host.textContent = message || '';
+  host.className = `pco-example__note${tone ? ` is-${tone}` : ''}`;
+}
+
+function renderWorkedExample(example) {
+  const host = document.getElementById('pco-example-body');
+  if (!host) return;
+  host.replaceChildren();
+
+  if (!example || !example.ok) {
+    setExampleNote((example && example.error) || 'Could not check this mapping.', 'error');
+    return;
+  }
+
+  const headline = document.createElement('p');
+  headline.className = 'pco-example__headline';
+  headline.textContent = example.headline;
+  host.appendChild(headline);
+
+  const context = document.createElement('p');
+  context.className = 'pco-example__context';
+  const bits = [];
+  if (example.profile) bits.push(`rules: ${example.profile}`);
+  if (example.people) bits.push(`${example.people} scheduled`);
+  context.textContent = bits.join(' \u00b7 ');
+  host.appendChild(context);
+
+  if (example.rows.length) {
+    const list = document.createElement('ul');
+    list.className = 'pco-example__rows';
+    example.rows.forEach((row) => {
+      const li = document.createElement('li');
+      const slots = row.slots.length === 1 ? `slot ${row.slots[0]}` : `slots ${row.slots.join(', ')}`;
+      // ⛔ textContent: these are names out of somebody's Planning Center
+      // account, rendered from a network response.
+      li.textContent = `${row.position} \u2192 ${row.person} (${slots}${row.via ? `, by ${row.via}` : ''})`;
+      list.appendChild(li);
+    });
+    host.appendChild(list);
+  }
+
+  // ⛔ The rows that did not match carry the same weight as the ones that did:
+  // the row that teaches somebody their rule is wrong is always a miss.
+  if (example.unmatched.length) {
+    const head = document.createElement('p');
+    head.className = 'pco-example__subhead';
+    head.textContent = example.unmatched.length === 1
+      ? '1 person would not be placed'
+      : `${example.unmatched.length} people would not be placed`;
+    host.appendChild(head);
+
+    const list = document.createElement('ul');
+    list.className = 'pco-example__rows is-unmatched';
+    example.unmatched.forEach((row) => {
+      const li = document.createElement('li');
+      li.textContent = `${row.person} \u2014 ${row.reason}`;
+      list.appendChild(li);
+    });
+    host.appendChild(list);
+  }
+
+  if (example.warnings.length) {
+    const list = document.createElement('ul');
+    list.className = 'pco-example__warnings';
+    example.warnings.forEach((warning) => {
+      const li = document.createElement('li');
+      li.className = `is-${warning.kind}`;
+      li.textContent = warning.text;
+      list.appendChild(li);
+    });
+    host.appendChild(list);
+  }
+
+  setExampleNote(example.note, 'ok');
+}
+
+/**
+ * Ask what this mapping would do to the next plan.
+ *
+ * ⛔⛔ `api/pco/preview`, which already existed for Preview Sync: it is
+ * `async`, resolved on the single PCO worker, and **writes nothing**. A worked
+ * example that fetched a plan on the Tornado loop would freeze every board for
+ * the length of the call -- the fault that has bitten this project three times.
+ *
+ * ⚠️ It costs real API calls, so it runs when somebody asks rather than on
+ * every open of the section.
+ */
+function checkMappingAgainstPlan() {
+  const button = document.getElementById('pco-example-run');
+  if (button) button.disabled = true;
+  setExampleNote('Checking against the next plan\u2026', null);
+
+  const planSel = document.getElementById('pco-plan-select');
+  const plan = (planSel && planSel.value) || '';
+  const url = plan ? `api/pco/preview?plan=${encodeURIComponent(plan)}` : 'api/pco/preview';
+
+  fetch(url, { cache: 'no-store' })
+    .then((res) => res.json())
+    .then((preview) => {
+      const slotCount = (micboard.config && Array.isArray(micboard.config.slots))
+        ? micboard.config.slots.length : 0;
+      renderWorkedExample(workedExample(preview, { slotCount }));
+      appendPcoLog('Checked the mapping against the next plan (nothing applied).');
+    })
+    .catch((err) => {
+      renderWorkedExample({ ok: false, error: formatError(err) });
+      appendPcoLog(`Could not check the mapping: ${formatError(err)}`, 'error');
+    })
+    .finally(() => {
+      if (button) button.disabled = false;
+    });
+}
 
 function ensureNotePreviewUI() {
   const input = document.getElementById('pco-note-category');
@@ -4205,6 +4442,17 @@ export function bindPcoHandlers() {
   document.addEventListener('click', (e) => {
     const t = e.target;
     if (!t) return;
+    const card = t.closest && t.closest('#pco-strategy-cards [data-strategy]');
+    if (card) {
+      e.preventDefault();
+      chooseStrategy(card.dataset.strategy);
+      return;
+    }
+    if (t.id === 'pco-example-run') {
+      e.preventDefault();
+      checkMappingAgainstPlan();
+      return;
+    }
     // ⭐ One Save per section (#179), each writing only the keys it owns.
     const sectionSave = PCO_SECTIONS.find((section) => t.id === `${section.id}-save`);
     if (sectionSave) {
@@ -4868,7 +5116,10 @@ document.addEventListener('change', (e) => {
     refreshPlansList({ auto: true });
     renderPcoTeamChoices(null);
   }
-  if (t.matches && t.matches('#pco-team-choices input[type="checkbox"][data-team]')) {
+  const chip = t.closest && t.closest('#pco-team-choices [data-team]');
+  if (chip) {
+    // ⭐ Toggle, then read back -- the chip's own `aria-pressed` is the state.
+    chip.setAttribute('aria-pressed', chip.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
     syncTeamFilterFromChoices();
   }
 }, { passive: true });
