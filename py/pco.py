@@ -348,19 +348,76 @@ BASE_URL = 'https://api.planningcenteronline.com/services/v2'
 _LAST_HTTP_ERROR: Optional[int] = None
 
 
-def _http_get(url: str, headers: Dict[str, str], params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+# Every attempt made during the roster read in progress, so the one summary
+# line at the end can say what was tried. Reset by `_begin_roster_read`.
+#
+# ⛔ Module state, like `_LAST_HTTP_ERROR` above, and safe for exactly the same
+# reason: PCO calls run on a single-worker executor and `tornado_server.py`
+# says in as many words that raising `max_workers` would break this. Two roster
+# reads at once would interleave their journals.
+_PROBE_JOURNAL: List[Tuple[str, Optional[int]]] = []
+
+# A sweep over twenty-odd service types is ~65 attempts. The cap is not about
+# memory; it is so a pathological account cannot turn the summary line into a
+# page of its own.
+_PROBE_JOURNAL_CAP = 120
+
+
+def _begin_roster_read() -> None:
+    """Start a new roster read, forgetting the last one's attempts."""
+    del _PROBE_JOURNAL[:]
+
+
+def _note_probe(url: str, status: Optional[int]) -> None:
+    if len(_PROBE_JOURNAL) < _PROBE_JOURNAL_CAP:
+        _PROBE_JOURNAL.append((url, status))
+
+
+def _probe_count() -> int:
+    return len(_PROBE_JOURNAL)
+
+
+def _http_get(
+    url: str,
+    headers: Dict[str, str],
+    params: Optional[Dict[str, Any]] = None,
+    *,
+    probe: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """GET one PCO URL.
+
+    ⛔ `probe=True` means **a miss here is not news** (#217). The roster read
+    is a sweep by design -- the generic path, then the plan's own service type,
+    then every service type over three endpoints each -- so each attempt that
+    comes back 404 is the sweep working, not failing. Logging every one of them
+    at WARNING put a dozen scary lines into the log for a sync that had
+    succeeded, and made the three outcomes that matter indistinguishable:
+    found on a later probe, nobody scheduled, or a token that cannot see the
+    service type. All three looked identical.
+
+    A probe's miss goes to DEBUG and into the journal. The *outcome* is logged
+    once, by whoever asked for the roster.
+    """
     global _LAST_HTTP_ERROR
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=10)
         if resp.status_code != 200:
             _LAST_HTTP_ERROR = resp.status_code
-            logger.warning('PCO GET %s failed: %s %s', url, resp.status_code, resp.text[:200])
+            if probe:
+                _note_probe(url, resp.status_code)
+                logger.debug('PCO probe %s: %s %s', url, resp.status_code, resp.text[:200])
+            else:
+                logger.warning('PCO GET %s failed: %s %s', url, resp.status_code, resp.text[:200])
             return None
         _LAST_HTTP_ERROR = None
         return resp.json()
     except Exception as exc:
         _LAST_HTTP_ERROR = None
-        logger.warning('PCO request error: %s', exc)
+        if probe:
+            _note_probe(url, None)
+            logger.debug('PCO probe %s: %s', url, exc)
+        else:
+            logger.warning('PCO request error: %s', exc)
         return None
 
 
@@ -411,7 +468,9 @@ def _plan_is_really_gone(plan_id: str, headers: Dict[str, str]) -> bool:
     One request, only on the failure path, and only when the sweep's last word
     was a 404: a timeout or a 500 is not evidence of anything either.
     """
-    _http_get(f"{BASE_URL}/plans/{plan_id}", headers, params={})
+    # ⚠️ A probe by definition: the whole question being asked is whether this
+    # answers 404, so a 404 here is the expected shape of a "yes".
+    _http_get(f"{BASE_URL}/plans/{plan_id}", headers, params={}, probe=True)
     return _LAST_HTTP_ERROR == 404
 
 
@@ -936,7 +995,7 @@ def list_plans() -> Dict[str, Any]:
 def _get_plan_people_with_service(service_type_id: int, plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
     url = f"{BASE_URL}/service_types/{service_type_id}/plans/{plan_id}/plan_people"
     params = {"include": "person,team,notes,notes.note_category", "per_page": 200}
-    return _http_get(url, headers, params)
+    return _http_get(url, headers, params, probe=True)
 
 
 def list_people_for_plan(plan_id: str, service_type_value=None, force: bool = False) -> Dict[str, Any]:
@@ -1221,7 +1280,7 @@ def _get_plan_people(plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str
         "include": "person,team,notes,notes.note_category",
         "per_page": 200
     }
-    return _http_get(url, headers, params)
+    return _http_get(url, headers, params, probe=True)
 
 
 def _get_plan_notes(plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
@@ -1248,7 +1307,7 @@ def _get_team_members(plan_id: str, headers: Dict[str, str]) -> Optional[Dict[st
         "include": "person,team,notes,notes.note_category",
         "per_page": 200
     }
-    return _http_get(url, headers, params)
+    return _http_get(url, headers, params, probe=True)
 
 
 def _get_team_members_with_service(service_type_id: int, plan_id: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
@@ -1257,7 +1316,7 @@ def _get_team_members_with_service(service_type_id: int, plan_id: str, headers: 
         "include": "person,team,notes,notes.note_category",
         "per_page": 200
     }
-    return _http_get(url, headers, params)
+    return _http_get(url, headers, params, probe=True)
 
 
 def _build_included_maps(included: List[Dict[str, Any]]) -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -1418,7 +1477,11 @@ def _get_plan_people_any(plan_id: str, headers: Dict[str, str]) -> Optional[Dict
         data = _get_team_members_with_service(stid, plan_id, headers)
         if data:
             return data
-    st_data = _http_get(f"{BASE_URL}/service_types", headers, params={"per_page": 200})
+    # ⛔ A probe like the rest: inside a roster read nothing warns on its
+    # own, because the outcome is reported once at the end. Warning here as
+    # well put two lines in the log for one answer.
+    st_data = _http_get(
+        f"{BASE_URL}/service_types", headers, params={"per_page": 200}, probe=True)
     if not st_data:
         return None
     for item in (st_data.get('data') or []):
@@ -2099,8 +2162,10 @@ def _get_plan_service_type_id(plan_id: str, headers: Dict[str, str]) -> Optional
     Uses relationships and included service_type if available.
     """
     url = f"{BASE_URL}/plans/{plan_id}"
-    # Ask to include service_type for a more robust resolution path
-    data = _http_get(url, headers, params={"include": "service_type"})
+    # Ask to include service_type for a more robust resolution path.
+    # ⚠️ A probe: this is a step on the way to a roster, and a plan that does
+    # not answer here is exactly what the sweep after it is for.
+    data = _http_get(url, headers, params={"include": "service_type"}, probe=True)
     if not data:
         return None
     # First check relationships
@@ -2130,9 +2195,10 @@ def _get_plan_people_via_relationship(plan_id: str, headers: Dict[str, str], sti
     """
     plan_data = None
     if stid_hint is not None:
-        plan_data = _http_get(f"{BASE_URL}/service_types/{stid_hint}/plans/{plan_id}", headers, params={})
+        plan_data = _http_get(
+            f"{BASE_URL}/service_types/{stid_hint}/plans/{plan_id}", headers, params={}, probe=True)
     if not plan_data:
-        plan_data = _http_get(f"{BASE_URL}/plans/{plan_id}", headers, params={})
+        plan_data = _http_get(f"{BASE_URL}/plans/{plan_id}", headers, params={}, probe=True)
     if not plan_data:
         return None
     rel = ((plan_data.get('data') or {}).get('relationships') or {})
@@ -2148,7 +2214,7 @@ def _get_plan_people_via_relationship(plan_id: str, headers: Dict[str, str], sti
         return None
     # Follow the link; ensure we include related resources
     params = {"include": "person,team,notes,notes.note_category", "per_page": 200}
-    return _http_get(link, headers, params)
+    return _http_get(link, headers, params, probe=True)
 
 
 def _team_matches_filters(team_name: Optional[str], team_filters: List[str]) -> bool:
@@ -2200,6 +2266,9 @@ def _fetch_plan_people(
     Returns ``(payload, first_failure)`` -- see `PlanPeopleFailure` for why the
     *first* failure is the one reported.
     """
+    # ⭐ One roster read, one summary line (#217). The attempts made between
+    # here and the end are the sweep doing its job, not a run of failures.
+    _begin_roster_read()
     failure = None
 
     if stid:
@@ -2208,12 +2277,14 @@ def _fetch_plan_people(
         # times, because this is the one an operator can act on.
         scoped = _get_plan_people_with_service(stid, plan_id, headers)
         if scoped:
+            _log_roster_found(plan_id, scoped)
             return (scoped, None)
         failure = PlanPeopleFailure(
             'service_types/{}/plans/{}/plan_people'.format(stid, plan_id), _LAST_HTTP_ERROR)
 
     plan_people = _get_plan_people_any(plan_id, headers)
     if plan_people:
+        _log_roster_found(plan_id, plan_people)
         return (plan_people, None)
 
     if failure is None:
@@ -2229,6 +2300,22 @@ def _fetch_plan_people(
     return (None, failure)
 
 
+def _log_roster_found(plan_id: str, payload: Dict[str, Any]) -> None:
+    """The success half of the one line per roster read (#217).
+
+    ⭐ Says how many probes it took, because that is the number the log used to
+    show as a dozen separate WARNINGs and never explained.
+    """
+    rows = len((payload or {}).get('data') or [])
+    probes = _probe_count()
+    if probes:
+        logger.info(
+            'PCO plan %s: %d scheduled, found after %d earlier path(s) came back empty',
+            plan_id, rows, probes)
+    else:
+        logger.info('PCO plan %s: %d scheduled', plan_id, rows)
+
+
 def _plan_people_error(
     failure: Optional[PlanPeopleFailure],
     plan_id: str,
@@ -2240,16 +2327,35 @@ def _plan_people_error(
     failure: the people list and the sync both asked whether a 404 meant the
     plan was gone, and the worked example -- the one surface whose whole job is
     to explain what a sync would do -- reported a bare status and nothing else.
+
+    ⭐ It also writes the failing half of #217's one-line-per-roster-read, so
+    the log and the interface can never disagree about what went wrong: they
+    are now the same decision, taken once.
     """
     status = failure.status if failure else None
+    probes = _probe_count()
+    where = failure.where if failure else 'the roster read'
 
     if status == 404:
         if _plan_is_really_gone(plan_id, headers):
             _remember_missing_plan(plan_id)
+            logger.warning(
+                'PCO plan %s: Planning Center no longer has this plan. '
+                'The board keeps the channel names it already has.', plan_id)
             return PLAN_GONE_ERROR
+        # ⛔ NOT a warning. A plan nobody is scheduled on yet ends the sweep
+        # exactly like a deleted one, and it is the ordinary case before a
+        # service has been staffed. Calling it a failure is what made a working
+        # board look broken.
+        logger.info(
+            'PCO plan %s: nobody readable on it after %d path(s). '
+            'Expected when nobody is scheduled yet.', plan_id, probes)
         return PLAN_PEOPLE_UNREADABLE_ERROR
 
     if status in (401, 403):
+        logger.warning(
+            'PCO plan %s: Planning Center rejected these credentials (%s) for %s.',
+            plan_id, status, where)
         return (
             'Planning Center rejected these credentials ({}). PCO credentials are kept '
             'in this computer\'s system keyring rather than in config.json, so a token '
@@ -2261,12 +2367,19 @@ def _plan_people_error(
         # ⭐ Name the request. "Planning Center returned 400" on its own sent
         # the venue looking at the plan, when the status belonged to whichever
         # probe the fallback sweep happened to end on.
+        logger.warning(
+            'PCO plan %s: roster unreadable -- %s returned %s, after %d path(s). '
+            'Set logging to DEBUG and try again to see each one.',
+            plan_id, where, status, probes)
         return (
             'Unable to fetch plan people -- Planning Center returned {} for {}. '
             'The full exchange, including Planning Center\'s own message, is in '
             'Logs.'
         ).format(status, failure.where)
 
+    logger.warning(
+        'PCO plan %s: Planning Center could not be reached, or the request timed out.',
+        plan_id)
     return (
         'Unable to fetch plan people. Planning Center could not be reached, or the '
         'request timed out. See Logs.'
