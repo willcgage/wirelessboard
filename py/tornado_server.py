@@ -538,6 +538,66 @@ def _parse_sources(params: Iterable[str]) -> Iterable[str]:
 class LogsHandler(web.RequestHandler):
     def get(self):
         self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+        limit_arg = self.get_query_argument('limit', default='200')
+        try:
+            limit = max(1, min(1000, int(limit_arg)))
+        except (TypeError, ValueError):
+            self.set_status(400)
+            self.write(json.dumps({'ok': False, 'error': 'Invalid limit parameter'}))
+            return
+
+        cursor = self.get_query_argument('cursor', default=None)
+        level = self.get_query_argument('level', default=None)
+        level = level.upper() if level else None
+
+        sources: Iterable[str] = self.get_arguments('source')
+        if not sources:
+            sources_param = self.get_query_argument('sources', default=None)
+            if sources_param:
+                sources = _parse_sources(sources_param.split(','))
+        else:
+            sources = _parse_sources(sources)
+
+        search = self.get_query_argument('search', default=None)
+        direction = self.get_query_argument('direction', default='desc').lower()
+        newer_flag = self.get_query_argument('newer', default=None)
+        newer = False
+        if newer_flag is not None:
+            newer = _parse_bool(newer_flag)
+        elif direction in {'asc', 'newer', 'forward'}:
+            newer = True
+
+        try:
+            payload = read_log_entries(
+                config.log_file(),
+                limit=limit,
+                cursor=cursor,
+                level=level,
+                sources=sources if sources else None,
+                search=search,
+                newer=newer,
+            )
+        except Exception as exc:
+            logger.warning('Unable to read log entries: %s', exc)
+            self.set_status(500)
+            self.write(json.dumps({'ok': False, 'error': 'Unable to read logs'}))
+            return
+
+        response = {
+            'ok': True,
+            'entries': payload['entries'],
+            'cursor': payload['next_cursor'],
+            'has_more': payload['has_more'],
+            'sources': available_sources(),
+            'levels': available_levels(),
+            'logging': config.get_logging_settings(),
+            'direction': 'asc' if newer else 'desc',
+        }
+        self.write(json.dumps(response))
+
+
 class LogsPurgeHandler(web.RequestHandler):
     def post(self):
         self.set_header('Content-Type', 'application/json')
