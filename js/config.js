@@ -28,6 +28,10 @@ import {
   DOCK_KINDS, DOCK_KIND_LABELS, dockChoices, dockKind,
 } from './docks.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
+import {
+  PCO_SECTIONS, payloadFor, sectionAvailable, NOT_CONNECTED_NOTE,
+  isConnected as isPcoConnected,
+} from './pco-sections.mjs';
 import { assignNumbers } from './slot-numbering.mjs';
 import {
   channelsToAdd, allChannelsToAdd, addLabel,
@@ -3441,66 +3445,304 @@ function loadPcoServiceTypes() {
     });
 }
 
-function buildPcoPayload() {
-  const enabled = document.getElementById('pco-enabled')?.checked || false;
-  const token = (document.getElementById('pco-token')?.value || '').trim();
-  const secret = (document.getElementById('pco-secret')?.value || '').trim();
-  const serviceTypeId = (document.getElementById('pco-service-type-id')?.value || '').trim();
-  const noteCategory = (document.getElementById('pco-note-category')?.value || 'Mic / IEM Assignments').trim();
-  const noteSource = (document.getElementById('pco-note-source')?.value || 'person').trim() || 'person';
-  const teamFilterRaw = (document.getElementById('pco-team-filter')?.value || '');
-  const strategy = (document.getElementById('pco-strategy')?.value || '').trim() || DEFAULT_PCO_STRATEGY;
-  const numberFallbackEl = document.getElementById('pco-number-fallback');
-  const seedExtendedIdEl = document.getElementById('pco-seed-extended-id');
-  const clearUnmatchedEl = document.getElementById('pco-clear-unmatched');
-  const autoSyncEl = document.getElementById('pco-auto-sync');
-  const liveStripEl = document.getElementById('pco-live-strip');
-  const liveTimerEl = document.getElementById('pco-live-timer-mode');
-  const payload = {
-    enabled,
-    services: {
-      plan: { select: 'next' },
-    },
-    mapping: {
-      strategy,
-      note_category: noteCategory,
-      note_source: noteSource,
-      team_name_filter: teamFilterRaw.split(',').map((s) => s.trim()).filter((s) => s),
-      position_number_fallback: numberFallbackEl ? !!numberFallbackEl.checked : false,
-      seed_extended_id: seedExtendedIdEl ? !!seedExtendedIdEl.checked : false,
-      clear_unmatched: clearUnmatchedEl ? !!clearUnmatchedEl.checked : false,
-      auto_sync: autoSyncEl ? !!autoSyncEl.checked : false,
-    },
-  };
-  if (serviceTypeId) {
-    payload.services.service_type_id = serviceTypeId;
-  }
-  // ⚠️ Always sent, including as an empty list -- `update_pco_config` merges,
-  // so omitting the key would make removing the last rule set impossible.
-  payload.profiles = profilesToPayload(pcoProfiles);
+/**
+ * Planning Center, section by section (#179).
+ *
+ * ⛔⛔ These five functions replace `buildPcoPayload()`, which read every field
+ * in the panel out of the DOM and posted them together. `update_pco_config`
+ * takes each top-level key it is handed and **replaces** it, so that one
+ * function made it impossible to change one setting without rewriting all of
+ * them from whatever the page was holding -- a list that had failed to
+ * populate, or a change made from another board since the panel was opened,
+ * went straight over the stored value.
+ *
+ * ⭐ The server needed nothing: it already merges at the top level, so a
+ * payload carrying one section's keys leaves the rest byte-identical.
+ * `pco-sections.mjs` owns which keys those are and refuses a payload that
+ * strays outside them.
+ */
 
-  // Watching the active plan (#140). ⚠️ The numbers are sent as given and
-  // clamped on the server, so a value typed here cannot put the watcher into
-  // a state the server would not accept on its own.
-  const watchEl = document.getElementById('pco-watch-active');
-  payload.watch_active_plan = watchEl ? !!watchEl.checked : false;
-  const interval = Number.parseInt(document.getElementById('pco-watch-interval')?.value, 10);
-  if (Number.isFinite(interval)) payload.watch_interval_seconds = interval;
-  const grace = Number.parseInt(document.getElementById('pco-watch-grace')?.value, 10);
-  if (Number.isFinite(grace)) payload.watch_grace_minutes = grace;
-
-  // The service-position strip (#121). ⛔ Server settings: following Live at
-  // all, and which of Planning Center's three timers to use. *Where* the strip
-  // sits is per screen and lives in view preferences, not here.
-  payload.live_strip = liveStripEl ? !!liveStripEl.checked : false;
-  if (liveTimerEl && TIMER_MODES.includes(liveTimerEl.value)) {
-    payload.live_timer_mode = liveTimerEl.value;
-  }
-  if (token || secret) {
-    payload.auth = { token, secret };
-  }
-  return payload;
+/** What is stored now, so a section can edit its own keys without dropping siblings. */
+function storedPco() {
+  const cfg = (micboard.config && micboard.config.pco) || {};
+  return typeof cfg === 'object' ? cfg : {};
 }
+
+function checked(id) {
+  const el = document.getElementById(id);
+  return el ? !!el.checked : false;
+}
+
+function trimmed(id) {
+  return (document.getElementById(id)?.value || '').trim();
+}
+
+function wholeNumber(id) {
+  const n = Number.parseInt(document.getElementById(id)?.value, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * The values one section is responsible for, read from its own controls.
+ *
+ * ⛔ Sub-objects are **spread over what is stored**, never rebuilt from
+ * scratch. `mapping` and `services` are replaced wholesale by the server, so
+ * rebuilding them here would silently drop any leaf this page does not happen
+ * to render -- which is the same class of fault as the one being removed, just
+ * one level down.
+ */
+function pcoSectionValues(sectionId) {
+  const stored = storedPco();
+
+  switch (sectionId) {
+    case 'pco-connection': {
+      const values = { enabled: checked('pco-enabled') };
+      const token = trimmed('pco-token');
+      const secret = trimmed('pco-secret');
+      // ⚠️ Only when something was typed. Sending an empty pair would ask the
+      // server to re-store nothing, and `update_pco_config` treats a missing
+      // `auth` as "leave the keyring alone", which is what we want.
+      if (token || secret) {
+        values.auth = { token, secret };
+      }
+      return values;
+    }
+
+    case 'pco-matching': {
+      const services = { ...(stored.services || {}) };
+      const serviceTypeId = trimmed('pco-service-type-id');
+      if (serviceTypeId) {
+        services.service_type_id = serviceTypeId;
+      } else {
+        delete services.service_type_id;
+      }
+      // The weekly plan choice is the sync surface's, not this section's, but
+      // it lives under `services` -- so it is carried through untouched.
+      if (!services.plan) {
+        services.plan = { select: 'next' };
+      }
+
+      const teamsRaw = document.getElementById('pco-team-filter')?.value || '';
+      const strategy = trimmed('pco-strategy') || DEFAULT_PCO_STRATEGY;
+      const mapping = {
+        ...(stored.mapping || {}),
+        strategy,
+        note_category: trimmed('pco-note-category') || 'Mic / IEM Assignments',
+        note_source: trimmed('pco-note-source') || 'person',
+        team_name_filter: teamsRaw.split(',').map((t) => t.trim()).filter((t) => t),
+        position_number_fallback: checked('pco-number-fallback'),
+        seed_extended_id: checked('pco-seed-extended-id'),
+        clear_unmatched: checked('pco-clear-unmatched'),
+        // ⛔ A mapping key on purpose: it is read through `effective_mapping`,
+        // which is what lets one rule set sync itself while another stays
+        // manual. See pco-sections.mjs.
+        auto_sync: checked('pco-auto-sync'),
+      };
+      return { services, mapping };
+    }
+
+    case 'pco-rulesets': {
+      // ⚠️ Always sent, including as an empty list -- the server merges, so
+      // omitting the key would make removing the last rule set impossible.
+      const values = { profiles: profilesToPayload(pcoProfiles) };
+      if (stored.default_profile) {
+        values.default_profile = stored.default_profile;
+      }
+      return values;
+    }
+
+    case 'pco-calendar': {
+      const values = { watch_active_plan: checked('pco-watch-active') };
+      // ⚠️ Sent as given and clamped on the server, so a value typed here
+      // cannot put the watcher into a state the server would not accept.
+      const interval = wholeNumber('pco-watch-interval');
+      if (interval !== null) values.watch_interval_seconds = interval;
+      const grace = wholeNumber('pco-watch-grace');
+      if (grace !== null) values.watch_grace_minutes = grace;
+      return values;
+    }
+
+    case 'pco-live': {
+      const values = { live_strip: checked('pco-live-strip') };
+      const mode = document.getElementById('pco-live-timer-mode')?.value;
+      if (mode && TIMER_MODES.includes(mode)) {
+        values.live_timer_mode = mode;
+      }
+      return values;
+    }
+
+    default:
+      return {};
+  }
+}
+
+function setPcoSectionStatus(sectionId, message, ok = true) {
+  const el = document.getElementById(`${sectionId}-status`);
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.toggle('is-error', !ok);
+}
+
+/** Save one section, writing only the keys it owns. */
+function savePcoSection(sectionId) {
+  let payload;
+  try {
+    payload = payloadFor(sectionId, pcoSectionValues(sectionId));
+  } catch (err) {
+    // ⛔ Loud. `payloadFor` throws when a section is handed a key it does not
+    // own, and a payload that quietly dropped it would look like a save that
+    // worked.
+    appendPcoLog(`Refusing to save ${sectionId}: ${formatError(err)}`, 'error');
+    setPcoSectionStatus(sectionId, 'Could not save \u2014 see the log.', false);
+    return;
+  }
+
+  setPcoSectionStatus(sectionId, 'Saving\u2026');
+  appendPcoLog(`Saving ${sectionId} (${Object.keys(payload).join(', ') || 'nothing'})...`);
+
+  postJSON('api/pco/config', payload, (resp) => {
+    const ok = resp && resp.ok !== false;
+    if (!ok) {
+      const msg = (resp && resp.error) ? resp.error : 'Save failed';
+      setPcoSectionStatus(sectionId, msg, false);
+      appendPcoLog(`${sectionId} save failed: ${msg}`, 'error');
+      return;
+    }
+    const savedConfig = (resp && resp.pco) || {};
+    micboard.config.pco = savedConfig;
+    renderPcoCredentialStatus(savedConfig.auth || {});
+
+    // The credentials are in the keyring now; nothing should keep them here.
+    if (sectionId === 'pco-connection') {
+      const tokenEl = document.getElementById('pco-token');
+      const secretEl = document.getElementById('pco-secret');
+      if (tokenEl) tokenEl.value = '';
+      if (secretEl) secretEl.value = '';
+    }
+
+    setPcoSectionStatus(sectionId, 'Saved.');
+    appendPcoLog(`${sectionId} saved.`);
+    // ⭐ The rail carries each section's state, so it has to follow a save.
+    //
+    // ⚠️ Announced rather than called. `admin-page.js` already re-renders on
+    // this event, and importing it here would point `config.js` at the page
+    // that is wired to `config.js` — a cycle, to redraw a rail.
+    applyPcoGate();
+    try {
+      window.dispatchEvent(new CustomEvent('wirelessboard:config-loaded'));
+    } catch (_) { /* a board that cannot dispatch still saved */ }
+  }, (err) => {
+    setPcoSectionStatus(sectionId, formatError(err), false);
+    appendPcoLog(`${sectionId} save failed: ${formatError(err)}`, 'error');
+  });
+}
+
+/**
+ * ⛔⛔ Nothing below Connection may be interacted with before a connection
+ * exists.
+ *
+ * This is a fact before it is a rule: service types, teams, note categories
+ * and plans are all fetched *from the account*, so those controls have nothing
+ * to offer until there is one. The panel this replaces let an administrator
+ * scroll through them, open the selects and set things anyway.
+ *
+ * ⚠️ One honest sentence per section rather than a tooltip per control.
+ */
+function applyPcoGate() {
+  const pco = storedPco();
+  PCO_SECTIONS.forEach((section) => {
+    const available = sectionAvailable(section.id, pco);
+    const body = document.getElementById(`${section.id}-body`);
+    const gate = document.getElementById(`${section.id}-gate`);
+    const save = document.getElementById(`${section.id}-save`);
+
+    if (body) {
+      // `inert` keeps it readable but unreachable by pointer or keyboard; the
+      // fallback matters because a control somebody can still tab into is the
+      // whole fault.
+      body.inert = !available;
+      body.classList.toggle('is-gated', !available);
+      body.querySelectorAll('input, select, textarea, button').forEach((el) => {
+        el.disabled = !available;
+      });
+    }
+    if (save) save.disabled = !available;
+    if (gate) {
+      gate.hidden = available;
+      gate.textContent = available ? '' : NOT_CONNECTED_NOTE;
+    }
+  });
+
+  // ⛔⛔ The one control inside Connection that is still gated.
+  //
+  // `Use Planning Center on this board` cannot be set before a connection
+  // succeeds, and Connect must never set it: it is the administrator's choice
+  // about whether this board uses Planning Center at all, and a successful
+  // connection only makes it *available*. Treating the two as one thing is the
+  // fault behind the "never flip an admin switch as a side effect" rule, and
+  // the split is the chance to make it structural rather than remembered.
+  //
+  // ⚠️ Token, secret and Connect stay live either way -- they are how a fresh
+  // board gets anywhere at all.
+  const enabledSwitch = document.getElementById('pco-enabled');
+  if (enabledSwitch) {
+    const connected = isPcoConnected(pco);
+    enabledSwitch.disabled = !connected;
+    if (!connected) {
+      // Not merely refused: it cannot be true without a connection, and
+      // leaving it ticked would say this board is using an account it has no
+      // credentials for.
+      enabledSwitch.checked = false;
+    }
+    const note = document.getElementById('pco-enabled-note');
+    if (note) {
+      note.hidden = connected;
+      note.textContent = connected ? '' : 'Available once this board is connected.';
+    }
+  }
+}
+
+/** Fill one section from the stored configuration, when it is opened. */
+function fillPcoSection(sectionId) {
+  const pco = storedPco();
+  switch (sectionId) {
+    case 'pco-connection':
+      renderPcoCredentialStatus(pco.auth || {});
+      applyConnectedState();
+      break;
+    case 'pco-matching':
+      applyPcoMappingToForm(pco.mapping || {});
+      loadPcoServiceTypes();
+      loadPcoTeams();
+      break;
+    case 'pco-rulesets':
+      applyPcoProfilesToForm(pco);
+      loadPcoBindingTargets();
+      break;
+    case 'pco-calendar':
+      applyPcoWatchToForm(pco);
+      break;
+    case 'pco-live':
+      applyPcoLiveToForm(pco);
+      break;
+    default:
+      break;
+  }
+  applyPcoGate();
+}
+
+/** The two Live controls, which had no apply function of their own. */
+function applyPcoLiveToForm(pcoCfg) {
+  const cfg = pcoCfg && typeof pcoCfg === 'object' ? pcoCfg : {};
+  const strip = document.getElementById('pco-live-strip');
+  if (strip) strip.checked = !!cfg.live_strip;
+  const mode = document.getElementById('pco-live-timer-mode');
+  if (mode && cfg.live_timer_mode && TIMER_MODES.includes(cfg.live_timer_mode)) {
+    mode.value = cfg.live_timer_mode;
+  }
+}
+
+export { savePcoSection, fillPcoSection, applyPcoGate };
 
 function ensureNotePreviewUI() {
   const input = document.getElementById('pco-note-category');
@@ -3714,52 +3956,6 @@ function showPCOView() {
   loadPcoBindingTargets();
   renderPcoTeamChoices(null);
   appendPcoLog('Opened PCO settings view');
-}
-
-function handlePcoSave() {
-  const payload = buildPcoPayload();
-  appendPcoLog('Saving PCO configuration...');
-  postJSON('api/pco/config', payload, (resp) => {
-    const statusEl = document.getElementById('pco-save-status');
-    const ok = resp && resp.ok !== false;
-    if (!ok) {
-      const msg = (resp && resp.error) ? resp.error : 'Save failed';
-      if (statusEl) {
-        statusEl.classList.remove('d-none');
-        statusEl.classList.remove('text-success');
-        statusEl.classList.add('text-danger');
-        statusEl.textContent = msg;
-      }
-      appendPcoLog(`PCO configuration save failed: ${msg}`, 'error');
-      return;
-    }
-
-    const savedConfig = (resp && resp.pco) || {};
-    micboard.config.pco = savedConfig;
-    renderPcoCredentialStatus(savedConfig.auth || {});
-    const tokenEl = document.getElementById('pco-token');
-    const secretEl = document.getElementById('pco-secret');
-    if (tokenEl) tokenEl.value = '';
-    if (secretEl) secretEl.value = '';
-
-    if (statusEl) {
-      statusEl.classList.remove('text-danger');
-      statusEl.classList.remove('d-none');
-      statusEl.classList.add('text-success');
-      statusEl.textContent = 'Saved!';
-      setTimeout(() => {
-        statusEl.classList.add('d-none');
-      }, 1000);
-    }
-    appendPcoLog('PCO configuration saved.');
-    if (savedConfig.auth && savedConfig.auth.has_credentials) {
-      appendPcoLog('Credentials stored securely in system keyring.');
-    } else {
-      appendPcoLog('No credentials stored yet.');
-    }
-  }, (err) => {
-    appendPcoLog(`PCO configuration save failed: ${formatError(err)}`, 'error');
-  });
 }
 
 /**
@@ -4009,9 +4205,11 @@ export function bindPcoHandlers() {
   document.addEventListener('click', (e) => {
     const t = e.target;
     if (!t) return;
-    if (t.id === 'pco-save') {
+    // ⭐ One Save per section (#179), each writing only the keys it owns.
+    const sectionSave = PCO_SECTIONS.find((section) => t.id === `${section.id}-save`);
+    if (sectionSave) {
       e.preventDefault();
-      handlePcoSave();
+      savePcoSection(sectionSave.id);
     } else if (t.id === 'pco-sync') {
       e.preventDefault();
       handlePcoSync(false);
@@ -4048,11 +4246,14 @@ export function bindPcoHandlers() {
     }
   }, { passive: false });
 
+  // ⛔ The form no longer saves anything. It holds the weekly plan surface --
+  // choose a plan, preview, sync -- and the settings that used to sit inside it
+  // are sections of the administration page, each with its own Save. A submit
+  // here would be the one-payload fault coming back in through the keyboard.
   document.addEventListener('submit', (e) => {
     const t = e.target;
     if (t && t.id === 'pco-form') {
       e.preventDefault();
-      handlePcoSave();
     }
   }, { passive: false });
 }

@@ -33,6 +33,7 @@
  */
 
 import { GUARDED_ACTIONS, allows } from './viewer-lock.mjs';
+import { PCO_SECTIONS, PCO_SECTION_IDS, pcoStateLine } from './pco-sections.mjs';
 
 /**
  * The page, in the order it is read.
@@ -67,9 +68,20 @@ export const SECTIONS = [
   },
   {
     title: 'Planning Center',
-    items: [
-      { id: 'pco', label: 'Planning Center', action: 'pco' },
-    ],
+    // ⛔ Five items, not one (#179). Connecting is done once ever and was 4 of
+    // the 26 controls in the panel, yet it opened it; everything done
+    // repeatedly sat below it, down a scroll, behind a `<details>` labelled
+    // "rarely changes". ⭐ Each section now owns its own keys and saves itself,
+    // so changing one setting no longer rewrites all of them from whatever the
+    // page happened to be holding. `pco-sections.mjs` holds the ownership.
+    //
+    // ⚠️ All five keep `action: 'pco'`, so the lock refuses the whole group on
+    // a locked board exactly as the single item did.
+    items: PCO_SECTIONS.map((section) => ({
+      id: section.id,
+      label: section.label,
+      action: 'pco',
+    })),
   },
   {
     title: 'Diagnostics',
@@ -268,22 +280,26 @@ export function stateLine(id, facts = {}) {
       return parts.join(', ');
     }
 
-    case 'pco': {
-      if (!config || !config.pco || typeof config.pco !== 'object') {
-        return null;
-      }
-      const { pco } = config;
-      const hasCredentials = !!(pco.auth && pco.auth.has_credentials);
-      if (!hasCredentials) {
-        return 'Not connected';
-      }
-      // ⚠️ Credentials stored and the integration switched off are different
-      // states, and conflating them is how somebody concludes a sync is broken
-      // when it was simply never turned on ([[admin-switches-are-the-admins]]).
-      return pco.enabled ? 'Connected' : 'Connected, switched off';
-    }
-
     default:
+      // ⭐ The five Planning Center sections carry their own state lines, so an
+      // administrator sees what is set from one screen instead of opening five
+      // panes to find out (#179). `pco-sections.mjs` keeps the wording with the
+      // ownership it describes.
+      if (PCO_SECTION_IDS.includes(id)) {
+        // ⛔ Two different silences, and only one of them is "not connected".
+        //
+        // No `config` at all means the board has not been told anything yet —
+        // the page draws before the first payload arrives — and announcing
+        // "Not connected" there would be a lie by timing. A config that *is*
+        // loaded and simply has no `pco` block is a board nobody has connected,
+        // which is exactly when the line matters: saying nothing reads as
+        // missing information rather than as the answer.
+        if (!config) {
+          return null;
+        }
+        const pco = typeof config.pco === 'object' && config.pco ? config.pco : {};
+        return pcoStateLine(id, pco);
+      }
       return null;
   }
 }
@@ -311,9 +327,25 @@ export const DOOR_LABEL = 'Administration';
  * read as prose turned "Planning Center" into "planning center", which is a
  * product's name spelt wrong.
  */
+/**
+ * What is behind the door, named on the door.
+ *
+ * ⛔ A group stands in for its items when it has more than two of them. #179
+ * split Planning Center into five sections, and listing all five put thirteen
+ * labels on a line whose job is to let somebody decide whether to open it —
+ * while dropping the words "Planning Center", which is what they would actually
+ * be looking for. The group title is both shorter and more findable.
+ */
 export const DOOR_DETAIL = SECTIONS
-  .flatMap((section) => section.items)
-  .map((item) => item.label)
+  .flatMap((section) => (
+    // ⚠️ Only this group. Diagnostics keeps its items listed because one of
+    // them is **Help & about**, which is the thing somebody looks for when they
+    // do not yet know how the board works (#187) -- collapsing that to
+    // "Diagnostics" would hide it behind a word nobody searches for.
+    section.title === 'Planning Center'
+      ? [section.title]
+      : section.items.map((item) => item.label)
+  ))
   .join(', ');
 
 export const DOOR_SCOPE = 'Changes there affect every board';
@@ -374,6 +406,7 @@ export function resetAdminRoutes() {
  */
 export const IN_PAGE_ITEMS = [
   'about', 'screens', 'slots', 'logs', 'backgrounds', 'receivers', 'groups',
+  ...PCO_SECTION_IDS,
 ];
 
 /**

@@ -397,6 +397,327 @@
           <span id="slots-status" class="admin-status" role="status" aria-live="polite"></span>
         </div>
       </section>
+      <section class="admin-section admin-section--moved" id="admin-section-pco-connection" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Connection</h3>
+          <p class="admin-section__lead">Done once, ever. The token and secret are kept in this computer&rsquo;s keyring, never in the configuration file.</p>
+        </div>
+        <div class="pco-gate" id="pco-connection-gate" hidden></div>
+        <p class="admin-prose">&#9940; <strong>Connecting does not switch Planning Center on.</strong> That stays an administrator&rsquo;s choice &mdash; a successful connection makes the switch available, it never sets it.</p>
+        <div class="pco-section-body" id="pco-connection-body">
+            <h5 class="pco-step-heading">1 &middot; Connect</h5>
+            <div class="form-row">
+              <div class="form-group col-md-2 col-6 d-flex align-items-center">
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="pco-enabled">
+                  <label class="form-check-label" for="pco-enabled">Use Planning Center on this board</label>
+                  <span id="pco-enabled-note" class="admin-status d-block" hidden></span>
+                </div>
+              </div>
+              <div class="form-group col-md-5 col-12">
+                <label for="pco-token" class="form-label">Personal Access Token</label>
+                <input type="text" class="form-control" id="pco-token" name="pco-token" placeholder="PCO Personal Access Token" autocomplete="off">
+              </div>
+              <div class="form-group col-md-5 col-12">
+                <label for="pco-secret" class="form-label">Personal Access Secret</label>
+                <input type="password" class="form-control" id="pco-secret" name="pco-secret" placeholder="PCO Personal Access Secret" autocomplete="off">
+              </div>
+            </div>
+            <!-- Its own action, not part of the form's Save (#120). Connecting
+                 checks the credentials against Planning Center *before* storing
+                 them, which is what makes the rest of the panel usable without
+                 the old save → fetch → find out it was wrong → save again. -->
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <button type="button" id="pco-connect" class="btn btn-primary">Connect</button>
+              <span id="pco-connect-status" class="small"></span>
+            </div>
+            <div class="form-text">
+              Checks the token and secret against Planning Center, then stores them in this
+              computer&rsquo;s system keyring &mdash; never in <code>config.json</code>, which is why
+              a token entered on another machine does not carry across. Connecting does not change
+              Enable PCO &mdash; that stays as you set it, and a save is what changes it.
+            </div>
+
+        </div>
+        <div class="admin-actions">
+          <button type="button" id="pco-connection-save" class="admin-btn admin-btn--primary">Save connection</button>
+          <span id="pco-connection-status" class="admin-status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+      <section class="admin-section admin-section--moved" id="admin-section-pco-matching" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Matching</h3>
+          <p class="admin-section__lead">Which service type, whose names to read, and how a position on a plan becomes a slot on this board.</p>
+        </div>
+        <div class="pco-gate" id="pco-matching-gate" hidden></div>
+        <p class="admin-prose">&#9888;&#65039; <strong>Automatic sync lives here</strong>, with the other rules a sync follows, because it is one of them: it is read through the same mapping a rule set inherits, so one kind of service can sync itself while another stays manual.</p>
+        <div class="pco-section-body" id="pco-matching-body">
+              <h5 class="pco-step-heading mt-3">Service type</h5>
+              <div class="row g-2 align-items-end">
+                <div class="col-md-6 col-12">
+                  <label for="pco-service-type-id" class="form-label">Service Type</label>
+                  <select class="form-select" id="pco-service-type-id">
+                    <option value="">All service types</option>
+                  </select>
+                  <div class="form-text">
+                    Narrows the plan list above. Left on &ldquo;All&rdquo;, every service
+                    type&rsquo;s plans are mixed together. ⚠️ Saved with the rest of Setup.
+                  </div>
+                </div>
+              </div>
+            <h5 class="pco-step-heading mt-4">Teams that need mics</h5>
+            <div class="form-row mt-2">
+              <div class="form-group col-md-8 col-12">
+                <label class="form-label" id="pco-teams-label">Teams</label>
+                <div id="pco-team-choices" class="border rounded p-2" role="group" aria-labelledby="pco-teams-label" style="max-height: 260px; overflow-y: auto;">
+                  <span class="text-muted small">Choose a plan above to list its teams.</span>
+                </div>
+                <div class="form-text">
+                  Only people on the ticked teams are considered. Read from the
+                  selected plan, so the names always match Planning Center exactly.
+                </div>
+                <!-- Source of truth for the saved config; the boxes above write here. -->
+                <input type="hidden" id="pco-team-filter" name="pco-team-filter">
+              </div>
+            </div>
+
+            <h5 class="pco-step-heading mt-4">Notes (optional)</h5>
+            <div class="form-row mt-2">
+              <div class="form-group col-md-8 col-12">
+                <label for="pco-note-category" class="form-label">Note Category</label>
+                <div class="d-flex flex-column flex-md-row align-items-md-end gap-2 pco-note-row">
+                  <input type="text" class="form-control flex-grow-1" id="pco-note-category" name="pco-note-category" placeholder="Note Category (default: Mic / IEM Assignments)" autocomplete="off">
+                  <select id="pco-note-source" class="form-select form-select-sm mt-2 mt-md-0" aria-label="Note source">
+                    <option value="person">People notes</option>
+                    <option value="plan">Plan notes</option>
+                  </select>
+                  <button type="button" id="pco-note-preview" class="btn btn-outline-secondary btn-sm mt-2 mt-md-0">Fetch Notes</button>
+                </div>
+                <div class="form-text">
+                  Only consulted when a position does not name a slot on its own.
+                  Leave it alone if your slots are labelled by position.
+                </div>
+                <div id="pco-note-preview-results" class="small text-muted mt-2"></div>
+              </div>
+            </div>
+
+            <h5 class="pco-step-heading mt-4">How positions match slots</h5>
+            <div class="form-row mt-2">
+              <div class="form-group col-md-6 col-12">
+                <label for="pco-strategy" class="form-label">Assignment Source</label>
+                <select id="pco-strategy" class="form-select" aria-label="Assignment source">
+                  <option value="position_or_note">Team position, then note category</option>
+                  <option value="position">Team position only</option>
+                  <option value="note_or_brackets">Note category, then [ID] in name (legacy)</option>
+                </select>
+                <div class="form-text">
+                  Planning Center positions carry the mic name and number &mdash; a person under position
+                  &ldquo;Vocal 1&rdquo; fills the slots labelled for mic 1 and IEM 1.
+                </div>
+              </div>
+              <div class="form-group col-md-6 col-12 mt-2 mt-md-0">
+                <div class="form-check mt-md-4">
+                  <input type="checkbox" class="form-check-input" id="pco-number-fallback">
+                  <label class="form-check-label" for="pco-number-fallback">
+                    Match by trailing number when the label differs
+                  </label>
+                  <div class="form-text small text-muted">
+                    Single-team plans only. Keys on the trailing number alone, so
+                    with several teams scheduled &ldquo;Vocal 1&rdquo;,
+                    &ldquo;Guitar 1&rdquo; and &ldquo;Host 1&rdquo; all claim the
+                    same slot.
+                  </div>
+                </div>
+                <div class="form-check mt-2">
+                  <input type="checkbox" class="form-check-input" id="pco-seed-extended-id">
+                  <label class="form-check-label" for="pco-seed-extended-id">
+                    Fill empty slot IDs with the position name
+                  </label>
+                </div>
+                <!-- Off by default on purpose (#135): on, a sync makes the board
+                     match the plan exactly, which also takes the spare handheld
+                     off the visiting speaker nobody told Planning Center about. -->
+                <div class="form-check mt-2">
+                  <input type="checkbox" class="form-check-input" id="pco-clear-unmatched">
+                  <label class="form-check-label" for="pco-clear-unmatched">
+                    Clear slots this plan does not fill
+                  </label>
+                  <div class="form-text">
+                    A sync normally only writes names, so whoever was scheduled last week stays on
+                    their slot until a later plan replaces them. With this on, a sync takes the
+                    person off any slot the new plan has nobody for &mdash; including one you
+                    assigned by hand. The slot keeps its ID, so it still matches next week.
+                  </div>
+                </div>
+              </div>
+            </div>
+        </div>
+        <div class="admin-actions">
+          <button type="button" id="pco-matching-save" class="admin-btn admin-btn--primary">Save matching</button>
+          <span id="pco-matching-status" class="admin-status" role="status" aria-live="polite"></span>
+        </div>
+            <!-- ⛔⛔ Here, not under Calendar & automation, because `auto_sync` is a
+                 MAPPING key: it is read through `effective_mapping`, which is what
+                 lets one rule set sync itself while another stays manual. The
+                 section that sends `mapping` owns every leaf in it, and a control
+                 whose Save does not carry it would look like it had saved. -->
+            <!-- ⛔ Off by default, and the wording has to carry the cost: this
+                 is the one setting that lets the board rewrite itself with
+                 nobody present (#140). -->
+            <div class="form-check mt-3">
+              <input type="checkbox" class="form-check-input" id="pco-auto-sync">
+              <label class="form-check-label" for="pco-auto-sync">
+                Re-sync by itself when the plan changes
+              </label>
+              <div class="form-text">
+                Without this, the bar appears and waits for somebody to press Sync. With it on, the
+                board syncs the change itself &mdash; including, if &ldquo;Clear slots this plan
+                does not fill&rdquo; is also on, <strong>taking people off slots while nobody is
+                watching</strong>. A slot two people both claim is never guessed at: it is left
+                exactly as it is and flagged for a person. Needs the checkbox above.
+                <br>⭐ A rule set can turn this on or off for its own kind of plan &mdash; Youth
+                automatic, the main service by hand.
+              </div>
+            </div>
+      </section>
+      <section class="admin-section admin-section--moved" id="admin-section-pco-rulesets" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Rule sets</h3>
+          <p class="admin-section__lead">Different kinds of plan, with their own rules. A rule set changes only what it names &mdash; everything else is inherited.</p>
+        </div>
+        <div class="pco-gate" id="pco-rulesets-gate" hidden></div>
+        <p class="admin-prose">&#9940; A template cannot be bound to: Planning Center <em>copies</em> a template into a plan rather than linking it, so nothing the board can read says which template a plan came from. That is why a rule set can also be picked by hand for one sync.</p>
+        <div class="pco-section-body" id="pco-rulesets-body">
+            <h5 class="pco-step-heading mt-4">Rule sets for different kinds of plan</h5>
+            <div class="form-text mb-2">
+              Sunday morning, Wednesday youth and a special service rarely want the same rules. A
+              rule set changes only what differs from the settings above &mdash; everything it does
+              not mention it inherits, so a later change here reaches all of them.
+            </div>
+            <div class="form-text mb-2">
+              Bind one to a <strong>service type</strong> or to a <strong>folder</strong> (which
+              covers every service type inside it) and it applies on its own. Leave it unbound and
+              you pick it when syncing &mdash; which is how a Christmas Eve service is handled,
+              since Planning Center copies a template into a plan rather than linking it, so nothing
+              the board can read says which template a plan came from.
+            </div>
+            <div id="pco-profile-list" class="mb-2"></div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <button type="button" id="pco-profile-add" class="btn btn-outline-primary btn-sm">
+                Add a rule set
+              </button>
+              <span id="pco-profile-status" class="small align-self-center"></span>
+            </div>
+            <div class="form-row mt-3">
+              <div class="col">
+        </div>
+        <div class="admin-actions">
+          <button type="button" id="pco-rulesets-save" class="admin-btn admin-btn--primary">Save rule sets</button>
+          <span id="pco-rulesets-status" class="admin-status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+      <section class="admin-section admin-section--moved" id="admin-section-pco-calendar" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Calendar &amp; automation</h3>
+          <p class="admin-section__lead">Whether this board watches the plan it last synced, and how often it looks.</p>
+        </div>
+        <div class="pco-gate" id="pco-calendar-gate" hidden></div>
+        <p class="admin-prose">&#9888;&#65039; Watching <em>reports</em>; it never syncs on its own. Whether a change also triggers a sync is a rule each rule set carries, set under Matching.</p>
+        <div class="pco-section-body" id="pco-calendar-body">
+            <h5 class="pco-step-heading mt-4">Watch the plan on the board</h5>
+            <div class="form-check mt-2">
+              <input type="checkbox" class="form-check-input" id="pco-watch-active">
+              <label class="form-check-label" for="pco-watch-active">
+                Tell me when this plan changes in Planning Center
+              </label>
+              <div class="form-text">
+                A plan edited an hour before a service is normal, and the board otherwise goes on
+                showing the names it synced. With this on, a bar appears across the bottom of every
+                board when the plan changes.
+              </div>
+            </div>
+            <div class="form-row mt-2">
+              <div class="form-group col-md-4 col-6">
+                <label for="pco-watch-interval" class="form-label">Check every</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="pco-watch-interval" min="30" max="3600" step="30">
+                  <span class="input-group-text">seconds</span>
+                </div>
+                <div class="form-text">
+                  Every check spends a little of your Planning Center allowance, all day rather
+                  than only during a service.
+                </div>
+              </div>
+              <div class="form-group col-md-4 col-6">
+                <label for="pco-watch-grace" class="form-label">Stop watching</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" class="form-control" id="pco-watch-grace" min="0" max="1440" step="15">
+                  <span class="input-group-text">min after the end</span>
+                </div>
+                <div class="form-text">
+                  Services run over, so watching carries on for a while past the scheduled end.
+                  Watching also stops as soon as Planning Center Live ends the service.
+                </div>
+              </div>
+            </div>
+
+        </div>
+        <div class="admin-actions">
+          <button type="button" id="pco-calendar-save" class="admin-btn admin-btn--primary">Save calendar</button>
+          <span id="pco-calendar-status" class="admin-status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+      <section class="admin-section admin-section--moved" id="admin-section-pco-live" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Live options</h3>
+          <p class="admin-section__lead">The service-position strip: whether this board follows Planning Center Live, and which of its three timers to read.</p>
+        </div>
+        <div class="pco-gate" id="pco-live-gate" hidden></div>
+        <p class="admin-prose">&#9888;&#65039; <em>Where</em> the strip sits is a per-screen view preference, not an account setting, so it is not here.</p>
+        <div class="pco-section-body" id="pco-live-body">
+            <h5 class="pco-step-heading mt-4">Service position on the board</h5>
+            <div class="form-check mt-2">
+              <input type="checkbox" class="form-check-input" id="pco-live-strip">
+              <label class="form-check-label" for="pco-live-strip">
+                Follow Planning Center Live
+              </label>
+              <div class="form-text">
+                Shows where the service has got to &mdash; the current item, its timer, and what is
+                next. &#9888;&#65039; A <em>server</em> setting, not a per-screen one: it spends one
+                Planning Center account&rsquo;s allowance on behalf of every board, so it is off
+                until somebody turns it on. Each screen then chooses <em>where</em> to put it, or
+                to hide it, in its own view settings.
+                <br>Live is often not running, and the strip says so plainly rather than showing a
+                stale position as though it were current.
+              </div>
+            </div>
+            <div class="form-row mt-2">
+              <div class="form-group col-md-6 col-12">
+                <label for="pco-live-timer-mode" class="form-label">Timer</label>
+                <select class="form-select form-select-sm" id="pco-live-timer-mode">
+                  <option value="full_item_length">Full item length</option>
+                  <option value="end_item_on_time">End item on time</option>
+                  <option value="end_service_on_time">End service on time</option>
+                </select>
+                <div class="form-text">
+                  Planning Center&rsquo;s own three modes, with its own names and behaviour.
+                  <strong>Full item length</strong> counts the item&rsquo;s scheduled length.
+                  <strong>End item on time</strong> counts to when this item was meant to finish,
+                  so a late service shows as late. <strong>End service on time</strong> counts to
+                  the end of the service. Past zero the timer turns over and counts up, exactly as
+                  Live does.
+                  <br>&#9888;&#65039; The middle one reads the plan&rsquo;s running order, which is
+                  one extra request per plan; the other two cost nothing beyond the position itself.
+                </div>
+              </div>
+            </div>
+
+        </div>
+        <div class="admin-actions">
+          <button type="button" id="pco-live-save" class="admin-btn admin-btn--primary">Save live options</button>
+          <span id="pco-live-status" class="admin-status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
       <section class="admin-section admin-section--moved" id="admin-section-logs" hidden>
         <div class="admin-section__head">
           <h3 class="admin-section__title">Logs</h3>
@@ -626,38 +947,6 @@
         </div>
         <div class="p-3 border rounded">
           <form id="pco-form" autocomplete="off" novalidate>
-            <h5 class="pco-step-heading">1 &middot; Connect</h5>
-            <div class="form-row">
-              <div class="form-group col-md-2 col-6 d-flex align-items-center">
-                <div class="form-check">
-                  <input type="checkbox" class="form-check-input" id="pco-enabled">
-                  <label class="form-check-label" for="pco-enabled">Enable PCO</label>
-                </div>
-              </div>
-              <div class="form-group col-md-5 col-12">
-                <label for="pco-token" class="form-label">Personal Access Token</label>
-                <input type="text" class="form-control" id="pco-token" name="pco-token" placeholder="PCO Personal Access Token" autocomplete="off">
-              </div>
-              <div class="form-group col-md-5 col-12">
-                <label for="pco-secret" class="form-label">Personal Access Secret</label>
-                <input type="password" class="form-control" id="pco-secret" name="pco-secret" placeholder="PCO Personal Access Secret" autocomplete="off">
-              </div>
-            </div>
-            <!-- Its own action, not part of the form's Save (#120). Connecting
-                 checks the credentials against Planning Center *before* storing
-                 them, which is what makes the rest of the panel usable without
-                 the old save → fetch → find out it was wrong → save again. -->
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-              <button type="button" id="pco-connect" class="btn btn-primary">Connect</button>
-              <span id="pco-connect-status" class="small"></span>
-            </div>
-            <div class="form-text">
-              Checks the token and secret against Planning Center, then stores them in this
-              computer&rsquo;s system keyring &mdash; never in <code>config.json</code>, which is why
-              a token entered on another machine does not carry across. Connecting does not change
-              Enable PCO &mdash; that stays as you set it, and a save is what changes it.
-            </div>
-
             <h5 class="pco-step-heading mt-4">2 &middot; This week</h5>
             <p class="form-text mt-0">
               The only part most weeks need. Everything else is under Setup below.
@@ -691,238 +980,6 @@
           </div>
           <div id="pco-conflicts" class="small mt-2"></div>
           <div id="pco-unmatched" class="small mt-2"></div>
-            <details class="pco-setup mt-4" id="pco-setup">
-              <summary class="pco-step-heading">Setup &mdash; rarely changes</summary>
-              <p class="form-text">
-                Service type, teams, how positions match slots, and the rule sets. Set once,
-                then left alone &mdash; nothing here needs touching week to week.
-              </p>
-              <h5 class="pco-step-heading mt-3">Service type</h5>
-              <div class="row g-2 align-items-end">
-                <div class="col-md-6 col-12">
-                  <label for="pco-service-type-id" class="form-label">Service Type</label>
-                  <select class="form-select" id="pco-service-type-id">
-                    <option value="">All service types</option>
-                  </select>
-                  <div class="form-text">
-                    Narrows the plan list above. Left on &ldquo;All&rdquo;, every service
-                    type&rsquo;s plans are mixed together. ⚠️ Saved with the rest of Setup.
-                  </div>
-                </div>
-              </div>
-            <h5 class="pco-step-heading mt-4">Teams that need mics</h5>
-            <div class="form-row mt-2">
-              <div class="form-group col-md-8 col-12">
-                <label class="form-label" id="pco-teams-label">Teams</label>
-                <div id="pco-team-choices" class="border rounded p-2" role="group" aria-labelledby="pco-teams-label" style="max-height: 260px; overflow-y: auto;">
-                  <span class="text-muted small">Choose a plan above to list its teams.</span>
-                </div>
-                <div class="form-text">
-                  Only people on the ticked teams are considered. Read from the
-                  selected plan, so the names always match Planning Center exactly.
-                </div>
-                <!-- Source of truth for the saved config; the boxes above write here. -->
-                <input type="hidden" id="pco-team-filter" name="pco-team-filter">
-              </div>
-            </div>
-
-            <h5 class="pco-step-heading mt-4">Notes (optional)</h5>
-            <div class="form-row mt-2">
-              <div class="form-group col-md-8 col-12">
-                <label for="pco-note-category" class="form-label">Note Category</label>
-                <div class="d-flex flex-column flex-md-row align-items-md-end gap-2 pco-note-row">
-                  <input type="text" class="form-control flex-grow-1" id="pco-note-category" name="pco-note-category" placeholder="Note Category (default: Mic / IEM Assignments)" autocomplete="off">
-                  <select id="pco-note-source" class="form-select form-select-sm mt-2 mt-md-0" aria-label="Note source">
-                    <option value="person">People notes</option>
-                    <option value="plan">Plan notes</option>
-                  </select>
-                  <button type="button" id="pco-note-preview" class="btn btn-outline-secondary btn-sm mt-2 mt-md-0">Fetch Notes</button>
-                </div>
-                <div class="form-text">
-                  Only consulted when a position does not name a slot on its own.
-                  Leave it alone if your slots are labelled by position.
-                </div>
-                <div id="pco-note-preview-results" class="small text-muted mt-2"></div>
-              </div>
-            </div>
-
-            <h5 class="pco-step-heading mt-4">How positions match slots</h5>
-            <div class="form-row mt-2">
-              <div class="form-group col-md-6 col-12">
-                <label for="pco-strategy" class="form-label">Assignment Source</label>
-                <select id="pco-strategy" class="form-select" aria-label="Assignment source">
-                  <option value="position_or_note">Team position, then note category</option>
-                  <option value="position">Team position only</option>
-                  <option value="note_or_brackets">Note category, then [ID] in name (legacy)</option>
-                </select>
-                <div class="form-text">
-                  Planning Center positions carry the mic name and number &mdash; a person under position
-                  &ldquo;Vocal 1&rdquo; fills the slots labelled for mic 1 and IEM 1.
-                </div>
-              </div>
-              <div class="form-group col-md-6 col-12 mt-2 mt-md-0">
-                <div class="form-check mt-md-4">
-                  <input type="checkbox" class="form-check-input" id="pco-number-fallback">
-                  <label class="form-check-label" for="pco-number-fallback">
-                    Match by trailing number when the label differs
-                  </label>
-                  <div class="form-text small text-muted">
-                    Single-team plans only. Keys on the trailing number alone, so
-                    with several teams scheduled &ldquo;Vocal 1&rdquo;,
-                    &ldquo;Guitar 1&rdquo; and &ldquo;Host 1&rdquo; all claim the
-                    same slot.
-                  </div>
-                </div>
-                <div class="form-check mt-2">
-                  <input type="checkbox" class="form-check-input" id="pco-seed-extended-id">
-                  <label class="form-check-label" for="pco-seed-extended-id">
-                    Fill empty slot IDs with the position name
-                  </label>
-                </div>
-                <!-- Off by default on purpose (#135): on, a sync makes the board
-                     match the plan exactly, which also takes the spare handheld
-                     off the visiting speaker nobody told Planning Center about. -->
-                <div class="form-check mt-2">
-                  <input type="checkbox" class="form-check-input" id="pco-clear-unmatched">
-                  <label class="form-check-label" for="pco-clear-unmatched">
-                    Clear slots this plan does not fill
-                  </label>
-                  <div class="form-text">
-                    A sync normally only writes names, so whoever was scheduled last week stays on
-                    their slot until a later plan replaces them. With this on, a sync takes the
-                    person off any slot the new plan has nobody for &mdash; including one you
-                    assigned by hand. The slot keeps its ID, so it still matches next week.
-                  </div>
-                </div>
-              </div>
-            </div>
-            <h5 class="pco-step-heading mt-4">Service position on the board</h5>
-            <div class="form-check mt-2">
-              <input type="checkbox" class="form-check-input" id="pco-live-strip">
-              <label class="form-check-label" for="pco-live-strip">
-                Follow Planning Center Live
-              </label>
-              <div class="form-text">
-                Shows where the service has got to &mdash; the current item, its timer, and what is
-                next. &#9888;&#65039; A <em>server</em> setting, not a per-screen one: it spends one
-                Planning Center account&rsquo;s allowance on behalf of every board, so it is off
-                until somebody turns it on. Each screen then chooses <em>where</em> to put it, or
-                to hide it, in its own view settings.
-                <br>Live is often not running, and the strip says so plainly rather than showing a
-                stale position as though it were current.
-              </div>
-            </div>
-            <div class="form-row mt-2">
-              <div class="form-group col-md-6 col-12">
-                <label for="pco-live-timer-mode" class="form-label">Timer</label>
-                <select class="form-select form-select-sm" id="pco-live-timer-mode">
-                  <option value="full_item_length">Full item length</option>
-                  <option value="end_item_on_time">End item on time</option>
-                  <option value="end_service_on_time">End service on time</option>
-                </select>
-                <div class="form-text">
-                  Planning Center&rsquo;s own three modes, with its own names and behaviour.
-                  <strong>Full item length</strong> counts the item&rsquo;s scheduled length.
-                  <strong>End item on time</strong> counts to when this item was meant to finish,
-                  so a late service shows as late. <strong>End service on time</strong> counts to
-                  the end of the service. Past zero the timer turns over and counts up, exactly as
-                  Live does.
-                  <br>&#9888;&#65039; The middle one reads the plan&rsquo;s running order, which is
-                  one extra request per plan; the other two cost nothing beyond the position itself.
-                </div>
-              </div>
-            </div>
-
-            <h5 class="pco-step-heading mt-4">Watch the plan on the board</h5>
-            <div class="form-check mt-2">
-              <input type="checkbox" class="form-check-input" id="pco-watch-active">
-              <label class="form-check-label" for="pco-watch-active">
-                Tell me when this plan changes in Planning Center
-              </label>
-              <div class="form-text">
-                A plan edited an hour before a service is normal, and the board otherwise goes on
-                showing the names it synced. With this on, a bar appears across the bottom of every
-                board when the plan changes.
-              </div>
-            </div>
-            <!-- ⛔ Off by default, and the wording has to carry the cost: this
-                 is the one setting that lets the board rewrite itself with
-                 nobody present (#140). -->
-            <div class="form-check mt-3">
-              <input type="checkbox" class="form-check-input" id="pco-auto-sync">
-              <label class="form-check-label" for="pco-auto-sync">
-                Re-sync by itself when the plan changes
-              </label>
-              <div class="form-text">
-                Without this, the bar appears and waits for somebody to press Sync. With it on, the
-                board syncs the change itself &mdash; including, if &ldquo;Clear slots this plan
-                does not fill&rdquo; is also on, <strong>taking people off slots while nobody is
-                watching</strong>. A slot two people both claim is never guessed at: it is left
-                exactly as it is and flagged for a person. Needs the checkbox above.
-                <br>⭐ A rule set can turn this on or off for its own kind of plan &mdash; Youth
-                automatic, the main service by hand.
-              </div>
-            </div>
-            <div class="form-row mt-2">
-              <div class="form-group col-md-4 col-6">
-                <label for="pco-watch-interval" class="form-label">Check every</label>
-                <div class="input-group input-group-sm">
-                  <input type="number" class="form-control" id="pco-watch-interval" min="30" max="3600" step="30">
-                  <span class="input-group-text">seconds</span>
-                </div>
-                <div class="form-text">
-                  Every check spends a little of your Planning Center allowance, all day rather
-                  than only during a service.
-                </div>
-              </div>
-              <div class="form-group col-md-4 col-6">
-                <label for="pco-watch-grace" class="form-label">Stop watching</label>
-                <div class="input-group input-group-sm">
-                  <input type="number" class="form-control" id="pco-watch-grace" min="0" max="1440" step="15">
-                  <span class="input-group-text">min after the end</span>
-                </div>
-                <div class="form-text">
-                  Services run over, so watching carries on for a while past the scheduled end.
-                  Watching also stops as soon as Planning Center Live ends the service.
-                </div>
-              </div>
-            </div>
-
-            <h5 class="pco-step-heading mt-4">Rule sets for different kinds of plan</h5>
-            <div class="form-text mb-2">
-              Sunday morning, Wednesday youth and a special service rarely want the same rules. A
-              rule set changes only what differs from the settings above &mdash; everything it does
-              not mention it inherits, so a later change here reaches all of them.
-            </div>
-            <div class="form-text mb-2">
-              Bind one to a <strong>service type</strong> or to a <strong>folder</strong> (which
-              covers every service type inside it) and it applies on its own. Leave it unbound and
-              you pick it when syncing &mdash; which is how a Christmas Eve service is handled,
-              since Planning Center copies a template into a plan rather than linking it, so nothing
-              the board can read says which template a plan came from.
-            </div>
-            <div id="pco-profile-list" class="mb-2"></div>
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-              <button type="button" id="pco-profile-add" class="btn btn-outline-primary btn-sm">
-                Add a rule set
-              </button>
-              <span id="pco-profile-status" class="small align-self-center"></span>
-            </div>
-            <div class="form-row mt-3">
-              <div class="col">
-                <button type="submit" id="pco-save" class="btn btn-primary mr-2">Save PCO Settings</button>
-                <button type="button" id="pco-preview-sync" class="btn btn-outline-secondary mr-2">Preview Sync</button>
-                <button type="button" id="pco-sync" class="btn btn-secondary">Sync Now</button>
-              </div>
-            </div>
-            <div class="form-row mt-2">
-              <div class="col">
-                <div id="pco-save-status" class="alert alert-success d-none" role="alert">
-                  PCO settings saved.
-                </div>
-              </div>
-            </div>
-            </details>
           </form>
         </div>
       </div>
