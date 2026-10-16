@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [2.0.0-beta.6] - 2026-10-16
+
+Everything behind the gear. The menu bar is gone, the configuration page with it, and every surface
+they reached is a section of one **Administration** page — including the ones that were still
+micboard-era a tap away. The board itself gained its missing mode: **Rack**, **Board** and
+**Pocket** are all built. A device opens as **Rack** and the operator picks the other two; nothing
+switches mode on its own.
+
+⛔ **This is the build to test on hardware.** Twenty-three changes, and **not one of them has run on
+a television.** beta.5's own headline fault — every Screens & docks save returning 500 — is fixed
+here, and that is the chain to exercise first, because it has never worked on a board: describe a
+screen, describe the dock under it, and watch the column count follow.
+
+⚠️ Four other things in here have never met the thing they are for: **Rack** and **Pocket** have only
+been seen in a dev browser on demo data, the **Planning Center** panes have never talked to a real
+account, and **saving a slot name** has never been seen to work at a venue — which this release also
+fixes a probable cause of.
+
+### Added
 - **Pocket, the third mode** (#233). A phone, one hand, standing up: the channel that needs somebody
   is at the top, then everything else in slot order under a divider. ⛔ Nothing is filtered — the
   list never lies about how many channels there are. The Mode control is now **Rack · Board ·
@@ -12,20 +39,30 @@
   number, then frequency, offset and battery. ⛔ No photographs — a face is how the room identifies
   somebody, not how the operator does. **This is what a board shows by default**, so it is what a new
   installation looked like.
+- **Slots is a table, and the board is never borrowed.** Naming people used to render every channel
+  as a card with two boxes in it, which meant switching the group to all channels, turning the
+  backgrounds off and forcing a television into desk mode — a trip that had to be patched twice
+  because it never switched back. The table is a section like any other: one row per slot, the
+  person typed, and the wall keeps showing the service while somebody types.
+- **The slot stores the position a plan schedules somebody under** (#238). Planning Center writes
+  both halves of a plan row — "Bob Roberts — Vocal 1" — and the board kept only the person, reading
+  the position on every sync to decide *which* slot somebody belonged to and then discarding it. A
+  sync overwrites it; typing fills the gaps. ⛔ It is not drawn on the card.
+- **Planning Center is five sections, each owning its own settings** (#179). Connecting is done once
+  ever and was four of twenty-six controls, yet it opened the panel; everything done repeatedly sat
+  below it, down a scroll, behind a fold labelled "rarely changes". Connection, Matching, Rule sets,
+  Calendar & automation and Live options now each save themselves. ⛔ Nothing below Connection can
+  be touched before a connection exists — every list there is fetched from your account — and
+  *Use Planning Center on this board* stays yours to switch on.
+- **Matching ends in a worked example against a real plan** (#179). *11 of 12 slots would be filled.
+  Vocal 1 → Jane Smith (slots 1, 7, by position). Pat Speaker — no position set.* Setting a matching
+  rule was guesswork until you could see the result; this turns it into checking one. Nothing is
+  applied, and it says so every time.
 - **The administration rail names the dock list.** The item is **Screens & docks**, and its state
   line counts what is underneath a screen — `3 screens, 1 dock`, or `3 screens described` when
   there is nothing below them. The dock list has existed since 2.0.0-beta.5 but had no route of its
   own: it was a section further down the devices pane, reachable only by already knowing it was
   there.
-
-### Removed
-- **The group list no longer tells you to press a key.** Its empty state read "Open a group from the
-  bar and press E" — a menu bar retired in this release and a keyboard removed in 1.16.
-- **Google Drive backgrounds are gone** (#83). The feature never put a file on a board: nothing
-  called the fetch, so a fully authorized account still showed nothing, and authorization could not
-  even start in the desktop app. Its settings UI, its five API routes and its module are removed —
-  1,573 lines. ⚠️ A `cloud` block already in a `config.json` is left alone rather than rewritten,
-  and any token in the OS keyring is left for you to remove if you want it gone.
 
 ### Changed
 - **Everything underneath a screen is a dock.** This replaces the charging-dock / pickup-pad split
@@ -36,8 +73,37 @@
   Docks described on beta.5 are carried forward with their meaning intact: a stored `dock` becomes
   `charging` and a stored `pad` becomes `noncharging`. Nothing in the layout branches on the kind,
   so no board's columns change.
+- **Choices read as what they do, not what they are called** (#179). The three ways a person reaches
+  a slot are named cards saying what each does *and when to pick it*; teams are chips rather than a
+  scrolling list of checkboxes; and the switch that can take somebody off a slot now says that it
+  removes a name **a person put there by hand**.
+- **Every pane behind the rail is in the 2.0 look.** The Planning Center sections were moved in
+  before they were restyled, so for a while they wore uppercase headings and old buttons inside the
+  new frame.
+
+### Removed
+- **Google Drive backgrounds are gone** (#83). The feature never put a file on a board: nothing
+  called the fetch, so a fully authorized account still showed nothing, and authorization could not
+  even start in the desktop app. Its settings UI, its five API routes and its module are removed —
+  1,573 lines. ⚠️ A `cloud` block already in a `config.json` is left alone rather than rewritten,
+  and any token in the OS keyring is left for you to remove if you want it gone.
+- **The group list no longer tells you to press a key.** Its empty state read "Open a group from the
+  bar and press E" — a menu bar retired in this release and a keyboard removed in 1.16.
 
 ### Fixed
+- **Saving a screen or a dock no longer returns 500** (#203, #212). A rename left a name behind that
+  nothing defined, so every save of the Screens & docks pane failed — on the build that introduced
+  the pane. ⛔ **The whole chain from a described screen to a column count has therefore never run on
+  a board**, and it is the first thing to try on this one.
+- **Paging shows what the board is showing** (#215). The pager walked one list while the screen drew
+  another, so a page could skip a channel that was on the wall.
+- **The slot-name editor gives the board back** (#216). It switched a television into desk mode to
+  draw its boxes and never switched back, and the only way out reloaded the board — into desk mode
+  again. The editor it belonged to is gone entirely in this release.
+- **A board remembers Rack or Board, like every other view preference** (#216).
+- **Saving a slot name raced the reload it scheduled.** The reload was *called* rather than passed,
+  so it ran while the arguments were still being evaluated and the browser was free to cancel the
+  save. ⚠️ This is the likeliest reason saving a name has never been seen to work at a venue.
 - **A trend no longer spans the card.** It was `flex: 1 1 auto` — about 370px of a 420px card — and
   stretched, so the same signal drew a different shape at every card width. It is now a fixed 92px,
   unstretched, and sits *after* its number: label, value, then the line that glosses it.
