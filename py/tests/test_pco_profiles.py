@@ -295,7 +295,7 @@ class TestItReachesTheSync:
         import pco
 
         monkeypatch.setattr(pco, '_select_plan', lambda *a, **k: (34, '77', None))
-        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: ({'data': [], 'included': []}, None))
         monkeypatch.setattr(pco, '_configured_slots', lambda: [])
         return pco
 
@@ -361,7 +361,7 @@ class TestItReachesTheSync:
         import pco
 
         monkeypatch.setattr(pco, '_select_plan', lambda *a, **k: (None, '77', None))
-        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: ({'data': [], 'included': []}, None))
         monkeypatch.setattr(pco, '_configured_slots', lambda: [])
         looked_up = []
 
@@ -381,7 +381,7 @@ class TestItReachesTheSync:
         import pco
 
         monkeypatch.setattr(pco, '_select_plan', lambda *a, **k: (None, '77', None))
-        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: ({'data': [], 'included': []}, None))
         monkeypatch.setattr(pco, '_configured_slots', lambda: [])
 
         def explode(*_a, **_k):
@@ -397,7 +397,7 @@ class TestItReachesTheSync:
         import pco
 
         monkeypatch.setattr(pco, '_select_plan', lambda *a, **k: (None, '77', None))
-        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: ({'data': [], 'included': []}, None))
         monkeypatch.setattr(pco, '_configured_slots', lambda: [])
 
         def explode(*_a, **_k):
@@ -551,7 +551,7 @@ class TestFolderWalkIsNotPaidForTwice:
         import pco
 
         monkeypatch.setattr(pco, '_select_plan', lambda *a, **k: (34, '77', None))
-        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: {'data': [], 'included': []})
+        monkeypatch.setattr(pco, '_fetch_plan_people', lambda *a, **k: ({'data': [], 'included': []}, None))
         monkeypatch.setattr(pco, '_configured_slots', lambda: [])
         walked = []
         monkeypatch.setattr(pco, 'folder_chain',

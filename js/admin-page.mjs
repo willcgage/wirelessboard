@@ -191,6 +191,36 @@ function plural(n, one, many) {
 }
 
 /**
+ * How many receivers this board is configured to talk to, and how many channels
+ * those cover.
+ *
+ * ⛔ A receiver is an *address*, not a slot: a four-channel receiver is one
+ * box carrying four slots, and counting slots would report four receivers.
+ * Distinct `ip` is the only thing in the config that identifies the box.
+ *
+ * ⚠️ A slot of type `offline` has no receiver behind it at all, and a slot
+ * saved without an address cannot connect -- 1.16.0's config page allowed
+ * exactly that. Neither is a receiver.
+ *
+ * Returns `null` when the board has not been told its config yet, which the
+ * caller turns into no line at all rather than into a zero.
+ */
+function configuredReceivers(config) {
+  if (!config || !Array.isArray(config.slots)) {
+    return null;
+  }
+  const addresses = new Set();
+  let channels = 0;
+  config.slots.forEach((slot) => {
+    if (!slot || typeof slot !== 'object') return;
+    if (!slot.ip || slot.type === 'offline') return;
+    addresses.add(String(slot.ip));
+    channels += 1;
+  });
+  return { receivers: addresses.size, channels };
+}
+
+/**
  * The state line under a rail item, so nothing has to be opened to be read.
  *
  * ⛔ Returns `null` when the board has not been told, and the caller leaves the
@@ -206,22 +236,33 @@ export function stateLine(id, facts = {}) {
 
   switch (id) {
     case 'receivers': {
-      if (!Array.isArray(facts.discovered)) {
+      // ⛔⛔ This line used to count `discovered` and nothing else, so a board
+      // happily monitoring twelve channels read "0 found" whenever the
+      // discovery scan came back empty -- which it does on any network where
+      // multicast does not reach, even though the receivers are configured by
+      // address and working. The venue photographed exactly that.
+      //
+      // ⭐ Discovery is a tool *inside* the Receivers section, not the subject
+      // of it. The subject is the receivers this board has.
+      const configured = configuredReceivers(config);
+      const discovered = Array.isArray(facts.discovered) ? facts.discovered : null;
+
+      if (configured === null && discovered === null) {
         return null;
       }
-      const found = facts.discovered.length;
-      // ⭐ `discovered[i].channels` already carries the receiver's channel
-      // count and the config UI ignores it (#144). Summing it here is the
-      // honest total: a four-channel receiver is four channels whether or not
-      // anybody has configured them.
-      const channels = facts.discovered.reduce((sum, rx) => {
-        const n = Number(rx && rx.channels);
-        return sum + (Number.isFinite(n) && n > 0 ? n : 0);
-      }, 0);
-      const foundText = plural(found, 'found', 'found');
-      return channels > 0
-        ? `${found} found, ${plural(channels, 'channel', 'channels')}`
-        : foundText;
+
+      if (configured && configured.receivers > 0) {
+        return `${plural(configured.receivers, 'receiver', 'receivers')}, `
+          + `${plural(configured.channels, 'channel', 'channels')}`;
+      }
+
+      // ⭐ Nothing configured yet. *Now* the scan is the interesting fact,
+      // because it is the next thing the administrator will act on.
+      if (discovered && discovered.length > 0) {
+        return `${discovered.length} found, none added yet`;
+      }
+
+      return configured === null ? null : 'None configured';
     }
 
     case 'screens': {
