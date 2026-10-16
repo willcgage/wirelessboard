@@ -72,20 +72,44 @@ test('⛔ the door names every section, because a half-list reads as the whole l
   const labels = SECTIONS.flatMap((s) => s.items).map((i) => i.label);
   assert.ok(labels.length >= 9, `expected the full rail, got ${labels.length}`);
 
-  for (const label of labels) {
-    assert.ok(
-      DOOR_DETAIL.toLowerCase().includes(label.toLowerCase()),
-      `the door does not mention "${label}"`,
-    );
+  // ⭐ Refined by #179, which split Planning Center into five sections: an item
+  // is named on the door, **or the group it belongs to is**. Listing all five
+  // put thirteen labels on a line whose job is to help somebody decide whether
+  // to open it, and dropped the words "Planning Center" -- the thing they would
+  // actually be looking for. One word standing for a group of its own items is
+  // not a half-list; five sub-parts of an unnamed whole would be.
+  const door = DOOR_DETAIL.toLowerCase();
+  for (const section of SECTIONS) {
+    const groupNamed = door.includes(section.title.toLowerCase());
+    for (const item of section.items) {
+      assert.ok(
+        door.includes(item.label.toLowerCase()) || groupNamed,
+        `the door mentions neither "${item.label}" nor its group "${section.title}"`,
+      );
+    }
   }
 
   // ⚠️ And nothing it mentions is gone. A list that keeps a retired section is
   // the same fault pointing the other way.
   const mentioned = DOOR_DETAIL.split(', ').map((s) => s.trim().toLowerCase());
-  const known = new Set(labels.map((l) => l.toLowerCase()));
+  const known = new Set([
+    ...labels.map((l) => l.toLowerCase()),
+    ...SECTIONS.map((s) => s.title.toLowerCase()),
+  ]);
   for (const name of mentioned) {
-    assert.ok(known.has(name), `the door mentions "${name}", which is not a section`);
+    assert.ok(known.has(name), `the door mentions "${name}", which is not a section or a group`);
   }
+});
+
+test('⛔ and that door check still fails when something really is missing', () => {
+  // Planted: a rail whose group name does not cover its own item. Two of this
+  // project's guards passed on everything before anybody tried this.
+  const planted = [{ title: 'Setup', items: [{ label: 'Receivers' }, { label: 'Screens & docks' }] }];
+  const doorText = 'receivers';
+  const missing = planted[0].items.filter(
+    (i) => !doorText.includes(i.label.toLowerCase()) && !doorText.includes(planted[0].title.toLowerCase()),
+  );
+  assert.equal(missing.length, 1, 'the check would have missed a dropped item');
 });
 
 test('every item declares an id and a label, and no id twice', () => {
@@ -157,6 +181,17 @@ test('⛔ a board that has been told nothing shows no state lines', () => {
   allItems().forEach((item) => {
     assert.equal(stateLine(item.id, {}), null, `${item.id} must not invent a figure`);
   });
+});
+
+test('⛔ but a LOADED configuration with no Planning Center block says so', () => {
+  // Two different silences, and only one of them is "not connected". `{}` is
+  // "the first payload has not arrived", where announcing it would be a lie by
+  // timing. A config that IS loaded and simply has no `pco` block is a board
+  // nobody has connected -- and there, saying nothing reads as missing
+  // information rather than as the answer.
+  assert.equal(stateLine('pco-connection', { config: {} }), 'Not connected');
+  assert.equal(stateLine('pco-matching', { config: {} }), 'Needs a connection');
+  assert.equal(stateLine('pco-connection', {}), null);
 });
 
 test('receivers count what was found and the channels behind them', () => {
@@ -246,15 +281,21 @@ test('⚠️ Planning Center separates "no credentials" from "switched off"', ()
   // Conflating them is how somebody concludes a sync is broken when it was
   // never turned on -- and the switch is the administrator's to flip, not
   // ours ([[admin-switches-are-the-admins]]).
-  assert.equal(stateLine('pco', { config: { pco: { auth: {} } } }), 'Not connected');
+  // ⭐ On the Connection section now: #179 split the one item into five, and
+  // this is the one that reports the connection itself.
+  assert.equal(stateLine('pco-connection', { config: { pco: { auth: {} } } }), 'Not connected');
   assert.equal(
-    stateLine('pco', { config: { pco: { auth: { has_credentials: true }, enabled: false } } }),
+    stateLine('pco-connection', { config: { pco: { auth: { has_credentials: true }, enabled: false } } }),
     'Connected, switched off',
   );
   assert.equal(
-    stateLine('pco', { config: { pco: { auth: { has_credentials: true }, enabled: true } } }),
+    stateLine('pco-connection', { config: { pco: { auth: { has_credentials: true }, enabled: true } } }),
     'Connected',
   );
+  // ⛔ And the four below it say they need one, rather than reading as empty.
+  ['pco-matching', 'pco-rulesets', 'pco-calendar', 'pco-live'].forEach((id) => {
+    assert.equal(stateLine(id, { config: { pco: { auth: {} } } }), 'Needs a connection');
+  });
 });
 
 test('a late-filled micboard does not throw', () => {

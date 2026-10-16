@@ -2952,7 +2952,13 @@ body.live-strip-bottom .rotation-bar {
 // their state lines are a known width, and a rail that grows with the window
 // pushes the content pane around for no reason.
 .admin-rail {
-  width: 236px;
+  // ⚠️ A ceiling, not a fixed width. Thirteen items (#179 split Planning
+  // Center into five) are taller than the pane, so the rail gets a vertical
+  // scrollbar -- which takes 15px out of its content box. A hard 236px child
+  // then overflowed it sideways, and a rail that scrolls sideways hides the
+  // item at the end of it.
+  width: 100%;
+  max-width: 236px;
   flex: none;
   min-height: 0;
   overflow-y: auto;
@@ -3495,6 +3501,10 @@ body.live-strip-bottom .rotation-bar {
 .admin-item__label {
   display: block;
   font-size: 0.8rem;
+  // ⚠️ Wrap, never widen. #179 added "Calendar & automation", which is 15px
+  // wider than the 236px rail -- and a rail that scrolls sideways hides the
+  // item at the end of it, which on this page is the whole navigation.
+  overflow-wrap: anywhere;
 }
 
 .admin-item__state {

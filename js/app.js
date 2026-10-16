@@ -23,6 +23,7 @@ import {
   initConfigEditor, bindPcoNav, bindPcoHandlers, bindScreenHandlers,
   configureConfigModule, scheduleBackgroundFilenameGuide, refreshScreensEditor,
   showLogsSection, hideLogsSection, showBackgroundsSection, showConfigHealth,
+  fillPcoSection,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
@@ -766,6 +767,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // ⚠️ Both fill the same editors: the discovered list, the slot rows and
         // the group summary are rendered together by one pass.
         if (id === 'receivers' || id === 'groups') initConfigEditor(true);
+        // ⭐ #179: five Planning Center sections, each filled from the stored
+        // configuration when it is opened and each saving only its own keys.
+        if (id.startsWith('pco-')) fillPcoSection(id);
       },
       // ⛔ The other edge, and the reason it exists: the log viewer follows the
       // file on a timer. A section that is hidden, or a page that is closed,
