@@ -1,4 +1,5 @@
 import { micboard, updateHash } from './app.js';
+import { pocketOrder, pocketFooter } from './pocket.mjs';
 import { updateBackground } from './gif.js';
 import { initChart, charts } from './signal-view.js';
 import { seedTransmitters, autoRandom } from './demodata.js';
@@ -401,7 +402,31 @@ export function renderDisplayList(dl) {
   }
 
   const tx = micboard.transmitters;
-  dl.forEach((e) => {
+
+  // ⭐⭐ Pocket is an ORDER, not a skin. Rack and Board show the display list
+  // as it is given; Pocket puts whatever needs somebody at the top, because
+  // its reader is already walking. ⛔ Nothing is filtered -- the calm channels
+  // follow in slot order under a divider, so the list never lies about how
+  // many channels there are.
+  //
+  // ⚠️ `micboard.displayList` is NOT reordered. Paging, the rotation and the
+  // "what is this board showing" count all read it, and #215 was exactly the
+  // fault of one of those reading a different list from the one on screen.
+  // This orders the render, and only the render.
+  const pocket = micboard.displayMode === 'pocketmode';
+  const order = pocket ? pocketOrder(dl, tx) : null;
+  const sequence = pocket ? [...order.urgent, ...order.rest] : dl;
+  const dividerAfter = pocket && order.urgent.length && order.rest.length
+    ? order.urgent.length
+    : -1;
+
+  sequence.forEach((e, index) => {
+    if (index === dividerAfter) {
+      const divider = document.createElement('p');
+      divider.className = 'pocket-divider';
+      divider.textContent = 'Everything else';
+      document.getElementById('micboard').appendChild(divider);
+    }
     let t;
     if (e !== 0) {
       if (typeof tx[e] !== 'undefined') {
@@ -418,6 +443,19 @@ export function renderDisplayList(dl) {
       document.getElementById('micboard').appendChild(t);
     }
   });
+
+  // ⛔ Counts what is SHOWN, never what the board has. #215 came out of a bar
+  // whose count was built from `config.groups` whatever was actually on
+  // screen, so it said "12 channels" over a page of four.
+  if (pocket) {
+    const footer = document.createElement('p');
+    footer.className = 'pocket-footer';
+    footer.textContent = pocketFooter({
+      shown: sequence.filter((s) => s !== 0).length,
+      total: Object.keys(tx || {}).length,
+    });
+    document.getElementById('micboard').appendChild(footer);
+  }
 
   infoToggle();
   try {

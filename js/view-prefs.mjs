@@ -78,7 +78,11 @@ export const VIEWER_LOCK_KEY = 'wirelessboard.viewerLock';
 // ⭐ Per device, like the rest of this file: the wall is a television and the
 // FOH laptop watching the same server is not.
 export const DISPLAY_MODE_KEY = 'wirelessboard.displayMode';
-export const DISPLAY_MODES = ['deskmode', 'tvmode'];
+// ⛔ Three modes, and the stored values keep their old names. `deskmode` is
+// **Rack** and `tvmode` is **Board**; only the labels and the layouts changed,
+// the way `row` kept its value when it became *Side by side*. Renaming them
+// would have cost every board its remembered mode to buy nothing.
+export const DISPLAY_MODES = ['deskmode', 'tvmode', 'pocketmode'];
 export function isDisplayMode(value) {
   return DISPLAY_MODES.includes(value);
 }

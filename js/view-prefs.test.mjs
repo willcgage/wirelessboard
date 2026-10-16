@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   readPref, writePref, resolvePref, ARRANGEMENT_KEY, CARD_SHAPE_KEY,
@@ -210,10 +211,25 @@ test('a board with storage denied still resolves a mode', () => {
   assert.equal(resolveMode('elinfo11', throwingStorage), 'tvmode');
 });
 
-test('the two modes are exactly the two class names the container uses', () => {
-  // `applyViewClasses` removes every one of these and adds `micboard.displayMode`,
-  // so a third entry here without a stylesheet rule would paint nothing.
-  assert.deepEqual(DISPLAY_MODES, ['deskmode', 'tvmode']);
+test('⛔ every mode is a class name the stylesheet actually paints', () => {
+  // ⭐ This used to assert the list was exactly `['deskmode', 'tvmode']` and
+  // warned that "a third entry here without a stylesheet rule would paint
+  // nothing". That warning was the real content, so when Pocket arrived the
+  // test became the invariant instead of the snapshot: `applyViewClasses`
+  // removes every one of these and adds `micboard.displayMode`, so a mode with
+  // no rule is a mode that silently does nothing.
+  assert.deepEqual(DISPLAY_MODES, ['deskmode', 'tvmode', 'pocketmode']);
   DISPLAY_MODES.forEach((m) => assert.ok(isDisplayMode(m)));
   assert.ok(!isDisplayMode('TVMODE'));
+
+  const css = readFileSync(new URL('../css/style.scss', import.meta.url), 'utf8');
+  for (const mode of DISPLAY_MODES) {
+    // ⛔⛔ NOT a template literal. Written as `new RegExp(`\.${mode}...`)` the
+    // literal eats the backslashes before RegExp ever sees them, so the
+    // pattern silently becomes something else -- the fifth time that trap has
+    // been hit on this project. A plain string keeps its escapes.
+    // eslint-disable-next-line prefer-template
+    const paints = new RegExp('\\.' + mode + '[\\s,{.#:]');
+    assert.match(css, paints, `${mode} is offered as a mode but the stylesheet never paints it`);
+  }
 });

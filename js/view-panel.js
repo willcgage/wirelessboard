@@ -173,7 +173,16 @@ function renderDisplayRow() {
   seg.setAttribute('role', 'group');
   seg.setAttribute('aria-label', 'Display mode');
 
-  [['deskmode', 'Desk'], ['tvmode', 'TV']].forEach(([mode, text]) => {
+  // ⛔ Three, and named for their readers rather than their hardware. "Desk"
+  // and "TV" described where the screen was; Rack, Board and Pocket describe
+  // who is looking and what they want from it, which is the thing that makes
+  // them three modes rather than one layout with settings.
+  //
+  // ⚠️ The operator picks Pocket. There is no width threshold and nothing
+  // automatic -- one rule for all three. A phone's first load is therefore the
+  // Board layout, which is unreadable on it; the gear is the way out and is
+  // never hidden.
+  [['deskmode', 'Rack'], ['tvmode', 'Board'], ['pocketmode', 'Pocket']].forEach(([mode, text]) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'vp-opt';
