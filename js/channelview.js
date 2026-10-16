@@ -203,13 +203,14 @@ function updateStatus(slotSelector, data) {
   slotSelector.querySelector('div.electrode').classList.add(data.status);
 
   if (micboard.settingsMode !== 'EXTENDED') {
-    if (data.status === 'RX_COM_ERROR') {
-      slotSelector.querySelector('.chartzone').style.display = 'none';
-      slotSelector.querySelector('.errorzone').style.display = 'block';
-    } else {
-      slotSelector.querySelector('.chartzone').style.display = 'block';
-      slotSelector.querySelector('.errorzone').style.display = 'none';
-    }
+    // ⛔ `hidden`, not an inline `display`. Setting `display: block` here wrote
+    // an inline style that beats every stylesheet rule, so a mode wanting the
+    // chartzone laid out differently -- Rack lays it along the strip -- could
+    // never have it. The attribute says "not shown" and leaves *how* it is
+    // shown to CSS, which is the whole distinction.
+    const quiet = data.status === 'RX_COM_ERROR';
+    slotSelector.querySelector('.chartzone').hidden = quiet;
+    slotSelector.querySelector('.errorzone').hidden = !quiet;
   }
 }
 
@@ -430,10 +431,11 @@ export function renderDisplayList(dl) {
 }
 
 export function renderGroup(group) {
-  if (micboard.settingsMode === 'CONFIG') {
-    document.getElementById('micboard').style.display = 'grid';
-    document.getElementsByClassName('settings')[0].style.display = 'none';
-  }
+  // ⛔ A branch for `settingsMode === 'CONFIG'` was here, showing the board and
+  // hiding `.settings`. #222 retired the configuration page: `.settings` no
+  // longer exists, so `getElementsByClassName('settings')[0].style` would have
+  // thrown the moment anything set that mode again. Dead and dangerous, not
+  // dead and harmless.
   micboard.group = group;
   updateHash();
   if (group === 0) {

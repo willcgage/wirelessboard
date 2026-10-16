@@ -20,6 +20,13 @@ html,body {
   // background-color: var(--color-black);
 }
 
+// ⛔ A mode may arrange the board however it likes; "not on screen" has to beat
+// that, or `display: flex` from a mode rule puts the board back while Planning
+// Center is open.
+#micboard[hidden] {
+  display: none !important;
+}
+
 #micboard,
 .wirelessboard-board {
   height: 100%;
@@ -98,6 +105,15 @@ p.device-name {
   box-sizing: border-box;
 }
 
+// ⛔ A mode may lay the chartzone out however it likes, but "not shown" has to
+// beat that -- otherwise `display: flex` from a mode rule resurrects a drawer
+// the board deliberately emptied. `!important` earns itself here: it is the
+// one declaration that must not lose.
+.chartzone[hidden],
+.errorzone[hidden] {
+  display: none !important;
+}
+
 .chartzone {
   display: flex;
   flex-direction: column;
@@ -105,9 +121,14 @@ p.device-name {
   min-width: 0;
 }
 
-/* ⭐ One signal: what it is, how it has been, where it is now. The trend is
-   the wide part because "is it steady?" is the question being asked; the
-   number is beside it because reading a value off a line never worked. */
+/* ⭐ One signal: what it is, where it is now, and how it has been.
+   ⛔ The trend is the SMALL part, and it comes after the number. This said the
+   opposite -- "the trend is the wide part because 'is it steady?' is the
+   question being asked" -- and the build followed it: `flex: 1 1 auto` took
+   ~370px of a 420px card, and `preserveAspectRatio: none` drew the same signal
+   as a different shape at every card width. The maintainer settled it on the
+   2.0 canvas: a trend sits beside its number and never spans the card. The
+   number is what is read; the line only says whether to trust it. */
 .spark-row {
   display: flex;
   align-items: center;
@@ -3621,4 +3642,229 @@ body.statusbar-off .rotation-bar {
 .admin-door.is-locked .admin-door__scope {
   color: var(--color-white);
   opacity: 0.8;
+}
+
+// ---------------------------------------------------------------------------
+// The sparkline rule (#195, settled on the 2.0 canvas)
+//
+// ⛔ A trend sits BESIDE its number and is small. It never spans the card.
+// Shipped as label - trend - number with `flex: 1 1 auto`, so the line took
+// ~370px of a 420px card and `preserveAspectRatio: none` drew the same signal
+// as a different shape at every card width.
+//
+// ⚠️ Reordered in CSS rather than in the markup, because the markup order is
+// also the reading order for a screen reader: label, value, then the drawing
+// that glosses it. Visually the number has to come before the line; in the
+// document it already does the right thing.
+// ---------------------------------------------------------------------------
+.spark-value {
+  order: 2;
+  min-width: 3.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-white);
+}
+
+.spark-line {
+  order: 3;
+  flex: none;
+  width: 92px;
+  height: 16px;
+}
+
+// ---------------------------------------------------------------------------
+// Rack — the FOH strip (#233)
+//
+// ⛔ The reader is a metre away on a laptop, mid-service, and knows the rack.
+// They want numbers: which pack, what level, how long left. **No photographs**
+// -- a face is how the room identifies somebody, not how the operator does.
+//
+// ⚠️ The layout controls (arrangement, columns on screen, card shape) are
+// Board-only and do not reach this: a strip has no dock position to point at.
+// ---------------------------------------------------------------------------
+.deskmode #micboard,
+.deskmode .wirelessboard-board {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  grid-gap: 0;
+  padding: 6px;
+}
+
+.deskmode #micboard .col-sm,
+.deskmode .wirelessboard-board .col-sm {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 10px 0 0;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 5px;
+  border-style: none;
+  overflow: hidden;
+}
+
+// The device id, which is a column header on the wall and the first thing
+// read on a strip. ⛔ It is the equipment, never the person.
+.deskmode .chan-label {
+  flex: 0 0 92px;
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  margin: 0;
+}
+
+.deskmode .chan-label .device-name {
+  margin: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--color-white);
+}
+
+// ⭐ The status wash becomes a RAIL. On the wall the colour is the card, read
+// from across a room; at a metre it only has to say which row to look at, and
+// a full-width wash behind six numbers makes them harder to read, not easier.
+// ⚠️ `flex-direction: row` explicitly. The base rule stacks this column, and
+// setting only `display: flex` left that in place -- the chip and the band
+// stacked to 55px inside a 46px strip and the band hung out of the bottom.
+// Same trap as the chartzone, made twice in one stylesheet.
+.deskmode .mic_name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  background: none !important;
+  border-left: 4px solid currentColor;
+  padding-left: 10px;
+}
+
+// ⛔ No photographs.
+.deskmode .slot-media,
+.deskmode .electrode {
+  display: none;
+}
+
+.deskmode .status-chip {
+  position: static;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.deskmode .card-band {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  position: static;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.deskmode .card-band .name {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deskmode .card-band .card-runtime {
+  flex: 0 0 auto;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+}
+
+// AF, RF and the figures, inline rather than in a drawer under a photograph.
+.deskmode .info-drawer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  height: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+// ⚠️ `flex-direction` as well as `display`. The base rule stacks the two spark
+// rows in a column -- right under a photograph, wrong along a strip -- and
+// setting only `display: flex` left that column in place: AF and RF were 71px
+// of content inside a 46px strip, and both escaped it.
+.deskmode .chartzone {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  height: auto;
+  padding: 0;
+}
+
+.deskmode .spark-row {
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+// ⛔ Antenna diversity, as a small two-segment meter. It is genuinely useful to
+// an operator -- which antenna is carrying the pack -- but left unconstrained
+// it inherited the wall card's full-width bar and became 714px of colour per
+// channel, drowning the numbers the strip exists to show.
+.deskmode .diversity {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 9px;
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  padding: 0;
+}
+
+.deskmode .diversity-bar {
+  flex: 1 1 0;
+  width: auto;
+  height: 100%;
+}
+
+// ⚠️ The wall card centres the name under a photograph. On a strip it is a
+// column, and a column reads from its left edge.
+.deskmode .card-band .name {
+  text-align: left;
+}
+
+.deskmode .drawer-figures {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--color-gray-light, #B4B4B4);
+}
+
+// ⚠️ A laptop is not a wall. Below this the numbers wrap rather than shrink --
+// the board sheds nothing (#198), so a narrow window gets a taller strip.
+@media (max-width: 1100px) {
+  .deskmode #micboard .col-sm,
+  .deskmode .wirelessboard-board .col-sm {
+    flex-wrap: wrap;
+    padding-bottom: 6px;
+  }
+
+  .deskmode .info-drawer {
+    flex: 1 1 100%;
+    padding-left: 106px;
+  }
 }
