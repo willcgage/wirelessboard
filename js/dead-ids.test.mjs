@@ -122,3 +122,25 @@ test('⛔ the page with the editors has the close control its handler expects', 
     assert.ok(markupIds().has(id), `${id} is the recovery path and must be in the markup`);
   }
 });
+
+test('⛔⛔ a callback is passed, never the result of calling it', () => {
+  // `submitUpdate` in the slot editor read:
+  //
+  //     postJSON(url, data, window.location.reload());
+  //
+  // which RUNS the reload while the arguments are evaluated, before postJSON
+  // is entered -- so every save raced a navigation that had already been
+  // scheduled, and the browser was free to cancel the request. Saving in that
+  // editor is on the list of things never verified against real hardware, and
+  // this is the likeliest reason it would have failed there.
+  //
+  // ⚠️ The shape, not the file: any `postJSON(..., someFn())` is the same bug.
+  for (const file of ['js/extended.js', 'js/config.js', 'js/data.js', 'js/app.js']) {
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.doesNotMatch(
+      src,
+      /postJSON\([^)]*,\s*[\w.]+\(\)\s*\)/,
+      `${file} passes the RESULT of a call to postJSON where a callback belongs`,
+    );
+  }
+});

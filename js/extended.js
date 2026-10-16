@@ -47,7 +47,15 @@ function loadBulkNames() {
 
 function submitUpdate(data) {
   const url = 'api/slot';
-  postJSON(url, data, window.location.reload());
+  // ⛔⛔ `() => window.location.reload()`, not `window.location.reload()`.
+  //
+  // `postJSON(url, data, callback)` wants a FUNCTION. Passing the invocation
+  // ran the reload while the arguments were being evaluated -- before
+  // `postJSON` was entered -- so every save raced a navigation that had
+  // already been scheduled, and the browser was free to cancel the request.
+  // ⚠️ Saving in this editor is on the list of things never verified against
+  // real hardware; this is the likeliest reason it would have failed there.
+  postJSON(url, data, () => window.location.reload());
 }
 
 function initSlotEdit() {
