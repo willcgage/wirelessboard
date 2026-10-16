@@ -470,40 +470,15 @@
             <!-- ⛔ Off by default, and the wording has to carry the cost: this
                  is the one setting that lets the board rewrite itself with
                  nobody present (#140). -->
-            <div class="form-check mt-3">
-              <input type="checkbox" class="form-check-input" id="pco-auto-sync">
-              <label class="form-check-label" for="pco-auto-sync">
-                Re-sync by itself when the plan changes
-              </label>
-              <div class="form-text">
-                Without this, the bar appears and waits for somebody to press Sync. With it on, the
-                board syncs the change itself &mdash; including, if &ldquo;Clear slots this plan
-                does not fill&rdquo; is also on, <strong>taking people off slots while nobody is
-                watching</strong>. A slot two people both claim is never guessed at: it is left
-                exactly as it is and flagged for a person. Needs the checkbox above.
-                <br>⭐ A rule set can turn this on or off for its own kind of plan &mdash; Youth
-                automatic, the main service by hand.
-              </div>
-            </div>
 
-        <div class="admin-section__head admin-section__head--sub">
-          <h4 class="admin-section__subtitle">What this would do to the next plan</h4>
-          <p class="admin-section__lead">&#11088; The rules above, resolved against a real plan.
-            Setting a rule is guesswork until you can see the result.</p>
-        </div>
+
 
         <!-- ⛔⛔ Uses `api/pco/preview`, which already existed for Preview Sync: async,
              resolved on the single PCO worker, and it writes NOTHING. A worked example that
              fetched a plan on the Tornado loop would freeze every board for the length of
              the call -- the fault that has bitten this project three times (#73, #74, #79).
              ⚠️ It costs real API calls, so it runs when somebody asks. -->
-        <div class="pco-example">
-          <div id="pco-example-body" class="pco-example__body"></div>
-          <div class="admin-actions">
-            <button type="button" id="pco-example-run" class="admin-btn">Check against the next plan</button>
-            <span id="pco-example-note" class="pco-example__note" role="status" aria-live="polite"></span>
-          </div>
-        </div>
+
   </div>
                 </div>
               </div>
@@ -600,6 +575,31 @@
                 </div>
               </div>
             </div>
+          <div class="form-check mt-3">
+                <input type="checkbox" class="form-check-input" id="pco-auto-sync">
+                <label class="form-check-label" for="pco-auto-sync">
+                  Re-sync by itself when the plan changes
+                </label>
+                <div class="form-text">
+                  Without this, the bar appears and waits for somebody to press Sync. With it on, the
+                  board syncs the change itself &mdash; including, if &ldquo;Clear slots this plan
+                  does not fill&rdquo; is also on, <strong>taking people off slots while nobody is
+                  watching</strong>. A slot two people both claim is never guessed at: it is left
+                  exactly as it is and flagged for a person. Needs the checkbox above.
+                  <br>⭐ A rule set can turn this on or off for its own kind of plan &mdash; Youth
+                  automatic, the main service by hand.
+                </div>
+              </div><div class="admin-section__head admin-section__head--sub">
+            <h4 class="admin-section__subtitle">What this would do to the next plan</h4>
+            <p class="admin-section__lead">&#11088; The rules above, resolved against a real plan.
+              Setting a rule is guesswork until you can see the result.</p>
+          </div><div class="pco-example">
+            <div id="pco-example-body" class="pco-example__body"></div>
+            <div class="admin-actions">
+              <button type="button" id="pco-example-run" class="admin-btn">Check against the next plan</button>
+              <span id="pco-example-note" class="pco-example__note" role="status" aria-live="polite"></span>
+            </div>
+          </div>
         </div>
         <div class="admin-actions">
           <button type="button" id="pco-matching-save" class="admin-btn admin-btn--primary">Save matching</button>

@@ -3274,6 +3274,155 @@ body.live-strip-bottom .rotation-bar {
 }
 
 // ---------------------------------------------------------------------------
+// The Planning Center panes, in the 2.0 look (#222)
+//
+// ⛔⛔ Scoped to `.admin-section--moved`, never to the classes themselves. The
+// weekly surface -- choose a plan, preview, sync -- still lives in
+// `#pco-settings` and still uses every one of these classes; restyling them
+// globally would silently redraw a screen this change never looked at.
+//
+// ⭐ Re-laid-out rather than rewritten, which is the pattern #222 already set
+// for the screens editor: the markup is `config.js`'s and rewriting it would
+// mean rewriting the editor, for a change that is about how a pane *looks*.
+// ---------------------------------------------------------------------------
+
+// ⛔ The one that makes a pane read as micboard-era: an uppercase yellow
+// heading with a rule under it, in a page whose own subtitles are plain and
+// quiet. Four of them stacked down a pane made every group shout equally.
+.admin-section--moved .pco-step-heading {
+  margin: 14px 0 6px;
+  padding: 0;
+  border-bottom: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-white);
+}
+
+.admin-section--moved .pco-step-heading:first-child {
+  margin-top: 0;
+}
+
+// Bootstrap 4's grid row, which the `.row` rule above never covered because
+// the PCO markup predates it.
+.admin-section--moved .form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin: 0 0 10px;
+}
+
+.admin-section--moved .form-row > * {
+  flex: 1 1 140px;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+}
+
+.admin-section--moved .form-group {
+  margin-bottom: 0;
+}
+
+// ⛔ 44px, like every other control somebody presses on a wall tablet, and the
+// label sits beside the box rather than wrapping under it.
+.admin-section--moved .form-check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  align-items: start;
+  margin: 10px 0;
+  padding: 0;
+}
+
+.admin-section--moved .form-check-input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  flex: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(215, 215, 215, 0.4);
+}
+
+.admin-section--moved .form-check-input:checked {
+  background-color: rgba(0, 100, 148, 0.9);
+  border-color: rgba(79, 163, 209, 0.8);
+}
+
+.admin-section--moved .form-check-label {
+  grid-column: 2;
+  font-size: 0.84rem;
+  color: var(--color-white);
+}
+
+// The consequence note and any remaining help text line up under the label
+// rather than under the box.
+.admin-section--moved .form-check > .form-text,
+.admin-section--moved .form-check > .pco-consequence {
+  grid-column: 2;
+}
+
+// Bootstrap's buttons take the administration page's own button.
+.admin-section--moved .btn {
+  min-height: 44px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(215, 215, 215, 0.22);
+  border-radius: 6px;
+  color: var(--color-white);
+  font-size: 0.82rem;
+  box-shadow: none;
+}
+
+.admin-section--moved .btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.admin-section--moved .btn-primary,
+.admin-section--moved .btn-success {
+  background: rgba(0, 100, 148, 0.55);
+  border-color: rgba(79, 163, 209, 0.55);
+}
+
+.admin-section--moved .btn-primary:hover:not(:disabled),
+.admin-section--moved .btn-success:hover:not(:disabled) {
+  background: rgba(0, 100, 148, 0.75);
+}
+
+.admin-section--moved .btn-sm {
+  min-height: 36px;
+  font-size: 0.78rem;
+}
+
+.admin-section--moved .input-group-text {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(215, 215, 215, 0.22);
+  color: rgba(215, 215, 215, 0.7);
+  font-size: 0.78rem;
+}
+
+// ⛔ The gate's own note, which had no style at all and rendered as a wall of
+// body text the width of the pane. It is the sentence that explains why
+// everything below it is unavailable, so it reads as a notice, not as prose.
+.pco-gate {
+  margin: 0 0 10px;
+  padding: 8px 11px;
+  background: rgba(239, 157, 81, 0.1);
+  border-left: 3px solid rgba(239, 157, 81, 0.6);
+  border-radius: 0 5px 5px 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: rgba(215, 215, 215, 0.85);
+}
+
+// ⚠️ Dimmed, never hidden. Somebody setting a board up should be able to read
+// what they will be able to set once they connect.
+.pco-section-body.is-gated {
+  opacity: 0.55;
+}
+
+// ---------------------------------------------------------------------------
 // Planning Center: chips, cards, consequences and the worked example (#179)
 //
 // ⭐ "Choices read as consequences, not as field names." A 260px scrolling list
