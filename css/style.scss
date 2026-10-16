@@ -3868,3 +3868,183 @@ body.statusbar-off .rotation-bar {
     padding-left: 106px;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Pocket — worst first (#233)
+//
+// ⭐⭐ One hand, standing up, already walking towards a pack. **Order is the
+// feature**: the channel that needs somebody is at the top, and the reader can
+// stop after it. Everything else is below a divider in slot order, because
+// "which channel is Dave on" is still asked with a phone in hand.
+//
+// ⚠️ No arrangement, no columns, no card shape. One column by definition --
+// those controls belong to the Board, and the panel says which mode each row
+// applies to.
+// ---------------------------------------------------------------------------
+.pocketmode #micboard,
+.pocketmode .wirelessboard-board {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  grid-gap: 0;
+  padding: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.pocketmode #micboard .col-sm,
+.pocketmode .wirelessboard-board .col-sm {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 7px;
+  border-style: none;
+  border-left: 4px solid currentColor;
+  overflow: hidden;
+}
+
+// ⛔ No photographs, and no antenna meter. A phone is not where somebody
+// diagnoses a receiver; it is where they find out who to walk towards.
+.pocketmode .slot-media,
+.pocketmode .electrode,
+.pocketmode .diversity,
+.pocketmode .drawer-figures {
+  display: none;
+}
+
+// The device id is secondary here -- the person is what somebody is looking
+// for -- so it reads as a label beside the name rather than above it.
+.pocketmode .chan-label {
+  order: 2;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.pocketmode .chan-label .device-name {
+  margin: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: rgba(215, 215, 215, 0.6);
+}
+
+.pocketmode .mic_name {
+  order: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  background: none !important;
+  padding: 0;
+}
+
+.pocketmode .status-chip {
+  position: static;
+  order: 2;
+  align-self: flex-start;
+}
+
+.pocketmode .card-band {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  position: static;
+  background: none;
+  border: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.pocketmode .card-band .name {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+// ⭐ The runtime is the reading, and the trend underneath only says whether to
+// trust it -- 62px, beside the number, never across the row.
+.pocketmode .card-runtime {
+  order: 3;
+  margin: 0;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.92rem;
+}
+
+.pocketmode .info-drawer {
+  order: 4;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.pocketmode .chartzone {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  height: auto;
+  padding: 0;
+}
+
+.pocketmode .spark-row {
+  gap: 4px;
+  font-size: 0.62rem;
+}
+
+.pocketmode .spark-line {
+  width: 62px;
+  height: 12px;
+}
+
+// ⛔ A divider, not a filter. The calm channels are still here, in slot order.
+.pocket-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 2px 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(215, 215, 215, 0.45);
+}
+
+.pocket-divider::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgba(215, 215, 215, 0.16);
+}
+
+.pocket-footer {
+  margin: 12px 2px 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(215, 215, 215, 0.45);
+  text-align: center;
+}

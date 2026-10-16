@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 ### Added
+- **Pocket, the third mode** (#233). A phone, one hand, standing up: the channel that needs somebody
+  is at the top, then everything else in slot order under a divider. ⛔ Nothing is filtered — the
+  list never lies about how many channels there are. The Mode control is now **Rack · Board ·
+  Pocket**, and the operator picks; there is no width threshold and nothing automatic.
 - **Desk mode is now Rack, the FOH strip** (#233). It was the wall card stretched to full width, and
   at that shape the band, the name and the status chip overlapped. Each channel is now one row:
   device id, status, person, runtime, AF and RF as percentages each with a small trend beside the

@@ -1,7 +1,7 @@
 import { micboard, updateHash } from './app.js';
 
 import { updateGIFBackgrounds } from './gif.js';
-import { renderGroup } from './channelview.js';
+import { renderGroup, renderDisplayList } from './channelview.js';
 import { requestTvLayoutUpdate } from './tv-layout.js';
 import {
   ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES,
@@ -68,6 +68,7 @@ function applyDefaultBackgroundIfNeeded() {
  * mid-edit came back as a desk. Same shape as `setInfoDrawer`'s `switchToTv`.
  */
 export function setDisplayMode(mode, { remember = true } = {}) {
+  const previous = micboard.displayMode;
   const selector = document.getElementById('container');
   swapClass(selector, micboard.displayMode, mode);
   micboard.displayMode = mode;
@@ -75,6 +76,18 @@ export function setDisplayMode(mode, { remember = true } = {}) {
     writePref({ storage: safeStorage(), key: DISPLAY_MODE_KEY, value: mode });
   }
   requestTvLayoutUpdate();
+
+  // ⛔ Pocket is an ORDER, not a skin, so it needs the list drawn again --
+  // Rack and Board show the display list as given and a class change is enough
+  // for them. Without this, choosing Pocket left the channels in slot order
+  // until the next payload happened to redraw them: the mode said "worst
+  // first" and the board quietly did not.
+  if (mode === 'pocketmode' || previous === 'pocketmode') {
+    try {
+      renderDisplayList(micboard.displayList || []);
+    } catch (_) { /* a board with no list yet simply has nothing to reorder */ }
+  }
+
   if (mode === 'tvmode') {
     applyDefaultBackgroundIfNeeded();
   }
