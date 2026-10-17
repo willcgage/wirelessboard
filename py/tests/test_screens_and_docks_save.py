@@ -42,7 +42,7 @@ class TestTheSaveRuns:
 
         assert [s['id'] for s in saved['screens']] == ['wall']
         assert [d['id'] for d in saved['docks']] == ['green-room']
-        assert saved['screens'][0]['dock_id'] == 'green-room'
+        assert saved['screens'][0]['dock_ids'] == ['green-room']
         assert saved['docks'][0]['position_inches'] == 3.9
         assert saved['docks'][0]['positions'] == 11
 
@@ -73,8 +73,8 @@ class TestTheSaveRuns:
         config.update_screens_and_docks([dict(WALL, dock_id='green-room')], [DOCK])
         screen = config.get_screens()[0]
         docks = config.get_docks()
-        assert screen['dock_id'] == 'green-room'
-        assert any(d['id'] == screen['dock_id'] for d in docks), \
+        assert screen['dock_ids'] == ['green-room']
+        assert any(d['id'] in screen['dock_ids'] for d in docks), \
             'the screen must still point at a dock that exists'
 
 
@@ -135,7 +135,7 @@ class TestTheKindsThisReplaced:
         assert saved['docks'][0]['kind'] == 'noncharging'
         # And the screen still finds its floor, which is the reason any of
         # this is stored.
-        assert saved['screens'][0]['dock_id'] == 'green-room'
+        assert saved['screens'][0]['dock_ids'] == ['green-room']
         assert saved['docks'][0]['position_inches'] == 3.9
 
     def test_the_two_sides_agree_on_the_kinds(self):
@@ -160,3 +160,66 @@ class TestTheKindsThisReplaced:
         js_legacy = dict(re.findall(r"(\w+): '([^']+)'", legacy.group(1)))
         assert js_legacy == config.LEGACY_DOCK_KINDS
 
+
+
+class TestSeveralDocksUnderOneScreen:
+    """A3: the venue has eleven SBC200s under the Green Room screen.
+
+    ⛔ A screen named exactly one dock, and the field test reported that as the
+    plain limit it is:
+
+        "I can only choose 1 dock under a screen right now; however, I have 11
+         under the Green Room Screen I am testing and using in production now."
+
+    Eleven units in a row is the ordinary case, not an exotic one.
+    """
+
+    def test_a_screen_can_name_several(self, stored):
+        second = dict(DOCK, id='side-table', name='Side table')
+        saved = config.update_screens_and_docks(
+            [dict(WALL, dock_ids=['green-room', 'side-table'])], [DOCK, second])
+
+        assert saved['screens'][0]['dock_ids'] == ['green-room', 'side-table']
+
+    def test_the_order_is_the_operators(self, stored):
+        # Left to right on the table. A count would not care; anything that
+        # later links a position to a slot would.
+        second = dict(DOCK, id='side-table')
+        saved = config.update_screens_and_docks(
+            [dict(WALL, dock_ids=['side-table', 'green-room'])], [DOCK, second])
+
+        assert saved['screens'][0]['dock_ids'] == ['side-table', 'green-room']
+
+    def test_one_dock_cannot_be_under_one_screen_twice(self, stored):
+        # ⚠️ Summing a repeat would hand the board more columns than the room
+        # has places.
+        saved = config.update_screens_and_docks(
+            [dict(WALL, dock_ids=['green-room', 'green-room'])], [DOCK])
+
+        assert saved['screens'][0]['dock_ids'] == ['green-room']
+
+    def test_the_single_dock_shapes_are_still_read(self, stored):
+        # ⛔ Read, never written. A board described under an earlier shape keeps
+        # its floor; dropping the link would silently widen its columns past
+        # the dock they were measured against.
+        saved = config.update_screens_and_docks([dict(WALL, dock_id='green-room')], [DOCK])
+        assert saved['screens'][0]['dock_ids'] == ['green-room']
+
+        saved = config.update_screens_and_docks([dict(WALL, furniture_id='green-room')], [DOCK])
+        assert saved['screens'][0]['dock_ids'] == ['green-room']
+
+    def test_furniture_id_is_the_old_name_not_a_second_dock(self, stored):
+        # ⛔ `furniture_id` was renamed to `dock_id`. A board carrying both
+        # would otherwise be handed two docks where it has one, and a column
+        # count twice what it should be.
+        saved = config.update_screens_and_docks(
+            [dict(WALL, dock_id='green-room', furniture_id='side-table')],
+            [DOCK, dict(DOCK, id='side-table')])
+
+        assert saved['screens'][0]['dock_ids'] == ['green-room']
+
+    def test_the_singular_key_is_not_written_back(self, stored):
+        # One record of the link, so the two cannot drift apart.
+        saved = config.update_screens_and_docks([dict(WALL, dock_id='green-room')], [DOCK])
+        assert 'dock_id' not in saved['screens'][0]
+        assert 'furniture_id' not in saved['screens'][0]

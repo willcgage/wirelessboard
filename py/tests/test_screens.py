@@ -34,15 +34,16 @@ def tree(monkeypatch):
 
 class TestWhatIsKept:
     def test_a_described_screen_survives_intact(self):
-        # ⭐ `dock_id` arrived with #203: a screen now names the dock or
-        # dock beneath it rather than restating its width. ⛔ `min_column_inches`
-        # is still here on purpose — a board configured before #203 keeps its
-        # floor until the screens are next saved, and dropping it on read would
-        # silently widen that board's columns past the dock they were measured
-        # against.
+        # ⭐ `dock_ids` arrived with #203 as a single `dock_id` and became a
+        # list for A3: a screen names the docks beneath it rather than
+        # restating their width, and the venue has eleven units under one
+        # screen. ⛔ `min_column_inches` is still here on purpose — a board
+        # configured before #203 keeps its floor until the screens are next
+        # saved, and dropping it on read would silently widen that board's
+        # columns past the dock they were measured against.
         assert config.normalize_screens([WALL]) == [{
             'id': 'wall', 'name': 'Auditorium wall',
-            'diagonal_inches': 55.0, 'dock_id': None,
+            'diagonal_inches': 55.0, 'dock_ids': [],
             'min_column_inches': 4.5,
         }]
 
