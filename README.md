@@ -84,6 +84,44 @@ SLX-D and SLX-D+ do not appear in network discovery yet — add them by IP addre
   the configuration.
 
 
+## Photographs of the team
+
+The board is a wall of faces, so the photographs do more work than anything else on it. Wirelessboard
+will never cut a face off — a picture that does not match the card is shown whole, with the space
+around it filled by a blurred copy of itself — but a photograph taken for the shape of the card needs
+no filling at all, and looks considerably better.
+
+**A channel card is always taller than it is wide, often much taller.** That single fact drives
+everything below.
+
+| | |
+|---|---|
+| **Shape** | Portrait, about **3:4 or 4:5**. 1200×1600 is ample. A phone held upright is already right. |
+| **Crop** | Head and shoulders, with the face filling roughly **a third of the frame's height**. |
+| **Framing** | A little headroom, person near the centre. A head against the top edge is the first thing a short card loses. |
+| **Subject** | One recognisable face, looking toward the camera. |
+| **Light** | Even and front-ish. |
+
+What to avoid, and why:
+
+* **Wide stage shots.** A 16:9 photograph in a card a fifth as wide as it is tall is the hardest case
+  there is. Nothing is cropped away, but the picture sits small inside a blurred band.
+* **Full-length shots.** The face ends up a few pixels across on the wall, which defeats the point.
+* **Profiles, backs of heads, and faces behind a microphone or a cymbal.** These read as nobody from
+  five feet away, and no amount of scaling fixes a face that is not in the frame.
+* **Backlit stage lighting.** A silhouette cannot be brightened back into a person.
+
+Photographs taken on a phone keep their rotation, so an upright shot stays upright.
+
+> **One arrangement matters as much as the photographs.** With twelve channels in a single row every
+> card is a narrow strip whatever the picture. **Grid** is the arrangement photographs are at their
+> best in.
+
+What a file must be called for a channel to find it is a separate matter — see
+[background images](docs/configuration.md#background-images), or the Backgrounds pane, which lists
+the exact filename each slot is looking for.
+
+
 ## Documentation
 * [Installation](docs/installation.md)
 * [Configuration](docs/configuration.md)
