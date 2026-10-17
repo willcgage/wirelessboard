@@ -10,6 +10,52 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.9] - 2026-10-17
+
+The first build shaped by looking at the venue board itself rather than at photographs of it, and it
+is a short one: three Planning Center failures that survived three releases turned out to be **one
+line**, and the dock editor no longer lets a number through that can break the wall.
+
+⛔⛔ **Every Planning Center failure since beta.6 was the same fault.** The worked example sent the
+plan picker's raw value — `__next__`, the sentinel meaning *next upcoming* — as a plan id. Planning
+Center said, with some justice, *"You must pass a plan id"*. And because an explicit plan id means
+the server looks up no service type, it then swept **every** service type over three endpoints each:
+83 requests, a message reading *"no service type set"* on a board that plainly has one, and
+eventually a **429**. The 400, the contradiction and the rate limiting were never three bugs.
+
+⚠️ **And opening the Planning Center panel could silently lose your service type.** The control was
+given its stored value before the list of service types had loaded, which does nothing at all — so
+it sat on *All service types* while the configuration said otherwise, and the next save threw the
+setting away. Measured on a real board: the config held `1788894`, the control held nothing.
+
+⭐ Both were found in minutes with remote access to the board, from the log viewer restored in
+beta.7 and the message that names the failing request. Three releases of inference; three reads.
+
+### Added
+- **Pick the charger rather than measure it.** A dock row now offers a model — *Shure SBC200 — 2
+  bays, 1 position, 3.9in*, and three more — and choosing one fills in the width, the number of
+  places, and whether it can be asked what is in it. ⚠️ Both figures stay editable: they are derived
+  from published outside widths rather than from a bay-layout drawing, so a tape measure wins.
+  ⭐ **Other** is a first-class choice; a shelf is a place a microphone lives and has no model number.
+  ⛔ Models whose dimensions could not be established are absent rather than guessed.
+
+### Changed
+- **A typed position width cannot exceed 12 inches** — and when it does, the message names the
+  likely slip rather than only refusing: *"A position cannot be 39in… Did you mean 3.9in?"* A venue
+  board was configured with exactly that typo. The column floor is the widest position underneath,
+  so every column had to be 39 inches on a 55-inch screen: one column, and a wall that paged through
+  twelve channels one at a time. The chain was working perfectly; nothing questioned the number it
+  was given. ⚠️ One bad row no longer takes the good ones with it, and the server refuses the value
+  too, because a number that breaks the board must not survive a save made from anywhere.
+
+### Fixed
+- **The worked example asks about a real plan** (the `__next__` fault above). "Next upcoming" now
+  sends no plan at all, so the server resolves it when it matters — which is also why a panel left
+  open for a week does not check last Sunday's plan.
+- **The service type survives opening the panel.** It is restored from the configuration after the
+  service list has loaded, rather than read back off an empty control. ⭐ Clearing it stays possible
+  on purpose: *All service types* is a real answer.
+
 
 ## [2.0.0-beta.8] - 2026-10-17
 
