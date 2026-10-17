@@ -196,3 +196,59 @@ test('isPrerelease reads the running version the way the channel default needs',
   assert.equal(updateCheck.isPrerelease('2.0.0'), false);
   assert.equal(updateCheck.isPrerelease('nonsense'), false, 'unparseable is not a beta');
 });
+
+const { compareVersions, isUpdateAvailable, newestRelease } = updateCheck;
+
+/**
+ * ⛔⛔ The betas reached double figures and the updater stopped working.
+ *
+ * `comparePrerelease` was a single `<` on the whole tail, so `'beta.9' <
+ * 'beta.10'` was **false** — "9" sorts after "1" — and the updater believed
+ * beta.9 was newer than beta.10. A board on beta.9 was told it was up to date
+ * and offered neither beta.10 nor beta.11.
+ *
+ * ⚠️ Latent from the very first beta. Every comparison before 9→10 happened to
+ * agree with string order, so nothing failed until the day it mattered.
+ */
+test('⛔⛔ beta.10 is newer than beta.9, not older', () => {
+  assert.strictEqual(compareVersions('2.0.0-beta.9', '2.0.0-beta.10'), -1);
+  assert.strictEqual(compareVersions('2.0.0-beta.10', '2.0.0-beta.9'), 1);
+  assert.strictEqual(isUpdateAvailable('2.0.0-beta.9', '2.0.0-beta.11'), true);
+  assert.strictEqual(isUpdateAvailable('2.0.0-beta.11', '2.0.0-beta.9'), false);
+});
+
+test('every crossing of a digit boundary, numerically', () => {
+  for (const [lower, higher] of [[2, 10], [9, 10], [9, 11], [10, 11], [19, 100]]) {
+    assert.strictEqual(
+      compareVersions(`2.0.0-beta.${lower}`, `2.0.0-beta.${higher}`), -1,
+      `beta.${lower} must be older than beta.${higher}`,
+    );
+  }
+});
+
+test('a release still beats its own prereleases', () => {
+  assert.strictEqual(compareVersions('2.0.0-beta.10', '2.0.0'), -1);
+  assert.strictEqual(compareVersions('2.0.0', '2.0.0-beta.10'), 1);
+  assert.strictEqual(compareVersions('1.16.2', '2.0.0-beta.10'), -1);
+});
+
+test('⚠️ the rest of semver §11, so the fix is the rule and not a patch', () => {
+  // A longer identifier list wins once the earlier ones match.
+  assert.strictEqual(compareVersions('2.0.0-beta.1', '2.0.0-beta.1.1'), -1);
+  // Numeric identifiers rank BELOW alphanumeric ones.
+  assert.strictEqual(compareVersions('2.0.0-1', '2.0.0-alpha'), -1);
+  // Alphanumeric identifiers compare in ASCII order.
+  assert.strictEqual(compareVersions('2.0.0-beta.9', '2.0.0-rc.1'), -1);
+  assert.strictEqual(compareVersions('2.0.0-alpha.1', '2.0.0-beta.1'), -1);
+  assert.strictEqual(compareVersions('2.0.0-beta.10', '2.0.0-beta.10'), 0);
+});
+
+test('⛔ GitHub lists releases in an order that is NOT newest-first', () => {
+  // Observed on the live repository: beta.10 has the newest created_at of all
+  // of them and is served FOURTH, below beta.7 — the order is descending by
+  // tag string. `newestRelease` must scan the whole list, never take the head.
+  const asGithubServesThem = [
+    'v2.0.0-beta.9', 'v2.0.0-beta.8', 'v2.0.0-beta.7', 'v2.0.0-beta.10', 'v2.0.0-beta.6',
+  ].map((tag) => ({ tag_name: tag, draft: false }));
+  assert.strictEqual(newestRelease(asGithubServesThem).tag_name, 'v2.0.0-beta.10');
+});

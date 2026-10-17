@@ -38,6 +38,53 @@ function parseVersion(value) {
   };
 }
 
+/**
+ * Compare two prerelease tails, per semver §11.
+ *
+ * ⛔⛔ **This was a plain string comparison, and it was wrong the moment the
+ * betas reached double figures.** `'beta.9' < 'beta.10'` is **false** — "9"
+ * sorts after "1" — so `compareVersions('2.0.0-beta.9', '2.0.0-beta.10')`
+ * returned 1 and the updater believed beta.9 was the newer build. A board on
+ * beta.9 was told it was up to date and never offered beta.10 or beta.11.
+ *
+ * ⚠️ Latent from the first beta and invisible until today, because every
+ * comparison before 9→10 happened to agree with string order.
+ *
+ * The rules, which a single `<` cannot express:
+ *   - identifiers are split on "." and compared one at a time;
+ *   - all-digit identifiers compare **numerically**, so 10 beats 9;
+ *   - a numeric identifier ranks **below** an alphanumeric one;
+ *   - when everything matches, the longer list wins (`beta.1.1` > `beta.1`).
+ */
+function comparePrerelease(a, b) {
+  if (a === b) return 0;
+  // ⭐ Absent beats present: 2.0.0 is newer than any 2.0.0-beta.N.
+  if (a === null) return 1;
+  if (b === null) return -1;
+
+  const left = a.split('.');
+  const right = b.split('.');
+  const length = Math.max(left.length, right.length);
+
+  for (let i = 0; i < length; i += 1) {
+    // A longer list wins only once every earlier identifier has matched.
+    if (left[i] === undefined) return -1;
+    if (right[i] === undefined) return 1;
+    if (left[i] === right[i]) continue;
+
+    const leftNumeric = /^\d+$/.test(left[i]);
+    const rightNumeric = /^\d+$/.test(right[i]);
+    if (leftNumeric && rightNumeric) {
+      return Number(left[i]) < Number(right[i]) ? -1 : 1;
+    }
+    if (leftNumeric !== rightNumeric) {
+      return leftNumeric ? -1 : 1;
+    }
+    return left[i] < right[i] ? -1 : 1;
+  }
+  return 0;
+}
+
 /** -1 if a < b, 0 if equal, 1 if a > b. Null for either side is 0. */
 function compareVersions(a, b) {
   const left = parseVersion(a);
@@ -48,10 +95,7 @@ function compareVersions(a, b) {
     if (left[part] !== right[part]) return left[part] < right[part] ? -1 : 1;
   }
 
-  if (left.prerelease === right.prerelease) return 0;
-  if (left.prerelease === null) return 1;
-  if (right.prerelease === null) return -1;
-  return left.prerelease < right.prerelease ? -1 : 1;
+  return comparePrerelease(left.prerelease, right.prerelease);
 }
 
 function isUpdateAvailable(currentVersion, latestVersion) {
