@@ -1481,6 +1481,12 @@ def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
 #
 # ⛔ Must stay in step with DOCK_KINDS in js/docks.mjs; the browser normalises
 # the same payload before it is sent and this is what gets stored.
+# ⛔⛔ The hard ceiling on a dock position, kept in step with
+# `MAX_POSITION_INCHES` in js/dock-models.mjs (a test fails if they drift).
+# The widest real dock position is the SBC450 at 4.42in; twelve inches is
+# three times that and far below the 39 a venue typed for 3.9.
+MAX_POSITION_INCHES = 12
+
 DOCK_KINDS = ('charging', 'networked', 'noncharging')
 
 # ⛔ Read, never written, and NOT interchangeable. A stored `dock` was labelled
@@ -1555,6 +1561,19 @@ def normalize_docks(payload: Any) -> List[Dict[str, Any]]:
         # it is dropped rather than stored half-made.
         if not width:
             continue
+        # ⛔⛔ And a width no dock could have is refused outright. A venue board
+        # was configured with one dock typed as `39` instead of `3.9`; the
+        # column floor is the widest position underneath, so every column had
+        # to be 39 inches on a 55-inch screen -- one column, and a wall paging
+        # through twelve channels one at a time. The editor warns, and this
+        # refuses, because a number that breaks the board must not survive a
+        # save made from anywhere.
+        if width > MAX_POSITION_INCHES:
+            logger.warning(
+                'Dock %s has a position width of %sin, which is wider than any dock. '
+                'Not stored -- a position is one place a microphone stands in.',
+                item_id, width)
+            continue
         seen.add(item_id)
         kind = entry.get('kind')
         out.append({
@@ -1563,6 +1582,10 @@ def normalize_docks(payload: Any) -> List[Dict[str, Any]]:
             'kind': dock_kind(kind),
             'position_inches': width,
             'positions': _positive(entry.get('positions')),
+            # ⭐ Which model filled the two numbers in, so reopening the editor
+            # shows what was chosen rather than only the figures. `other` is a
+            # real answer -- a shelf has no model number.
+            'model': str(entry.get('model') or 'other').strip().lower() or 'other',
         })
     return out
 

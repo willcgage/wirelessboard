@@ -30,6 +30,9 @@ import {
 } from './dock-editor.mjs';
 import { pairedSaveSummary } from './editor-rows.mjs';
 import {
+  dockModelChoices, dockModel, applyDockModel, OTHER_MODEL, MAX_POSITION_INCHES,
+} from './dock-models.mjs';
+import {
   DOCK_KINDS, DOCK_KIND_LABELS, dockChoices, dockKind, describeScreenDocks,
 } from './docks.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
@@ -5714,8 +5717,53 @@ function renderDockRows() {
     kindCol.appendChild(kind);
     wrap.appendChild(kindCol);
 
+    // ⭐ Pick the charger rather than measure it. The model fills in the
+    // width and the number of places, and sets whether it can be asked what
+    // is in it -- the one fact nobody can look at a dock and tell.
+    //
+    // ⛔ A venue typed `39` for `3.9` and every column on a 55-inch screen
+    // had to be 39 inches wide. A number nobody can sanity-check is a number
+    // that should not have to be typed.
+    //
+    // ⚠️ Both fields stay editable afterwards. The figures are derived from
+    // published outside widths, not from a bay-layout drawing, so the tape
+    // measure wins -- and `Other` is a first-class choice, because a shelf is
+    // a place a microphone lives and has no model number.
+    const modelCol = document.createElement('div');
+    modelCol.className = 'col-6 col-md-3';
+    const modelLab = document.createElement('label');
+    modelLab.className = 'form-label small mb-0';
+    modelLab.textContent = 'Model';
+    const model = document.createElement('select');
+    model.className = 'form-select form-select-sm';
+    dockModelChoices().forEach((choice) => {
+      const opt = document.createElement('option');
+      opt.value = choice.value;
+      opt.textContent = choice.label;
+      model.appendChild(opt);
+    });
+    model.value = dockModel(row.model) ? row.model : OTHER_MODEL;
+    model.addEventListener('change', () => {
+      // ⛔ A whole row at once, so the width, the places and the kind can
+      // never disagree with the model named beside them.
+      dockRows[index] = applyDockModel(dockRows[index], model.value);
+      renderDockRows();
+      renderScreenRows();
+      updateScreenStatus();
+    });
+    modelCol.appendChild(modelLab);
+    modelCol.appendChild(model);
+    wrap.appendChild(modelCol);
+
+    // ⛔ `max` as well as `min`. The browser's own validation is not the
+    // guard -- `dockProblem` and the server both refuse it -- but a spinner
+    // that will not climb past 12 says the rule before anybody breaks it.
     wrap.appendChild(field('Position width (in)', 'position_inches', {
-      type: 'number', min: '0', step: '0.1', placeholder: '3.9',
+      type: 'number',
+      min: '0.5',
+      max: String(MAX_POSITION_INCHES),
+      step: '0.1',
+      placeholder: '3.9',
     }, 'col-6 col-md-2'));
     wrap.appendChild(field('Positions', 'positions', {
       type: 'number', min: '1', step: '1', placeholder: 'optional',

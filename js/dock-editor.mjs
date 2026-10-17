@@ -16,6 +16,7 @@ import {
   saveCounts as rowsSaveCounts,
 } from './editor-rows.mjs';
 import { dockKind, screenNamesDock } from './docks.mjs';
+import { positionWidthProblem, dockModel, OTHER_MODEL } from './dock-models.mjs';
 
 /** A stable id from a name: lowercase, hyphenated, nothing surprising. */
 export function dockId(name) {
@@ -58,8 +59,15 @@ export function dockProblem(row) {
   // screen with nothing underneath it is a normal thing to describe; a dock
   // with no position width is not a dock, it is an empty entry that could be
   // chosen and would silently impose nothing.
-  if (!positive(row && row.position_inches)) {
-    return 'How wide is one position, left to right? The venue\'s SBC200 is 3.9in.';
+  //
+  // ⛔⛔ And it is now BOUNDED. A venue board was configured with one dock
+  // typed as `39` instead of `3.9`; the floor is the widest position
+  // underneath, so every column had to be 39 inches on a 55-inch screen. One
+  // column, and a wall that paged through twelve channels one at a time.
+  // Nothing in the product questioned it.
+  const width = positionWidthProblem(row && row.position_inches);
+  if (width) {
+    return width;
   }
   // Optional, but junk in it is not.
   if (row.positions !== '' && row.positions !== null && row.positions !== undefined
@@ -81,6 +89,10 @@ const SPEC = {
     kind: dockKind(row.kind),
     position_inches: positive(row.position_inches),
     positions: positive(row.positions),
+    // ⭐ Which model filled the two numbers in, so reopening the editor shows
+    // what was chosen rather than only the figures it produced. `other` is a
+    // real answer — a shelf has no model number — and is stored as one.
+    model: dockModel(row.model) ? String(row.model) : OTHER_MODEL,
   }),
 };
 
