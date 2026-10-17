@@ -10,6 +10,31 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.11] - 2026-10-17
+
+Cut to clear the way for the previous build's test rather than to add anything. beta.10 changed how
+every photograph is drawn, and then a strip was found sitting across the cards it was meant to be
+judged on — so this gets the chrome off the pictures first.
+
+### Fixed
+- **The service-position strip no longer overlaps the cards.** It is pinned to the foot of the screen
+  and drawn over the board, and the only thing making room for it was a fixed allowance the layout
+  never knew about — so the rows were sized for the whole screen and the last one ran on underneath
+  it. The strip is now measured and the board stops short of it, with the space reserved and the
+  space left over coming from the same number so they cannot disagree.
+  ⭐ The same fault was found and fixed for the paging bar three builds ago, in the same piece of
+  arithmetic; its neighbour was left alone. ⚠️ Measured rather than allowed for, because the strip's
+  text grows with the board — on a television it is taller than the allowance it used to be given,
+  so even correct arithmetic around a fixed figure would have come up short.
+
+### Changed
+- **The status bar says something when it is switched on.** It keeps a strip clear so that a board
+  paging through its channels never covers the last row, but it only ever drew anything *while*
+  paging — so on a board that shows everything at once it reserved space and left it empty, and Top
+  and Bottom were indistinguishable. It now says what the board is showing, which is the question it
+  exists to answer, in the one case where the answer is simply *everything*.
+  ⚠️ Quieter than the paging bar on purpose: a standing reassurance rather than an event.
+
 ## [2.0.0-beta.10] - 2026-10-17
 
 A short build with one job: put the photographs right on the wall. The previous build was judged on
