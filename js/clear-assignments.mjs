@@ -83,7 +83,7 @@ export function clearAllConfirmation(count) {
     return null;
   }
   const plural = count === 1 ? 'slot' : 'slots';
-  return `Take everybody off ${count} ${plural}? Slot IDs are kept, so next week’s plan still matches.`;
+  return `Take everybody off ${count} ${plural}? Roles are kept, so next week’s plan still matches.`;
 }
 
 /** The line shown after a clear, or when there was nothing to clear. */

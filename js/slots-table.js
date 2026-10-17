@@ -64,7 +64,10 @@ function stateCell(row) {
  * on input would replace the input being typed into, so the field would lose
  * focus on every keystroke — the same trap `renderScreenRows` documents.
  */
-const FIELD_LABELS = { person: 'Person', deviceId: 'Device id', position: 'Position' };
+// ⛔ One name per field, matching the table headings and every other pane
+// (#267). `deviceId` used to name the ROLE here, while the real `device_id`
+// sat in the Receiver-reports column beside it.
+const FIELD_LABELS = { person: 'Person', role: 'Role', position: 'Plan position' };
 
 function editCell(row, key, placeholder) {
   const cell = document.createElement('td');
@@ -161,10 +164,13 @@ function renderRows() {
     }
     tr.appendChild(reports);
 
-    tr.appendChild(editCell(row, 'deviceId', row.device || '—'));
+    // ⛔ The placeholder is NOT the device id any more. An empty Role cell
+    // showing `HH-1` taught everyone that a role is an equipment label,
+    // which is how the column came to be headed "Device id" at all.
+    tr.appendChild(editCell(row, 'role', 'no role set'));
     tr.appendChild(editCell(row, 'person', 'nobody assigned'));
     // ⭐ #238. Typed here, and overwritten by the next sync that names it.
-    tr.appendChild(editCell(row, 'position', 'no position'));
+    tr.appendChild(editCell(row, 'position', 'no plan position'));
     tr.appendChild(stateCell(row));
     tr.appendChild(clearCell(row));
 
@@ -221,7 +227,7 @@ function save() {
     //
     // ⭐ What was sent is now what is stored, so the rows become their own
     // baseline and a second save sends nothing.
-    rows = rows.map((row) => ({ ...row, wasDeviceId: row.deviceId, wasPerson: row.person }));
+    rows = rows.map((row) => ({ ...row, wasRole: row.role, wasPerson: row.person }));
     const box = document.getElementById('slots-paste');
     if (box) {
       box.value = '';

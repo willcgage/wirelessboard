@@ -192,6 +192,35 @@ function updateDeviceName(slotSelector, data) {
     // "HH-1 Dave" carries the person's name, who is already named on the card.
     el.textContent = deviceHeading(data && data.device_id, data && data.slot);
   }
+  updateRole(slotSelector, data);
+}
+
+/**
+ * The slot's **role**, under the device heading (#267).
+ *
+ * ⛔ This is the slot's own role (`extended_id`) -- what it is *for*, week to
+ * week -- and NOT the plan position, which is what Planning Center scheduled
+ * somebody under this week. #206 removed an invented role line from the card,
+ * and a guard in `slots-table.test.mjs` keeps the plan field off it; this is
+ * the other one, added on the maintainer's decision: "placing under the
+ * Device's Name at the top would be best."
+ *
+ * ⚠️ That guard is a plain substring check over this whole file, comments
+ * included, so the plan field's name is deliberately not spelled out here.
+ *
+ * ⚠️ `data.id` falls back to the device's own prefix when no role is set, so a
+ * slot with no role would print `BP-10` twice, once as the heading and once
+ * underneath. Measured on the venue board: slots 10 and 12 do exactly that.
+ * Drawn only when it says something the heading does not.
+ */
+function updateRole(slotSelector, data) {
+  const el = slotSelector.querySelector('p.card-role');
+  if (!el) {
+    return;
+  }
+  const role = ((data && data.id) || '').trim();
+  const device = ((data && data.device_id) || '').trim();
+  el.textContent = (role && role !== device) ? role : '';
 }
 
 function updateStatus(slotSelector, data) {
@@ -315,6 +344,11 @@ function updateSelector(slotSelector, data) {
   updateCheck(data, 'name_raw', () => {
     updateDeviceName(slotSelector, data);
   });
+  // ⚠️ Its own check. The role is `data.id`, which an operator can change
+  // without the transmitter's own label moving at all.
+  updateCheck(data, 'id', () => {
+    updateRole(slotSelector, data);
+  });
   updateCheck(data, 'status', () => {
     updateStatus(slotSelector, data);
   });
@@ -356,6 +390,9 @@ export function updateViewOnly(slotSelector, data) {
   }
   if ('name_raw' in data) {
     updateDeviceName(slotSelector, data);
+  }
+  if ('id' in data) {
+    updateRole(slotSelector, data);
   }
   if ('tx_offset' in data) {
     updateTXOffset(slotSelector, data);

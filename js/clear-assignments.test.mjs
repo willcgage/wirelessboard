@@ -94,10 +94,12 @@ test('the confirmation names the count', () => {
   assert.match(clearAllConfirmation(12), /12 slots/);
 });
 
-test('the confirmation says the slot IDs survive', () => {
+test('the confirmation says the roles survive', () => {
   // The whole reason an operator would hesitate. Saying it is what makes the
   // button usable rather than frightening.
-  assert.match(clearAllConfirmation(3), /IDs are kept/);
+  // ⛔ "Roles" since #267 — the field was called Slot ID here, Device id in
+  // the Slots table and Position in its own placeholder.
+  assert.match(clearAllConfirmation(3), /Roles are kept/);
 });
 
 test('one slot reads as one slot', () => {
