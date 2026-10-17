@@ -1,7 +1,46 @@
 import { micboard } from './app.js';
 import { findBackgroundFile } from './background-key.mjs';
+import { photoScale, blurRadius } from './photo-fit.mjs';
 
 const MEDIA_BASE_PATH = 'bg/';
+
+/**
+ * Size the photograph to its card (#172).
+ *
+ * ⚠️ Reads the box from the container rather than the card, because the card
+ * also holds the text band and the photograph does not get that space.
+ */
+function fitPhoto(container) {
+  const img = container.querySelector('.slot-media__image');
+  if (!img || !img.naturalWidth) {
+    return;
+  }
+  const boxW = container.clientWidth;
+  const boxH = container.clientHeight;
+  if (!boxW || !boxH) {
+    return;
+  }
+  container.style.setProperty(
+    '--photo-scale',
+    String(photoScale(img.naturalWidth, img.naturalHeight, boxW, boxH)),
+  );
+  container.style.setProperty('--photo-blur', `${blurRadius(boxW, boxH).toFixed(1)}px`);
+}
+
+/**
+ * ⭐ One observer for every card, not one each. The board relays out constantly
+ * — arrangement, columns, card shape, paging — and the scale depends on the
+ * card's shape, so it has to be recomputed rather than set once on load.
+ *
+ * ⚠️ Safe against a layout loop: the scale is applied as a `transform`, which
+ * does not affect layout, so nothing this writes can resize the box that
+ * triggered it.
+ */
+const photoResize = typeof ResizeObserver === 'function'
+  ? new ResizeObserver((entries) => {
+    entries.forEach((entry) => fitPhoto(entry.target));
+  })
+  : null;
 
 function ensureMediaContainer(slotEl) {
   let container = slotEl.querySelector('.slot-media');
@@ -18,6 +57,11 @@ function clearMedia(container) {
   container.classList.remove('is-active', 'is-image', 'is-video');
   container.dataset.mediaType = '';
   container.dataset.mediaName = '';
+  if (photoResize) {
+    photoResize.unobserve(container);
+  }
+  container.style.removeProperty('--photo-scale');
+  container.style.removeProperty('--photo-blur');
   while (container.firstChild) {
     container.removeChild(container.firstChild);
   }
@@ -32,17 +76,39 @@ function mountImage(container, filename) {
 
   clearMedia(container);
 
+  const src = MEDIA_BASE_PATH + filename;
+
+  // ⭐ The filler first, so it paints behind. Same `src`, so the browser serves
+  // it from cache and the card costs one request, not two.
+  const backdrop = document.createElement('img');
+  backdrop.src = src;
+  backdrop.alt = '';
+  backdrop.decoding = 'async';
+  backdrop.loading = 'lazy';
+  backdrop.className = 'slot-media__backdrop';
+  container.appendChild(backdrop);
+
   const img = document.createElement('img');
-  img.src = MEDIA_BASE_PATH + filename;
+  img.src = src;
   img.alt = '';
   img.decoding = 'async';
   img.loading = 'lazy';
   img.className = 'slot-media__image';
-
+  // ⚠️ Both paths are needed: `load` for a fresh request, and the immediate
+  // call for one served from cache, where `complete` is already true and the
+  // event has fired before this listener could be attached.
+  img.addEventListener('load', () => fitPhoto(container));
   container.appendChild(img);
+
   container.dataset.mediaType = 'image';
   container.dataset.mediaName = filename;
   container.classList.add('is-active', 'is-image');
+  if (img.complete) {
+    fitPhoto(container);
+  }
+  if (photoResize) {
+    photoResize.observe(container);
+  }
 }
 
 function mountVideo(container, filename) {

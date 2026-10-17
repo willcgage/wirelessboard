@@ -843,6 +843,9 @@ p.device-name {
     align-items: center;
     pointer-events: none;
     z-index: 0;
+    // ⛔ Required, not tidiness. The photograph is scaled past the card on
+    // purpose (#172), and without this it draws over its neighbours.
+    overflow: hidden;
   }
 
   .mic_name .slot-media.is-active {
@@ -862,12 +865,47 @@ p.device-name {
     opacity: 0.72;
   }
 
-  .mic_name .slot-media img,
+  // ⛔ Video still fills and crops. A blurred filler needs a second copy of the
+  // source decoding in parallel on every card, which is a real cost on a
+  // television and buys nothing at the venue, where there are no videos at all.
   .mic_name .slot-media video {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+  }
+
+  // The blurred filler behind the photograph (#172). ProPresenter's treatment:
+  // rather than a black bar beside a picture that does not match the card, the
+  // gap is the same picture, enlarged, blurred and dimmed.
+  //
+  // ⚠️ Scaled up before blurring. A blur samples past the element's edge, so at
+  // exactly 100% the card's own ground bleeds into the border as a pale halo.
+  .mic_name .slot-media__backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scale(1.12);
+    filter: blur(var(--photo-blur, 16px)) brightness(0.45);
+  }
+
+  // The photograph itself: contained, so nothing is ever cut off, then scaled
+  // back up by `photo-fit.mjs` as far as the crop cap allows.
+  //
+  // ⚠️ The fallback of 1 matters. If the scale is ever missing or invalid the
+  // card shows the whole picture small, which is visibly odd but honest —
+  // rather than falling back to the hard crop this exists to remove.
+  .mic_name .slot-media__image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transform: scale(var(--photo-scale, 1));
   }
 
   .mic_name .name,
