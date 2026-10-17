@@ -131,3 +131,50 @@ test('the whole layout carries it through', () => {
   assert.equal(with_.columns, 11, 'eleven places means eleven columns');
   assert.ok(with_.capacity >= 11, 'and a screenful holds at least that many');
 });
+
+/**
+ * ⛔⛔ And the gear's note, which is where an operator LOOKS to check.
+ *
+ * `describeScreenChoice` takes the same `docks = []` default, and the view
+ * panel called it without them too — so the one line that says whether the
+ * chain is working reported "nothing underneath it" about a screen with a
+ * dock described. The most misleading thing it could possibly have said, on
+ * the surface built to confirm the thing that has never worked.
+ */
+test('⛔⛔ the gear note names the dock rather than denying it', async () => {
+  const { describeScreenChoice } = await import('./display-geometry.mjs');
+  const args = {
+    screens: [{
+      id: 'green', name: 'Green Room Screen', diagonal_inches: 55, dock_ids: ['run'],
+    }],
+    screenId: 'green',
+    widthPx: 1920,
+    heightPx: 1080,
+  };
+
+  assert.match(
+    describeScreenChoice(args),
+    /nothing underneath/,
+    'without the docks it denies the dock — this is what the panel used to show',
+  );
+
+  const told = describeScreenChoice({ ...args, docks: DOCKS });
+  assert.match(told, /Green Room run/, 'with them it names the dock');
+  assert.doesNotMatch(told, /nothing underneath/);
+});
+
+test('⛔ the view panel passes them', async () => {
+  const panel = fs.readFileSync(path.join(import.meta.dirname, 'view-panel.js'), 'utf8');
+  const app = fs.readFileSync(path.join(import.meta.dirname, 'app.js'), 'utf8');
+
+  const call = panel.slice(
+    panel.indexOf('describeScreenChoice({'),
+    panel.indexOf('});', panel.indexOf('describeScreenChoice({')),
+  );
+  assert.match(call, /docks: board\.getDocks\(\)/, 'the note is given the docks');
+  assert.match(
+    app,
+    /getDocks: \(\) => \(micboard\.config && micboard\.config\.docks\)/,
+    'and the board can supply them',
+  );
+});

@@ -48,6 +48,7 @@ function allControls() {
  */
 let board = {
   getScreens: () => [],
+  getDocks: () => [],
   getScreenId: () => '',
   setScreenId: () => {},
   setViewOption: () => null,
@@ -201,8 +202,14 @@ function renderDisplayRow() {
   section.appendChild(row);
   section.appendChild(renderGroupRow());
   section.appendChild(renderScreenRow());
+  // ⛔⛔ The docks, which were missing here too. This is the line an operator
+  // reads to confirm the chain works -- and without them it said "nothing
+  // underneath it" about a screen with a dock described, which is the most
+  // misleading thing it could possibly say. Same omission as `tv-layout.js`,
+  // in the one place somebody would look to check.
   const note = describeScreenChoice({
     screens: board.getScreens(),
+    docks: board.getDocks(),
     screenId: board.getScreenId(),
     widthPx: (window.screen && window.screen.width) || window.innerWidth,
     heightPx: (window.screen && window.screen.height) || window.innerHeight,
