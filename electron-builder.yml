@@ -65,6 +65,11 @@ mac:
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.inherit.plist
 win:
+  # Without this the installer and the executable ship electron-builder's own
+  # default icon, which is why the Windows build has never carried the project's
+  # mark at all (#176). The .ico holds 16/24/32/48/64/128/256, each cut from the
+  # vector rather than resized from one another — scripts/make-icons.py.
+  icon: resources/wirelessboard.ico
   target:
     - nsis
   artifactName: wirelessboard-server-${version}-win.${ext}
