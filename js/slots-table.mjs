@@ -176,7 +176,11 @@ export function slotRows({ config, transmitters } = {}) {
     const offline = type === 'offline';
     const device = deviceLabel(live);
     const person = text(entry.extended_name);
-    const deviceId = text(entry.extended_id);
+    // ⛔ The ROLE: what this slot is for, week to week. It was called
+    // `deviceId` here and "Device id" in the table, which is a different
+    // field entirely -- `device_id` is the equipment, and it sits in the
+    // Receiver-reports column beside it (#267).
+    const role = text(entry.extended_id);
     // ⭐ #238: the position a plan scheduled somebody under. Planning Center
     // reads it to decide which slot somebody belongs to, and now stores it.
     const position = text(entry.extended_position);
@@ -190,13 +194,13 @@ export function slotRows({ config, transmitters } = {}) {
         channel: entry.channel || live.channel,
         device,
       }),
-      deviceId,
+      role,
       person,
       position,
       status: text(live.status) || 'UNASSIGNED',
       // ⛔ What was loaded, kept so a save can send only what changed. See
       // `slotPayload`.
-      wasDeviceId: deviceId,
+      wasRole: role,
       wasPerson: person,
       wasPosition: position,
     });
@@ -261,8 +265,8 @@ export function slotPayload(rows) {
     }
     const update = { slot: row.slot };
     let changed = false;
-    if (text(row.deviceId) !== text(row.wasDeviceId)) {
-      update.extended_id = text(row.deviceId);
+    if (text(row.role) !== text(row.wasRole)) {
+      update.extended_id = text(row.role);
       changed = true;
     }
     if (text(row.person) !== text(row.wasPerson)) {

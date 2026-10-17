@@ -62,7 +62,8 @@ SLX-D and SLX-D+ do not appear in network discovery yet — add them by IP addre
 ## Key Features
 
 * **A wall of faces.** Each channel is a card built around the photograph of whoever is holding that
-  microphone, with their name, position and time remaining in a band along the bottom. The photo is
+  microphone — the radio and what the slot is for at the top, their name and time remaining in a band
+  along the bottom. The photo is
   never printed over or dimmed. Stills (`.jpg`, `.png`, `.webp`) and muted looping video (`.mp4`,
   `.mov`) both work, matched to the channel's name or chosen per person — see the
   [configuration guide](docs/configuration.md#background-images).

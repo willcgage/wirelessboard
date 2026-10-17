@@ -26,7 +26,7 @@ const CONFIG = {
       slot: 1,
       type: 'ulxd4q',
       channel: 1,
-      extended_id: 'HH-1',
+      extended_id: 'Welcome',
       extended_name: 'Christian Nuckels',
       extended_position: 'Vocal 1',
     },
@@ -54,7 +54,9 @@ test('a row per configured slot, in slot order', () => {
   const rows = slotRows({ config: CONFIG, transmitters: TX });
   assert.deepEqual(rows.map((r) => r.slot), [1, 2, 3, 4]);
   assert.equal(rows[0].person, 'Christian Nuckels');
-  assert.equal(rows[0].deviceId, 'HH-1');
+  // ⛔ A role, not an equipment id. The fixture used to say `HH-1` here,
+  // which is what the mislabelled column taught everyone to expect (#267).
+  assert.equal(rows[0].role, 'Welcome');
   assert.equal(rows[2].person, '');
 });
 
@@ -181,9 +183,9 @@ test('⛔⛔ a save sends only what changed', () => {
 
 test('⛔ only the edited field is sent, not both', () => {
   const rows = slotRows({ config: CONFIG, transmitters: TX });
-  rows[0].deviceId = 'HH-1a';
+  rows[0].role = 'Welcome Host';
   const payload = slotPayload(rows);
-  assert.deepEqual(payload, [{ slot: 1, extended_id: 'HH-1a' }]);
+  assert.deepEqual(payload, [{ slot: 1, extended_id: 'Welcome Host' }]);
   assert.ok(!('extended_name' in payload[0]));
 });
 
@@ -320,7 +322,7 @@ test('⛔ a pasted list of names never touches the positions', () => {
   ]);
 });
 
-test('⛔ the Position column is in the markup, between Person and State', () => {
+test('⛔ the headings are the agreed vocabulary, in the agreed order', () => {
   // The order the mockup settled: what the receiver reports, the override, the
   // person, their position, then the state.
   const html = readFileSync(join(HERE, '..', 'demo.html'), 'utf8');
@@ -328,7 +330,11 @@ test('⛔ the Position column is in the markup, between Person and State', () =>
   // ⚠️ `<th[ >]`, not `<th`: `<thead>` matches the loose form and contributes an
   // empty first column. This project has hit that one twice.
   const heads = Array.from(table.matchAll(/<th[ >][^>]*>([^<]*)</g)).map((m) => m[1].trim());
-  assert.deepEqual(heads, ['Slot', 'Receiver reports', 'Device id', 'Person', 'Position', 'State', 'Clear']);
+  // ⛔⛔ `Role`, not `Device id` (#267). That heading sat over `extended_id`
+  // while the real `device_id` was in Receiver reports beside it, and
+  // `Plan position` is the Planning Center field it used to collide with.
+  assert.deepEqual(heads,
+    ['Slot', 'Receiver reports', 'Role', 'Person', 'Plan position', 'State', 'Clear']);
 });
 
 test('⛔⛔ the position is NOT drawn on the card', () => {
@@ -346,4 +352,30 @@ test('⛔⛔ the position is NOT drawn on the card', () => {
 test('⛔ and that guard can fail', () => {
   const planted = "slot.querySelector('.position').innerHTML = data.extended_position;";
   assert.ok(planted.includes('extended_position'), 'the check would have missed it');
+});
+
+test('⭐ the ROLE is drawn on the card, under the device heading (#267)', () => {
+  // The decision #206's guard was keeping open: "placing under the Device's
+  // Name at the top would be best." It is the slot's own role, not the plan
+  // field the guard above still excludes.
+  const view = readFileSync(join(HERE, 'channelview.js'), 'utf8');
+  const markup = readFileSync(join(HERE, '..', 'demo.html'), 'utf8');
+  assert.ok(markup.includes('class="card-role"'), 'the card has a role element');
+  assert.ok(view.includes('p.card-role'), 'the view writes into it');
+  assert.ok(
+    markup.indexOf('class="device-name"') < markup.indexOf('class="card-role"'),
+    'the role sits under the device heading, not above it',
+  );
+});
+
+test('⛔ a slot with no role shows nothing, rather than its device id twice', () => {
+  // `data.id` falls back to the device's own prefix when no role is set.
+  // Measured on the venue board: slots 10 and 12 report id `BP-10` / `BP-12`,
+  // identical to their device_id, and would otherwise print it twice.
+  const view = readFileSync(join(HERE, 'channelview.js'), 'utf8');
+  assert.match(
+    view,
+    /role\s*&&\s*role\s*!==\s*device/,
+    'the role is only drawn when it says something the heading does not',
+  );
 });

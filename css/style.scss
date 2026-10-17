@@ -909,6 +909,35 @@ p.device-name {
   }
 
   .mic_name .name,
+  /* ⭐ The slot's role, under the device heading (#267): what this slot is
+     FOR -- "Welcome", "Vocal 1" -- as distinct from which handheld is in it.
+
+     ⚠️ Quieter and smaller than the heading above it. The heading answers
+     "which radio is this"; the role answers "what is it for", and on a wall the
+     first is what somebody walks to the rack with.
+
+     ⛔ Empty when it would merely repeat the heading -- `channelview.js` blanks
+     it rather than hiding it here, so the card's rows do not move. */
+  p.card-role {
+    font-size: clamp(0.62rem, calc(var(--tvmode-type) * 0.042), calc(2.2rem * var(--tvmode-type-scale)));
+    color: var(--color-white);
+    opacity: 0.72;
+    margin: 0 0.75rem calc(0.15rem * var(--tvmode-scale-clamped));
+    padding: 0 0.35rem;
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: 0.35rem;
+    display: inline-block;
+    max-width: 100%;
+    text-align: center;
+    line-height: 1.2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  p.card-role:empty {
+    display: none;
+  }
+
   p.device-name {
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65), 0 0 12px rgba(0, 0, 0, 0.55);
   }

@@ -213,10 +213,10 @@
 
                 <div class="row">
                   <div class="col d-grid gap-2">
-                    <button type="button" class="admin-btn admin-btn--danger" id="clear-id">Clear IDs</button>
+                    <button type="button" class="admin-btn admin-btn--danger" id="clear-id">Clear Roles</button>
                   </div>
                   <div class="col d-grid gap-2">
-                    <button type="button" class="admin-btn admin-btn--danger" id="clear-name">Clear Extended Names</button>
+                    <button type="button" class="admin-btn admin-btn--danger" id="clear-name">Clear People</button>
                   </div>
                 </div>
                 <div class="row mt-2">
@@ -372,9 +372,9 @@
               <tr>
                 <th scope="col" class="slots-col-slot">Slot</th>
                 <th scope="col">Receiver reports</th>
-                <th scope="col">Device id</th>
+                <th scope="col">Role</th>
                 <th scope="col">Person</th>
-                <th scope="col" class="slots-col-position">Position</th>
+                <th scope="col" class="slots-col-position">Plan position</th>
                 <th scope="col" class="slots-col-state">State</th>
                 <th scope="col" class="slots-col-clear">Clear</th>
               </tr>
@@ -1025,7 +1025,7 @@
           <div class="table-responsive" id="pco-assignments-table" style="display:none;">
             <table class="table table-sm table-striped">
               <thead>
-                <tr><th>Position</th><th>Person</th><th>Team</th><th>Slots</th><th>Matched by</th></tr>
+                <tr><th>Plan position</th><th>Person</th><th>Team</th><th>Slots</th><th>Matched by</th></tr>
               </thead>
               <tbody></tbody>
             </table>
@@ -1053,7 +1053,7 @@
           <div class="table-responsive" id="pco-people-table" style="display:none;">
             <table class="table table-sm table-striped">
               <thead>
-                <tr><th>Name</th><th>Team</th><th>Position</th><th>Note</th></tr>
+                <tr><th>Name</th><th>Team</th><th>Plan position</th><th>Note</th></tr>
               </thead>
               <tbody></tbody>
             </table>
@@ -1071,7 +1071,7 @@
           <div class="table-responsive" id="pco-assign-table" style="display:none;">
             <table class="table table-sm table-striped">
               <thead>
-                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Slot ID</th><th>Extended Name</th><th>Select Person</th></tr>
+                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Role</th><th>Person</th><th>Select Person</th></tr>
               </thead>
               <tbody></tbody>
             </table>
@@ -1106,7 +1106,7 @@
           </div>
           <div class="form-text">
             For moving to the next plan. Takes everybody off every slot on the board &mdash;
-            it says how many and asks first. Slot IDs are kept, so next week&rsquo;s plan still
+            it says how many and asks first. Roles are kept, so next week&rsquo;s plan still
             matches. To clear one slot, pick &ldquo;clear this slot&rdquo; in its dropdown and
             apply.
           </div>
@@ -1181,7 +1181,7 @@
              line inside the card: it is the same string on every row of the
              board, and aligned across the top it reads once instead of twice a
              card. #130. -->
-        <div class="chan-label"><p class="device-name"></p></div>
+        <div class="chan-label"><p class="device-name"></p><p class="card-role"></p></div>
         <div class="mic_name">
           <div class="slot-media" aria-hidden="true"></div>
           <!-- ⛔ Status carries a glyph and a word, never colour alone: red and
@@ -1304,14 +1304,14 @@
         <div class="col col-md-3 col-12 cfg-row-form">
           <label class="form-label text-light small">Device Name</label>
           <input type="text" class="form-control cfg-device-name" placeholder="Detected device name" readonly tabindex="-1">
-          <label class="form-label text-light small mt-2">Slot ID</label>
+          <label class="form-label text-light small mt-2">Role</label>
           <!-- extended_id: the position this slot answers to, e.g. "Vocal 1".
                PCO matches against it, and the assignment table writes it when
                "Remember each person's position" is used. It had no field here,
                which is why Clear IDs was wired to the IP address instead. -->
-          <input type="text" class="form-control cfg-id" placeholder="Position, e.g. Vocal 1">
-          <label class="form-label text-light small mt-2">Extended Name</label>
-          <input type="text" class="form-control cfg-name" placeholder="Extended name (used by PCO)">
+          <input type="text" class="form-control cfg-id" placeholder="Role, e.g. Vocal 1">
+          <label class="form-label text-light small mt-2">Person</label>
+          <input type="text" class="form-control cfg-name" placeholder="Who is on this slot">
         </div>
 
         <div class="col col-md-1 col-12 del-btn cfg-row-form d-grid gap-2">
