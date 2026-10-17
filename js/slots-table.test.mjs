@@ -30,7 +30,9 @@ const CONFIG = {
       extended_name: 'Christian Nuckels',
       extended_position: 'Vocal 1',
     },
-    { slot: 2, type: 'ulxd4q', channel: 2, extended_name: 'Brandon Lee' },
+    {
+      slot: 2, type: 'ulxd4q', channel: 2, extended_name: 'Brandon Lee',
+    },
     { slot: 3, type: 'ulxd4q', channel: 3 },
     { slot: 4, type: 'offline' },
   ],
@@ -333,8 +335,10 @@ test('⛔ the headings are the agreed vocabulary, in the agreed order', () => {
   // ⛔⛔ `Role`, not `Device id` (#267). That heading sat over `extended_id`
   // while the real `device_id` was in Receiver reports beside it, and
   // `Plan position` is the Planning Center field it used to collide with.
-  assert.deepEqual(heads,
-    ['Slot', 'Receiver reports', 'Role', 'Person', 'Plan position', 'State', 'Clear']);
+  assert.deepEqual(
+    heads,
+    ['Slot', 'Receiver reports', 'Role', 'Person', 'Plan position', 'State', 'Clear'],
+  );
 });
 
 test('⛔⛔ the position is NOT drawn on the card', () => {

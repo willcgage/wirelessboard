@@ -16,7 +16,7 @@ import {
 const SHOT = [1920, 1080];
 const ONE_ROW = [160, 861];
 const SIX_COL = [320, 341];
-const CASIE = [1305, 1637];     // the one portrait shot in the set
+const CASIE = [1305, 1637]; // the one portrait shot in the set
 
 test('⛔ the fault, stated as a number: cover shows 10% of the picture', () => {
   const seen = visibleFraction(...SHOT, ...ONE_ROW, 1);
@@ -29,8 +29,10 @@ test('⭐⭐ the cap holds the SAME promise on both cards', () => {
   // of the way to cover gave 21% on one and 71% on the other.
   const wide = visibleFraction(...SHOT, ...ONE_ROW);
   const square = visibleFraction(...SHOT, ...SIX_COL);
-  assert.ok(Math.abs(wide - square) < 0.001,
-    `one row ${(wide * 100).toFixed(1)}% vs six col ${(square * 100).toFixed(1)}%`);
+  assert.ok(
+    Math.abs(wide - square) < 0.001,
+    `one row ${(wide * 100).toFixed(1)}% vs six col ${(square * 100).toFixed(1)}%`,
+  );
   assert.ok(Math.abs(wide - (1 - MAX_CROP)) < 0.001, 'and it is exactly 1 - MAX_CROP');
 });
 
@@ -64,8 +66,10 @@ test('⛔⛔ nothing is EVER cropped harder than it is today', () => {
     for (const box of [ONE_ROW, SIX_COL, [480, 167], [300, 300]]) {
       const s = photoScale(...img, ...box);
       assert.ok(s >= 1, 'never smaller than contain');
-      assert.ok(s <= aspectMismatch(...img, ...box) + 1e-9,
-        `${img} in ${box}: ${s} is past cover`);
+      assert.ok(
+        s <= aspectMismatch(...img, ...box) + 1e-9,
+        `${img} in ${box}: ${s} is past cover`,
+      );
     }
   }
 });
@@ -79,14 +83,19 @@ test('⚠️ nonsense in, no scaling out — never NaN into a transform', () => 
   }
   assert.equal(photoScale(...SHOT, 0, 0), 1);
   assert.equal(photoScale(...SHOT, ...SIX_COL, -5), 1, 'a negative cap crops nothing');
-  assert.equal(photoScale(...SHOT, ...SIX_COL, 99),
-    aspectMismatch(...SHOT, ...SIX_COL), 'a cap past 1 is still only cover');
+  assert.equal(
+    photoScale(...SHOT, ...SIX_COL, 99),
+    aspectMismatch(...SHOT, ...SIX_COL),
+    'a cap past 1 is still only cover',
+  );
   assert.ok(Number.isFinite(photoScale(...SHOT, ...SIX_COL, NaN)));
 });
 
 test('the blur follows the card size and stays in bounds', () => {
-  assert.ok(blurRadius(...SIX_COL) > blurRadius(...ONE_ROW),
-    'a wider card gets a softer wash');
+  assert.ok(
+    blurRadius(...SIX_COL) > blurRadius(...ONE_ROW),
+    'a wider card gets a softer wash',
+  );
   for (const box of [[1, 1], [10000, 10000], [0, 0], [NaN, NaN]]) {
     const r = blurRadius(...box);
     assert.ok(Number.isFinite(r) && r >= 6 && r <= 48, `blur ${r} out of bounds`);
