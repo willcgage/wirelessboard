@@ -10,6 +10,28 @@
 ### Fixed
 - _Nothing yet._
 
+
+## [2.0.0-beta.8] - 2026-10-17
+
+One line, and it is the line the beta.7 test sheet opens on.
+
+⛔⛔ beta.7 made the dock reach the **board**. It did not make it reach the **gear** — the note
+under the screen picker took the same `docks = []` default and was called without them, so it said
+*"Green Room Screen: 55in, nothing underneath it"* about a screen with a dock described. That note
+is the one place an operator looks to confirm the chain is working, and it denied it.
+
+⭐ It now reads *"a 3.9in position (Green Room run) is 156px here, so the board will not go
+narrower"* — naming the dock, which is the point.
+
+⚠️ Two call sites, two defaults, one missing argument each. `docks = []` reads as "no docks
+described", which is a real state, so neither looked wrong. Both are guarded now.
+
+### Fixed
+- **The gear names the dock instead of denying it.** Found while writing the beta.7 field test:
+  the first instruction was *describe a screen, describe the dock under it, check the gear says
+  so* — and on beta.7 the gear would have said no. The test would have failed for the wrong
+  reason, on the one chain that has never worked.
+
 ## [2.0.0-beta.7] - 2026-10-17
 
 The first build answering a venue test, and the first on which **the dock can reach the board at
