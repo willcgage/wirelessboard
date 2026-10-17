@@ -9,7 +9,7 @@
 import { micboard } from './app.js';
 import { renderDisplayList } from './channelview.js';
 import {
-  pagesForBoard, nextPage, rotationLabel, DEFAULT_DWELL_SECONDS,
+  pagesForBoard, nextPage, rotationLabel, restingText, DEFAULT_DWELL_SECONDS,
 } from './rotation.mjs';
 
 const BAR_ID = 'rotation-bar';
@@ -124,8 +124,13 @@ function renderBar(pages, {
 } = {}) {
   let bar = document.getElementById(BAR_ID);
   if (!pages.length) {
-    if (bar && bar.parentElement) bar.parentElement.removeChild(bar);
+    // ⚠️ Same rule as the `!why` path: a switched-on strip says the board is
+    // showing everything rather than going blank.
+    renderResting(total);
     return;
+  }
+  if (bar) {
+    bar.classList.remove('is-resting');
   }
   if (!bar) {
     bar = document.createElement('div');
@@ -176,6 +181,42 @@ function renderBar(pages, {
 function stopRendering() {
   const bar = document.getElementById(BAR_ID);
   if (bar && bar.parentElement) bar.parentElement.removeChild(bar);
+}
+
+/** Whether the operator has asked for the strip at all. */
+function statusBarOn() {
+  return !!micboard.statusBar && micboard.statusBar !== 'off';
+}
+
+/**
+ * The bar at rest: the board is not paging, and says so (#188).
+ *
+ * ⛔ Only when the strip is switched on. With it `off` the height is not
+ * reserved either, so drawing here would put the bar back over the last row —
+ * the exact fault the reserved strip exists to prevent.
+ */
+function renderResting(total) {
+  if (!statusBarOn()) {
+    stopRendering();
+    return;
+  }
+  let bar = document.getElementById(BAR_ID);
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = BAR_ID;
+    bar.className = 'rotation-bar';
+    bar.setAttribute('role', 'status');
+    document.body.appendChild(bar);
+  }
+  bar.textContent = '';
+  const el = document.createElement('span');
+  el.className = 'rotation-bar__name';
+  el.textContent = restingText(total);
+  bar.appendChild(el);
+  bar.dataset.dots = '';
+  bar.dataset.why = '';
+  bar.classList.remove('is-held', 'is-required');
+  bar.classList.add('is-resting');
 }
 
 function tick() {
@@ -230,7 +271,10 @@ function tick() {
       drawn = '';
       renderDisplayList(micboard.displayList || []);
     }
-    stopRendering();
+    // ⭐ Not `stopRendering()` any more. A switched-on strip now says the board
+    // is showing everything, rather than reserving 28px and drawing nothing in
+    // it — which is what made Top and Bottom indistinguishable (#188).
+    renderResting(total);
     applied = false;
     return;
   }

@@ -153,3 +153,27 @@ export function stripClass(live) {
   const state = (live && live.state) || 'off';
   return `live-strip live-${state}${isOver(live) ? ' live-over' : ''}`;
 }
+
+/**
+ * How much board height the strip takes away from the grid.
+ *
+ * ⛔⛔ Zero for every placement except `top` and `bottom`. `card` claims a grid
+ * cell instead — `cellsForChannels` already accounts for that — and reserving
+ * height for it as well would take the space twice. `off` draws nothing.
+ *
+ * ⚠️ `height` is measured from the rendered strip, never assumed. Its type
+ * scales with the board (`--tvmode-type-basis`), so on a television it is
+ * taller than the 2.25rem that used to be hard-coded for it, and a fixed
+ * reserve under-books the space however correct the arithmetic around it is.
+ *
+ * Pure so the rule can be tested without a layout: the caller does the
+ * measuring, this decides whether it counts.
+ */
+export function reservedStripHeight(where, height) {
+  const spot = placement(where);
+  if (spot !== 'top' && spot !== 'bottom') {
+    return 0;
+  }
+  const px = Number(height);
+  return Number.isFinite(px) && px > 0 ? px : 0;
+}

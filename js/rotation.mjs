@@ -291,3 +291,28 @@ export function rotationLabel(pages, index) {
   const name = page.title || `Group ${page.group}`;
   return page.parts > 1 ? `${name} (${page.part}/${page.parts})` : name;
 }
+
+/**
+ * What the status bar says when the board is NOT paging (#188).
+ *
+ * ⛔ The strip is reserved whether or not the board pages, so switching it on
+ * used to reserve 28px and draw nothing in it — the maintainer's report was
+ * "I don't know what the status bar is, but I don't see it do anything when I
+ * move it", which was accurate: Top and Bottom were indistinguishable because
+ * both were empty.
+ *
+ * ⭐ So a board that is not paging says so. It answers the question the bar
+ * exists for — *am I seeing everything?* — in the one case where the answer is
+ * simply yes, rather than leaving the operator to infer it from an absence.
+ *
+ * ⚠️ Deliberately quiet, and deliberately NOT "12 of 12". The paging bar
+ * withholds that phrasing on a rotation the operator asked for, on the grounds
+ * that it raises a question nobody had; the same restraint applies here.
+ */
+export function restingText(total) {
+  const n = Number(total);
+  if (!Number.isFinite(n) || n <= 0) {
+    return 'No channels on this board';
+  }
+  return n === 1 ? 'Showing the only channel' : `Showing all ${n} channels`;
+}

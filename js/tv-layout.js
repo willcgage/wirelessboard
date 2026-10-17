@@ -2,6 +2,7 @@ import { micboard } from './app.js';
 import { computeLayout, gridTemplateFor, layoutSlotCount } from './board-layout.mjs';
 import { minColumnPixelsForScreen, screenById } from './display-geometry.mjs';
 import { dockPositionsForScreen } from './docks.mjs';
+import { reservedStripHeight } from './live-strip.mjs';
 import { repageForCapacity } from './rotation-view.js';
 
 let tvResizeObserver;
@@ -121,7 +122,34 @@ export function updateTvLayoutMetrics() {
   const statusStrip = micboard.statusBar === 'off'
     ? 0
     : readNumeric(containerStyle.getPropertyValue('--statusbar-height'), 0);
-  const availableHeight = Math.max(240, viewportHeight - containerRect.top - statusStrip);
+
+  // ⛔⛔ The service-position strip, which was never reserved at all (#121).
+  // `.live-strip.live-at-bottom` is `position: fixed; bottom: 0` at z-index
+  // 1020, and the only thing making room for it was a hard-coded
+  // `padding-bottom: 2.25rem` on the board — which this arithmetic never knew
+  // about, so the rows were sized for the full height and the last one ran on
+  // underneath the strip. Reported from the wall: "when the service bar is on
+  // the bottom, it overlaps the information on the cards."
+  //
+  // ⭐ Exactly the fault #188 fixed for the paging bar, in this same function,
+  // left unfixed for its neighbour.
+  //
+  // ⚠️ Measured, not assumed. The strip's type is `calc(var(--tvmode-type-basis)
+  // * 0.1)`, so on a television it is taller than 2.25rem and a fixed reserve
+  // under-books it however correct the accounting is.
+  const liveStripEl = document.getElementById('live-strip');
+  const liveStrip = reservedStripHeight(
+    micboard.livePlacement,
+    liveStripEl ? liveStripEl.offsetHeight : 0,
+  );
+  // One number, two consumers: the board's padding comes from the same
+  // variable, so the space reserved and the space left can never disagree.
+  container.style.setProperty('--live-strip-height', `${liveStrip}px`);
+
+  const availableHeight = Math.max(
+    240,
+    viewportHeight - containerRect.top - statusStrip - liveStrip,
+  );
 
   // ⛔ The physical floor, where the screen has been described (#170). The
   // television hangs above the charging dock, so a column has to be wide
