@@ -142,9 +142,15 @@ export function updateTvLayoutMetrics() {
     micboard.livePlacement,
     liveStripEl ? liveStripEl.offsetHeight : 0,
   );
-  // One number, two consumers: the board's padding comes from the same
-  // variable, so the space reserved and the space left can never disagree.
-  container.style.setProperty('--live-strip-height', `${liveStrip}px`);
+  // One number, three consumers: the board's padding and the status bar's
+  // offset both read it, so the space reserved and the space left can never
+  // disagree.
+  //
+  // ⛔⛔ On `body`, not on the container. `.rotation-bar` is appended to
+  // `document.body` and is `position: fixed`, so it is NOT a descendant of the
+  // container and inherits nothing set there -- it would silently fall back to
+  // the hard-coded default and sit inside the service strip again.
+  document.body.style.setProperty('--live-strip-height', `${liveStrip}px`);
 
   const availableHeight = Math.max(
     240,
