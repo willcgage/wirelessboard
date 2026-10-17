@@ -270,10 +270,23 @@ export function stateLine(id, facts = {}) {
     }
 
     case 'screens': {
-      if (!config || !Array.isArray(config.screens)) {
+      // ⛔ Two different silences, and requiring the key conflated them. No
+      // `config` at all is a board that has not been told anything yet, and a
+      // count there would be a lie by timing. A config that IS loaded and has
+      // no `screens` key is a board nobody has described a screen on -- which
+      // is **every** board out of the box, because no shipped configuration
+      // carries the key: not `democonfig.json`, not the minimal fallback. So
+      // this item sat blank exactly when it had something to say.
+      //
+      // ⭐ And it is the item that can least afford to. Describing a screen is
+      // step one of the dock -> column-floor chain, which has never once
+      // worked on hardware; the rail is where an operator would see that the
+      // step is still undone.
+      if (!config) {
         return null;
       }
-      const n = config.screens.length;
+      const described = Array.isArray(config.screens) ? config.screens : [];
+      const n = described.length;
       const screens = n === 0 ? null : `${plural(n, 'screen', 'screens')}`;
 
       // ⭐ The item owns the dock list too, so the line has to be able to say

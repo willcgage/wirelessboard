@@ -341,6 +341,40 @@ test('⛔ every Setup item reports itself — none sits blank', () => {
   assert.deepEqual(blank, [], `these Setup items report nothing: ${blank}`);
 });
 
+test('⛔ Screens reports itself on a board that has never described one', () => {
+  // The state every board is in out of the box: a loaded configuration with no
+  // `screens` key at all. Neither `democonfig.json` nor the minimal fallback
+  // carries one, and requiring it meant this item sat blank exactly when it
+  // had something to say.
+  //
+  // ⭐ And it is the item that can least afford to. Describing a screen is
+  // step one of the dock -> column-floor chain, which has never once worked on
+  // hardware; the rail is where an operator would see the step is still undone.
+  assert.equal(stateLine('screens', { config: { slots: [], groups: [] } }), 'None described');
+
+  // ⚠️ Docks without screens is a real state and already had wording. It must
+  // survive the key being absent rather than empty.
+  assert.equal(
+    stateLine('screens', { config: { docks: [{}, {}] } }),
+    'No screens, 2 docks',
+  );
+
+  // Before the first payload there is still nothing honest to say.
+  assert.equal(stateLine('screens', {}), null);
+});
+
+test('⛔ the fixture this was got wrong with', () => {
+  // I first reported this as three broken items -- Receivers and Slots as well
+  // -- having measured against `config: {}`, an object that never occurs. Both
+  // ship `slots: []` and report correctly, so the defect was one item, not
+  // three. The fixture is pinned here so the claim stays checkable.
+  const shipped = { port: 8058, groups: [], slots: [] };
+  assert.equal(stateLine('receivers', { config: shipped, discovered: [] }), 'None configured');
+  assert.equal(stateLine('slots', { config: shipped }), 'None configured');
+  assert.equal(stateLine('groups', { config: shipped }), 'None yet');
+  assert.equal(stateLine('screens', { config: shipped }), 'None described');
+});
+
 test('screens and slots report what is described and what is named', () => {
   assert.equal(stateLine('screens', { config: { screens: [{}, {}, {}] } }), '3 screens described');
   assert.equal(stateLine('screens', { config: { screens: [{}] } }), '1 screen described');
@@ -401,8 +435,13 @@ test('⭐ the screens line counts what is underneath, because the item owns it',
   );
   assert.equal(stateLine('screens', { config: { screens: [], docks: [] } }), 'None described');
 
-  // Absent config is still "I do not know", not "none".
-  assert.equal(stateLine('screens', { config: {} }), null);
+  // ⛔ An ABSENT config is still "I do not know", not "none" -- and `{config: {}}`
+  // is not absent. That conflation is what this assertion used to encode, and
+  // the comment above it said "absent config" about a config that is plainly
+  // present and merely empty. A loaded configuration with no `screens` key is
+  // every board out of the box, and it has something to say.
+  assert.equal(stateLine('screens', {}), null, 'no config at all: say nothing');
+  assert.equal(stateLine('screens', { config: {} }), 'None described');
 });
 
 test('backgrounds count pictures and videos separately', () => {
