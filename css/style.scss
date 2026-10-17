@@ -2,6 +2,11 @@
 
 html,body {
   background-color: var(--color-background);
+  /* ⛔ Stated, not inherited from the user agent. `color-scheme: dark` makes
+     the UA's initial text colour white instead of black, so anything that
+     never set a colour would quietly invert -- including, before this, five
+     rows of the Planning Center preview that sit on a light wash. */
+  color: var(--color-white);
   height: 100%;
   margin: 0px;
   padding: 0px;
@@ -2850,18 +2855,22 @@ body.live-strip-bottom .rotation-bar {
    was black text on a dark red wash. Set the colour outright. */
 .sync-row-skipped td {
   background: #f8d7da;
+  color: #212529;
 }
 
 .sync-row-clear td {
   background: #fff3cd;
+  color: #212529;
 }
 
 .sync-row-change td {
   background: #cfe2ff;
+  color: #212529;
 }
 
 .sync-row-assign td {
   background: #d1e7dd;
+  color: #212529;
 }
 
 /* The rows that are already right: present, legible, and not competing. */
@@ -2872,6 +2881,7 @@ body.live-strip-bottom .rotation-bar {
 
 .sync-row-fold td {
   background: #fff;
+  color: #212529;
 }
 
 /* Setup, collapsed (#120).
