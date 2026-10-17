@@ -201,7 +201,14 @@ test('incomplete rows are held back, and the summary says they are still there',
   const payload = toPayload(rows);
   assert.equal(payload.length, 1);
   assert.deepEqual(payload[0], {
-    id: 'main-dock', name: 'Main dock', kind: 'charging', position_inches: 3.9, positions: 2,
+    id: 'main-dock',
+    name: 'Main dock',
+    kind: 'charging',
+    position_inches: 3.9,
+    positions: 2,
+    // ⭐ Which model filled the numbers in. 'other' is a real answer: a
+    // shelf is a place a microphone lives and has no model number.
+    model: 'other',
   });
   // ⛔ Counts, not a sentence: one request saves the screens and the docks
   // together, so one sentence has to speak for both (A2).

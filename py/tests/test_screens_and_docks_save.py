@@ -223,3 +223,52 @@ class TestSeveralDocksUnderOneScreen:
         saved = config.update_screens_and_docks([dict(WALL, dock_id='green-room')], [DOCK])
         assert 'dock_id' not in saved['screens'][0]
         assert 'furniture_id' not in saved['screens'][0]
+
+
+class TestADockPositionHasABound:
+    """⛔⛔ A venue board was configured with a dock typed `39` instead of `3.9`.
+
+    The column floor is the widest position underneath, so every column had to
+    be 39 inches on a 55-inch screen -- one column, and a wall that paged
+    through twelve channels one at a time. Nothing in the product questioned
+    it.
+
+    ⚠️ Refused HERE as well as in the editor, because a number that breaks the
+    board must not survive a save made from anywhere.
+    """
+
+    def test_an_impossible_width_is_not_stored(self, stored):
+        saved = config.update_screens_and_docks(
+            [], [dict(DOCK, id='vox-5', name='VOX 5', position_inches=39)])
+
+        assert saved['docks'] == [], 'a 39in position is not a dock'
+
+    def test_the_real_width_is_stored(self, stored):
+        saved = config.update_screens_and_docks([], [dict(DOCK, position_inches=3.9)])
+        assert saved['docks'][0]['position_inches'] == 3.9
+
+    def test_the_ceiling_itself_is_allowed(self, stored):
+        saved = config.update_screens_and_docks(
+            [], [dict(DOCK, position_inches=config.MAX_POSITION_INCHES)])
+        assert saved['docks'][0]['position_inches'] == config.MAX_POSITION_INCHES
+
+    def test_one_bad_row_does_not_take_the_good_ones_with_it(self, stored):
+        # ⚠️ The venue had twelve docks and one typo. Refusing the lot would
+        # lose eleven correct measurements over one slip.
+        saved = config.update_screens_and_docks([], [
+            dict(DOCK, id='vox-1', name='VOX 1', position_inches=3.9),
+            dict(DOCK, id='vox-5', name='VOX 5', position_inches=39),
+            dict(DOCK, id='vox-6', name='VOX 6', position_inches=3.9),
+        ])
+
+        assert [d['id'] for d in saved['docks']] == ['vox-1', 'vox-6']
+
+    def test_the_model_is_stored(self, stored):
+        # ⭐ So reopening the editor shows what was picked, not only the
+        # figures it produced. `other` is a real answer -- a shelf has no model
+        # number -- and is stored as one.
+        saved = config.update_screens_and_docks([], [dict(DOCK, model='sbc200')])
+        assert saved['docks'][0]['model'] == 'sbc200'
+
+        saved = config.update_screens_and_docks([], [DOCK])
+        assert saved['docks'][0]['model'] == 'other'
