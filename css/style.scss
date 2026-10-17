@@ -2710,13 +2710,26 @@ body.plan-change-shown .topbar-restore {
   white-space: normal;
 }
 
-/* Keeps the board clear of a fixed strip. */
+/* Keeps the board clear of a fixed strip.
+
+   ⛔⛔ `--live-strip-height` is set by `tv-layout.js` from the strip's MEASURED
+   height, and the same number is taken out of the height the rows are computed
+   from. One number, two consumers: the space reserved and the space left
+   cannot disagree.
+
+   Before that it was a hard-coded 2.25rem here and nothing at all in the
+   layout, so the rows were sized for the full screen and the last one ran on
+   underneath a strip painted at z-index 1020 — reported from the wall as the
+   service bar overlapping the cards.
+
+   ⚠️ The fallback is the old value, for the brief moment before the first
+   layout pass runs and for any surface that never calls it. */
 body.live-strip-top .wirelessboard-board {
-  padding-top: 2.25rem;
+  padding-top: var(--live-strip-height, 2.25rem);
 }
 
 body.live-strip-bottom .wirelessboard-board {
-  padding-bottom: 2.25rem;
+  padding-bottom: var(--live-strip-height, 2.25rem);
 }
 
 /* The rotation bar (#113).
@@ -4118,6 +4131,17 @@ body.statusbar-top .rotation-bar {
 body.statusbar-top .rotation-bar {
   bottom: auto;
   top: calc(env(safe-area-inset-top, 0px));
+}
+
+/* ⭐ The bar at rest: the board is not paging and says so, rather than the
+   strip being reserved and left empty — which made Top and Bottom look
+   identical and the control look broken.
+
+   ⚠️ Quieter than the paging bar on purpose. It is a standing reassurance, not
+   an event; at full weight it would read as something having happened. */
+.rotation-bar.is-resting {
+  opacity: 0.55;
+  font-weight: 400;
 }
 
 /* ⚠️ With the strip off, the bar has nowhere reserved to go, so it goes back to
