@@ -111,7 +111,7 @@ export function isConnected(pco) {
   if (!pco || typeof pco !== 'object') {
     return false;
   }
-  const auth = pco.auth;
+  const { auth } = pco;
   return !!(auth && typeof auth === 'object' && auth.has_credentials);
 }
 

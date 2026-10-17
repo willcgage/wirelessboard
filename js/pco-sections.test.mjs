@@ -351,8 +351,8 @@ test('⛔⛔ the pane is the shape it reads as, not merely one that behaves', ()
   // a depth for every element would be pinning the markup's shape rather than
   // the one thing that went wrong: a block of its own, nested into another.
   [
-    ['id="pco-auto-sync"', 2],   // its own .form-check, a child of the body
-    ['class="pco-example"', 1],  // the example block itself
+    ['id="pco-auto-sync"', 2], // its own .form-check, a child of the body
+    ['class="pco-example"', 1], // the example block itself
   ].forEach(([needle, maxDepth]) => {
     const depth = depthOf(html, bodyOpen, needle);
     assert.ok(
@@ -443,7 +443,8 @@ test('⛔ no Bootstrap class is restyled globally', () => {
   const css = readFileSync(join(HERE, '..', 'css', 'style.scss'), 'utf8');
   ['form-row', 'form-check-input', 'form-check-label', 'btn-primary'].forEach((cls) => {
     assert.deepEqual(
-      bareRules(css, cls), [],
+      bareRules(css, cls),
+      [],
       `.${cls} is restyled globally, which reaches the weekly Planning Center surface too`,
     );
   });
