@@ -2785,8 +2785,21 @@ body.live-strip-bottom .wirelessboard-board {
 }
 
 /* Keeps the rotation bar off the service strip when both are at the bottom. */
+/* ⛔⛔ The status bar sits on TOP of the service strip, so its offset is the
+   strip's measured height -- not a hard-coded 2.5rem.
+
+   Reported from the wall: "the status bar is overlapping, and there is extra
+   room at the bottom between the cards and the top of the service strip."
+   Both halves are this one line. The strip's text scales with the board, so on
+   a television it is taller than 2.5rem and the status bar was being placed
+   *inside* it; meanwhile the board reserved the strip's real height plus the
+   status strip, and the difference showed up as a gap nobody had asked for.
+
+   ⚠️ `--live-strip-height` is set on `body` by `tv-layout.js` precisely so this
+   rule can see it: `.rotation-bar` is fixed and parented to `body`, so a
+   variable set on the board's container would never reach it. */
 body.live-strip-bottom .rotation-bar {
-  bottom: calc(2.5rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--live-strip-height, 2.5rem) + env(safe-area-inset-bottom, 0px));
 }
 
 /* The rotation fields on a group row (#114). Quiet: most groups never need
