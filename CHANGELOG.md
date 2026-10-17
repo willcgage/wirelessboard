@@ -10,6 +10,45 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.10] - 2026-10-17
+
+A short build with one job: put the photographs right on the wall. The previous build was judged on
+a real screen and the verdict was that the board zooms into every picture and cuts people's faces
+off at the sides — so this is cut to be looked at, not read about.
+
+⛔ **That was not a bug, it was arithmetic, and it is now measured.** 33 of the venue board's 38
+background photographs are 1920×1080. At twelve columns the space a photograph gets is 160×861, and
+filling that space scaled the picture by its height and threw **688 pixels off each side — you saw
+10% of it.**
+
+### Changed
+- **A photograph now fills its card without cutting faces.** The whole picture is shown, and the
+  space left around it is filled with a blurred, dimmed copy of the same picture rather than a black
+  bar — the treatment a presentation system uses for a slide that does not match the screen. ⭐ A
+  little cropping is still allowed, because a picture that never crops at all sits too small: the
+  limit is that **no photograph loses more than 29% of a side**. On the venue's own shots that takes
+  a one-row board from 10% of each picture visible to 71%.
+  ⭐ A picture already close to the card's shape never reaches that limit, so it fills the card
+  exactly as it did before and no blur appears at all — the treatment only shows up where it earns
+  its place. ⚠️ Video still fills and crops: a blurred filler means a second copy of the clip
+  decoding on every card, which is a real cost on a television.
+  ⚠️ **One row of twelve is still the hardest place for a photograph.** 71% is a great deal better
+  than 10%, but a wide picture in a card one-fifth as wide as it is tall is a small strip whichever
+  way it is drawn. The dock rule asks for one column per charging position, and the photographs want
+  fewer, wider columns; those two cannot both win on one screen and this does not settle it.
+
+### Added
+- **The 2.0 application icon.** Six channel blocks, two of them lit — the board itself, rather than a
+  microphone. It was chosen over five other directions for one reason: it is the only one that is
+  still legible at 16 pixels as a single drawing, because six blocks of flat colour is the easiest
+  thing a small grid can draw. Every size is cut from one definition at that exact pixel count
+  rather than resized from a large one.
+  ⭐ **Windows has an application icon for the first time.** The installer and the executable have
+  always shipped the packaging tool's default, because nothing was ever pointed at a file.
+  ⚠️ The icon on light backgrounds — a browser tab — uses its own set of colours. The board's
+  greens and ambers are tuned for a near-black screen and wash out to nothing on white.
+
+
 ## [2.0.0-beta.9] - 2026-10-17
 
 The first build shaped by looking at the venue board itself rather than at photographs of it, and it
