@@ -34,6 +34,10 @@
 
 import { GUARDED_ACTIONS, allows } from './viewer-lock.mjs';
 import { PCO_SECTIONS, PCO_SECTION_IDS, pcoStateLine } from './pco-sections.mjs';
+// ⭐ The one place that knows what counts as a slot number, reused rather than
+// re-derived — `Number(null)` is 0, and that trap has already been walked into
+// once (#243).
+import { storedNumbers, asSlotNumber } from './group-membership.mjs';
 
 /**
  * The page, in the order it is read.
@@ -304,6 +308,48 @@ export function stateLine(id, facts = {}) {
         return 'None configured';
       }
       return `${slots.length}, ${named} named`;
+    }
+
+    case 'groups': {
+      // ⛔ Groups was the one rail item that sat blank while every neighbour
+      // reported itself — noticed in the venue photographs, where the rail
+      // reads "Slots / 12, 9 named", "Backgrounds / 38 pictures" and then
+      // "Groups" and nothing.
+      // ⛔ Two different silences, and only one of them is "no groups" — the
+      // same distinction the Planning Center sections draw below, and the
+      // reason this still read blank on a real board after the case was first
+      // written. No `config` at all means the board has not been told anything
+      // yet, and a count there would be a lie by timing. A config that IS
+      // loaded and simply has no `groups` key is a board nobody has grouped,
+      // which is exactly when the line is worth printing.
+      if (!config) {
+        return null;
+      }
+      const groups = Array.isArray(config.groups) ? config.groups : [];
+      if (!groups.length) {
+        // ⚠️ Not "every channel is in none". With no groups that is true and
+        // says nothing: channels still show on All channels, which is the
+        // ordinary state of a board nobody has grouped.
+        return 'None yet';
+      }
+
+      // ⭐ The count alone is the boring half. A channel in no group is
+      // invisible to anyone viewing groups rather than the combined board,
+      // and nothing else on the board says so — it is the question the
+      // Groups panel exists to answer, so the rail answers it too.
+      //
+      // ⛔ `storedNumbers` rather than `Number(n)`: `Number(null)` is 0, a
+      // finite number that passes every obvious guard, and a null in a stored
+      // list would otherwise claim a phantom channel 0 and hide a real orphan.
+      const claimed = new Set();
+      groups.forEach((entry) => storedNumbers(entry).forEach((n) => claimed.add(n)));
+      const loose = (Array.isArray(config.slots) ? config.slots : [])
+        .map((s) => asSlotNumber(s && s.slot))
+        .filter((n) => n !== null && !claimed.has(n))
+        .length;
+
+      const named = plural(groups.length, 'group', 'groups');
+      return loose ? `${named}, ${plural(loose, 'channel', 'channels')} in none` : named;
     }
 
     case 'backgrounds': {

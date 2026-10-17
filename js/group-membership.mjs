@@ -25,7 +25,7 @@
  * by a test rather than by review, which is the only reason it is not in the
  * config files already.
  */
-function asSlotNumber(value) {
+export function asSlotNumber(value) {
   if (typeof value === 'number') {
     return Number.isInteger(value) ? value : null;
   }
