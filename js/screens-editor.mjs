@@ -44,6 +44,27 @@ function positive(value) {
 }
 
 /**
+ * The docks a row names, from whichever shape it is in.
+ *
+ * ⚠️ `dock_id` is read and never written. The editor's rows come from a stored
+ * configuration that may predate the list, and a save that ignored the single
+ * key would silently drop a board's only dock — taking its column floor with
+ * it, which is a visible change to the wall rather than a quiet one.
+ */
+function dockIdsOf(row) {
+  const raw = Array.isArray(row && row.dock_ids)
+    ? row.dock_ids
+    : [row && (row.dock_id || row.furniture_id)];
+
+  const out = [];
+  raw.forEach((value) => {
+    const id = String(value || '').trim();
+    if (id && !out.includes(id)) out.push(id);
+  });
+  return out;
+}
+
+/**
  * What is wrong with one row, or null.
  *
  * ⚠️ Reported per row rather than as one message for the form. "Something is
@@ -86,14 +107,15 @@ const SPEC = {
     id: row.id || uniqueScreenId(String(row.name).trim(), ids),
     name: String(row.name).trim(),
     diagonal_inches: positive(row.diagonal_inches),
-    // ⭐ Which dock is underneath (#203). The width itself lives on the
-    // dock now; this is the reference to it.
-    dock_id: String(row.dock_id || '').trim() || null,
+    // ⭐ Which docks are underneath (#203, a list for A3). The width itself
+    // lives on the dock; these are the references to them. A screen can have
+    // several — the venue has eleven SBC200s under one.
+    dock_ids: dockIdsOf(row),
     // ⛔ Carried forward, not dropped. A board configured before #203 has its
     // position width here, and a save that discarded it would silently widen
     // that board's columns past the dock they were measured against. It stops
     // being written once the row names a dock instead.
-    min_column_inches: String(row.dock_id || '').trim()
+    min_column_inches: dockIdsOf(row).length
       ? null
       : positive(row.min_column_inches),
   }),

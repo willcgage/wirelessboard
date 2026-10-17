@@ -1,4 +1,4 @@
-import { positionInchesForScreen, dockById } from './docks.mjs';
+import { positionInchesForScreen, screenDocks } from './docks.mjs';
 
 /**
  * Turning a screen's physical size into a minimum column width (#170).
@@ -96,6 +96,20 @@ export function maxColumnsAtMinimum({ containerWidth, minColumnWidth }) {
  * human for it invites a mismatch between what was typed and the screen the
  * board is actually on — and a plausible wrong answer is worse than none.
  */
+/** The docks a screen names, from whichever shape it was saved in. */
+function dockIdsOf(entry) {
+  const raw = Array.isArray(entry.dock_ids)
+    ? entry.dock_ids
+    : [entry.dock_id || entry.furniture_id];
+
+  const out = [];
+  raw.forEach((value) => {
+    const id = String(value || '').trim();
+    if (id && !out.includes(id)) out.push(id);
+  });
+  return out;
+}
+
 export function normalizeScreens(list) {
   if (!Array.isArray(list)) {
     return [];
@@ -113,11 +127,15 @@ export function normalizeScreens(list) {
       id,
       name: String(entry.name || '').trim() || id,
       diagonal_inches: diagonal,
-      // ⭐ Which dock is underneath (#203). A screen with nothing
-      // under it is still worth describing; it simply imposes no minimum.
-      // ⚠️ `furniture_id` too, for the same window as the `furniture` key.
-      // Without it a board from that window keeps its docks and loses the link.
-      dock_id: String(entry.dock_id || entry.furniture_id || '').trim() || null,
+      // ⭐ Which docks are underneath (#203, a list since A3). A screen with
+      // nothing under it is still worth describing; it simply imposes no
+      // minimum.
+      //
+      // ⚠️ The single-dock shapes are read and never written, and `dock_id`
+      // `||` `furniture_id` rather than both -- `furniture_id` is the OLD NAME
+      // for the same field, not a second dock, and treating it as one would
+      // give a board two docks where it has one.
+      dock_ids: dockIdsOf(entry),
       // ⛔ Legacy, and deliberately still read. Before #203 the position width
       // lived here. A board configured under the old shape keeps its floor
       // until the screens are next saved -- see `positionInchesForScreen`.
@@ -196,8 +214,11 @@ export function describeScreenChoice({
   }
   // ⭐ Names the dock where there is one, because "a 3.9in column" does
   // not tell anybody *why* 3.9 — and the reason is the thing on the table.
-  const under = dockById(docks, screen.dock_id);
+  // ⚠️ With several underneath, the floor is the widest, so name that one:
+  // naming the first would point at furniture the number did not come from.
+  const under = screenDocks({ screen, docks });
   const inches = positionInchesForScreen({ screen, docks });
-  const because = under ? ` (${under.name})` : '';
+  const widest = under.find((d) => d.position_inches === inches);
+  const because = widest ? ` (${widest.name})` : '';
   return `${screen.name}: a ${inches}in position${because} is ${px}px here, so the board will not go narrower.`;
 }

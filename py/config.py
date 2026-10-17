@@ -1372,6 +1372,35 @@ def update_pco_config(pco_data: Any) -> Tuple[Dict[str, Any], CredentialMeta]:
     return merged, meta
 
 
+def _dock_ids(entry: Dict[str, Any]) -> List[str]:
+    """The docks a screen names, as a list, from whichever shape it was saved in.
+
+    ⛔ Order is the operator's and is kept: it is the order the units stand in
+    on the table, left to right, and a count that ignored it would still be
+    right while anything that later links a position to a slot would not.
+
+    ⚠️ Duplicates are dropped rather than counted twice. One dock cannot be
+    under one screen twice, and summing a repeat would hand the board more
+    columns than there are places.
+    """
+    raw = entry.get('dock_ids')
+    if not isinstance(raw, list):
+        # ⛔ The single-dock shapes, read and never written -- and `or`, not
+        # both. `furniture_id` is the OLD NAME for `dock_id`, not a second
+        # dock, so a board carrying both would otherwise be handed two docks
+        # where it has one and a column count twice what it should be.
+        raw = [entry.get('dock_id') or entry.get('furniture_id')]
+
+    out: List[str] = []
+    for value in raw:
+        if isinstance(value, bool) or not isinstance(value, (str, int)):
+            continue
+        text = str(value).strip()
+        if text and text not in out:
+            out.append(text)
+    return out
+
+
 def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
     """The screens an installation has described.
 
@@ -1415,18 +1444,20 @@ def normalize_screens(payload: Any) -> List[Dict[str, Any]]:
             'id': screen_id,
             'name': str(entry.get('name') or '').strip() or screen_id,
             'diagonal_inches': diagonal,
-            # ⭐ Which dock is underneath (#203). A screen worth
-            # describing may still have nothing below it, and must then impose
-            # no minimum.
-            # ⚠️ `furniture_id` is read for the same reason `furniture` is, and
-            # for the same hour-long window. Without it a board from that window
-            # keeps its docks and silently loses the *link* to them, which drops
-            # its column floor -- the half-migration is worse than none.
-            'dock_id': (
-                str(entry.get('dock_id') or '').strip()
-                or str(entry.get('furniture_id') or '').strip()
-                or None
-            ),
+            # ⭐ Which docks are underneath (#203, widened for A3). A screen
+            # worth describing may still have nothing below it, and must then
+            # impose no minimum.
+            #
+            # ⛔ A LIST. It was one id, and the venue reported that as a plain
+            # limit: eleven SBC200s under one screen, and a picker that took
+            # one. Eleven units in a row is the ordinary case.
+            #
+            # ⚠️ `dock_id` and `furniture_id` are read and never written, for
+            # the same reason `min_column_inches` below is. Without them a
+            # board from an earlier shape keeps its docks and silently loses
+            # the *link* to them, which drops its column floor -- the
+            # half-migration is worse than none.
+            'dock_ids': _dock_ids(entry),
             # ⛔ Legacy, and deliberately still stored. Before #203 the position
             # width lived here. A board configured under the old shape keeps its
             # floor until the screens are next saved; dropping it on read would

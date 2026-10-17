@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   DOCK_KINDS, isDockKind, dockKind, normalizeDocks, dockById,
   positionInchesForScreen, dockChoices,
+  screenDocks, dockPositionsForScreen, describeScreenDocks, screenNamesDock,
 } from './docks.mjs';
 import {
   dockProblem, docksHaveProblems, toPayload, mergeSaved, saveSummary,
@@ -260,7 +261,7 @@ test('⚠️ a board written while the key was `furniture` keeps its dock AND it
   const [screen] = normalizeScreens([{
     id: 'wall', name: 'Auditorium wall', diagonal_inches: 55, furniture_id: 'main-dock',
   }]);
-  assert.equal(screen.dock_id, 'main-dock', 'the link survives the rename');
+  assert.deepEqual(screen.dock_ids, ['main-dock'], 'the link survives the rename');
 
   assert.equal(
     positionInchesForScreen({ screen, docks: [DOCK] }),
@@ -270,8 +271,121 @@ test('⚠️ a board written while the key was `furniture` keeps its dock AND it
 });
 
 test('the new name wins where a config somehow carries both', () => {
+  // ⛔ ONE dock, not two. `furniture_id` is the old NAME for `dock_id`, so a
+  // board carrying both describes one dock under that screen -- reading them
+  // as a pair would give it two docks where it has one, and (since A3 sums
+  // their positions) a column count twice what the room has places for.
   const [screen] = normalizeScreens([{
     id: 'wall', diagonal_inches: 55, dock_id: 'stage-table', furniture_id: 'main-dock',
   }]);
-  assert.equal(screen.dock_id, 'stage-table');
+  assert.deepEqual(screen.dock_ids, ['stage-table']);
+});
+
+/**
+ * Several docks under one screen (A3).
+ *
+ * ⛔ A screen named exactly one, which the field test reported as the plain
+ * limit it is: "I can only choose 1 dock under a screen right now; however, I
+ * have 11 under the Green Room Screen I am testing and using in production
+ * now." Eleven units in a row is the ordinary case.
+ */
+
+const RUN = {
+  id: 'green-room',
+  name: 'Green Room run',
+  kind: 'charging',
+  position_inches: 3.9,
+  positions: 11,
+};
+const TABLE = {
+  id: 'side-table',
+  name: 'Side table',
+  kind: 'noncharging',
+  position_inches: 2,
+  positions: 3,
+};
+const UNCOUNTED = {
+  id: 'unknown', name: 'Unknown run', kind: 'charging', position_inches: 3.9,
+};
+const ALL = [RUN, TABLE, UNCOUNTED];
+
+test('⛔ a screen can have several docks underneath', () => {
+  const under = screenDocks({ screen: { dock_ids: ['green-room', 'side-table'] }, docks: ALL });
+  assert.deepEqual(under.map((d) => d.id), ['green-room', 'side-table']);
+});
+
+test('the order the screen names them in is kept', () => {
+  // Left to right on the table.
+  const under = screenDocks({ screen: { dock_ids: ['side-table', 'green-room'] }, docks: ALL });
+  assert.deepEqual(under.map((d) => d.id), ['side-table', 'green-room']);
+});
+
+test('a dock named twice is counted once', () => {
+  // ⚠️ Summing a repeat would hand the board more columns than the room has
+  // places.
+  const under = screenDocks({ screen: { dock_ids: ['green-room', 'green-room'] }, docks: ALL });
+  assert.equal(under.length, 1);
+});
+
+test('a dock that is not described is not underneath anything', () => {
+  assert.deepEqual(screenDocks({ screen: { dock_ids: ['ghost'] }, docks: ALL }), []);
+});
+
+test('the single-dock shape still resolves', () => {
+  const under = screenDocks({ screen: { dock_id: 'green-room' }, docks: ALL });
+  assert.deepEqual(under.map((d) => d.id), ['green-room']);
+});
+
+test('⭐ the floor is the WIDEST position underneath', () => {
+  // A minimum, not an alignment guarantee: a column narrower than any position
+  // below it stops pointing at that position, so the widest has to fit. Mixed
+  // widths cannot all line up in a uniform grid and this does not pretend so.
+  assert.equal(
+    positionInchesForScreen({ screen: { dock_ids: ['side-table', 'green-room'] }, docks: ALL }),
+    3.9,
+  );
+});
+
+test('⭐ the places under a screen are all its docks added up', () => {
+  assert.equal(dockPositionsForScreen({ screen: { dock_ids: ['green-room'] }, docks: ALL }), 11);
+  assert.equal(dockPositionsForScreen({ screen: { dock_ids: ['green-room', 'side-table'] }, docks: ALL }), 14);
+});
+
+test('⛔ no count at all unless every dock underneath says', () => {
+  // `positions` was optional and read by nothing until A3, so almost no board
+  // declares it. A count built from half the furniture is worse than none,
+  // because nothing on screen would say which half.
+  assert.equal(
+    dockPositionsForScreen({ screen: { dock_ids: ['green-room', 'unknown'] }, docks: ALL }),
+    null,
+  );
+  assert.equal(dockPositionsForScreen({ screen: {}, docks: ALL }), null);
+});
+
+test('the reading says what the board will take from the row', () => {
+  const say = (screen) => describeScreenDocks(screen, ALL);
+
+  assert.match(say({ dock_ids: ['green-room'] }), /11 places/);
+  assert.match(say({ dock_ids: ['green-room'] }), /at least 3\.9in/);
+  assert.match(say({ dock_ids: ['green-room', 'side-table'] }), /2 docks/);
+
+  // ⚠️ Names the dock that did not say, rather than quietly summing the rest.
+  const partial = say({ dock_ids: ['green-room', 'unknown'] });
+  assert.match(partial, /Unknown run/);
+  assert.doesNotMatch(partial, /11 places/);
+
+  assert.match(say({}), /no minimum/);
+  assert.match(say({ min_column_inches: 4.5 }), /4\.5in from before/);
+});
+
+test('screenNamesDock answers for a dock that is being removed', () => {
+  // ⚠️ The editor asks while a dock is going away, so it may already be gone
+  // from the list — `screenDocks` would drop it and the screen would look
+  // innocent.
+  assert.equal(screenNamesDock({ dock_ids: ['green-room'] }, 'green-room'), true);
+  assert.equal(screenNamesDock({ dock_id: 'green-room' }, 'green-room'), true);
+  assert.equal(screenNamesDock({ furniture_id: 'green-room' }, 'green-room'), true);
+  assert.equal(screenNamesDock({ dock_ids: ['other'] }, 'green-room'), false);
+  assert.equal(screenNamesDock(null, 'green-room'), false);
+  assert.equal(screenNamesDock({ dock_ids: ['green-room'] }, ''), false);
 });

@@ -15,7 +15,7 @@ import {
   mergeSaved as rowsMergeSaved,
   saveSummary as rowsSaveSummary,
 } from './editor-rows.mjs';
-import { dockKind } from './docks.mjs';
+import { dockKind, screenNamesDock } from './docks.mjs';
 
 /** A stable id from a name: lowercase, hyphenated, nothing surprising. */
 export function dockId(name) {
@@ -116,7 +116,7 @@ export function screensUsing(dockEntryId, screens) {
   const wanted = String(dockEntryId || '').trim();
   if (!wanted) return [];
   return (screens || [])
-    .filter((s) => s && String(s.dock_id || '').trim() === wanted)
+    .filter((s) => s && screenNamesDock(s, wanted))
     .map((s) => String(s.name || s.id || '').trim())
     .filter(Boolean);
 }

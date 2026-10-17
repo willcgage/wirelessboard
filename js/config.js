@@ -28,7 +28,7 @@ import {
   screensUsing,
 } from './dock-editor.mjs';
 import {
-  DOCK_KINDS, DOCK_KIND_LABELS, dockChoices, dockKind,
+  DOCK_KINDS, DOCK_KIND_LABELS, dockChoices, dockKind, describeScreenDocks,
 } from './docks.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
 import {
@@ -5504,37 +5504,75 @@ function renderScreenRows() {
     // ⭐ What is underneath, chosen rather than typed (#203). This was a
     // "Dock position (in)" box on every screen row, so one dock under two
     // screens was measured twice with nothing keeping the two in step.
+    // ⛔ A list, not a `<select>`. The venue has eleven SBC200s under one
+    // screen and could name one of them: "I can only choose 1 dock under a
+    // screen right now; however, I have 11 under the Green Room Screen I am
+    // testing and using in production now."
+    //
+    // ⚠️ Checkboxes rather than `<select multiple>`: a native multi-select
+    // is the control nobody works out how to use on a touch display, and D7
+    // reported native controls rendering unreadably under the operating
+    // system's own dark mode. Same shape as the Groups picker.
     const underCol = document.createElement('div');
-    underCol.className = 'col-6 col-md-3';
-    const underLab = document.createElement('label');
+    underCol.className = 'col-12 col-md-3';
+    const underLab = document.createElement('div');
     underLab.className = 'form-label small mb-0';
     underLab.textContent = 'Underneath';
-    const under = document.createElement('select');
-    under.className = 'form-select form-select-sm';
-    dockChoices(docksToPayload(dockRows)).forEach((choice) => {
-      const opt = document.createElement('option');
-      opt.value = choice.value;
-      opt.textContent = choice.label;
-      under.appendChild(opt);
-    });
-    under.value = row.dock_id || '';
-    // ⚠️ A board configured before #203 has its width on the row and no
-    // dock to point at. Say so rather than showing an innocent "Nothing
-    // underneath" over a floor that is still in force.
-    if (!row.dock_id && row.min_column_inches) {
-      const legacy = document.createElement('option');
-      legacy.value = '';
-      legacy.textContent = `${row.min_column_inches}in \u2014 from before, add a dock to replace it`;
-      under.replaceChildren(legacy, ...Array.from(under.children).slice(1));
-      under.value = '';
-    }
-    under.addEventListener('change', () => {
-      screenRows[index].dock_id = under.value;
-      refreshScreenProblem(index);
-      updateScreenStatus();
-    });
     underCol.appendChild(underLab);
-    underCol.appendChild(under);
+
+    const underList = document.createElement('div');
+    underList.className = 'screen-docks';
+    underList.setAttribute('role', 'group');
+    underList.setAttribute('aria-label', `Docks under ${row.name || 'this screen'}`);
+
+    const choices = dockChoices(docksToPayload(dockRows)).filter((c) => c.value);
+    const chosen = Array.isArray(row.dock_ids) ? row.dock_ids : [];
+
+    if (!choices.length) {
+      const none = document.createElement('p');
+      none.className = 'small text-muted mb-0';
+      none.textContent = 'No docks described yet — add one below.';
+      underList.appendChild(none);
+    }
+
+    choices.forEach((choice) => {
+      const line = document.createElement('div');
+      line.className = 'form-check screen-dock';
+
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.className = 'form-check-input';
+      box.id = `screen-${index}-dock-${choice.value}`;
+      box.checked = chosen.includes(choice.value);
+      box.addEventListener('change', () => {
+        const next = (screenRows[index].dock_ids || []).filter((id) => id !== choice.value);
+        if (box.checked) next.push(choice.value);
+        screenRows[index].dock_ids = next;
+        refreshScreenProblem(index);
+        updateScreenStatus();
+      });
+
+      const label = document.createElement('label');
+      label.className = 'form-check-label small';
+      label.htmlFor = box.id;
+      label.textContent = choice.label;
+
+      line.appendChild(box);
+      line.appendChild(label);
+      underList.appendChild(line);
+    });
+
+    // ⚠️ A board configured before #203 has its width on the row and no
+    // dock to point at. Say so rather than showing an innocent "nothing
+    // underneath" over a floor that is still in force.
+    if (!chosen.length && row.min_column_inches) {
+      const legacy = document.createElement('p');
+      legacy.className = 'small text-muted mb-0';
+      legacy.textContent = `${row.min_column_inches}in — from before, add a dock to replace it`;
+      underList.appendChild(legacy);
+    }
+
+    underCol.appendChild(underList);
     wrap.appendChild(underCol);
 
     const removeCol = document.createElement('div');
@@ -5565,6 +5603,15 @@ function renderScreenRows() {
     note.textContent = screenProblem(row) || '';
     wrap.appendChild(note);
 
+    // ⭐ What the board will read off this row, said back. The count is the
+    // thing an operator can check against the room -- eleven units on the
+    // table should read eleven places -- and it is the number that has been
+    // captured and ignored until now.
+    const reading = document.createElement('div');
+    reading.className = 'col-12 small text-muted screen-reading';
+    reading.textContent = describeScreenDocks(row, docksToPayload(dockRows));
+    wrap.appendChild(reading);
+
     host.appendChild(wrap);
   });
 }
@@ -5575,6 +5622,16 @@ function refreshScreenProblem(index) {
   const wrap = host && host.querySelectorAll('.row')[index];
   const note = wrap && wrap.querySelector('.screen-problem');
   if (note) note.textContent = screenProblem(screenRows[index]) || '';
+
+  // ⛔ The reading too. It was added beside the problem note and left out of
+  // here, so ticking a second dock changed the row and the line underneath it
+  // went on saying "1 dock underneath" -- which is worse than having no line,
+  // because it is a confident wrong answer about what the board will read.
+  // Found by ticking a box on the running editor, not by a test.
+  const reading = wrap && wrap.querySelector('.screen-reading');
+  if (reading) {
+    reading.textContent = describeScreenDocks(screenRows[index], docksToPayload(dockRows));
+  }
 }
 
 function updateScreenStatus(message) {
@@ -5766,7 +5823,7 @@ export function bindScreenHandlers() {
     if (!t) return;
     if (t.id === 'screen-add') {
       e.preventDefault();
-      screenRows.push({ name: '', diagonal_inches: '', dock_id: '' });
+      screenRows.push({ name: '', diagonal_inches: '', dock_ids: [] });
       renderScreenRows();
     } else if (t.id === 'dock-add') {
       e.preventDefault();

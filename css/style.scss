@@ -3115,6 +3115,37 @@ body.live-strip-bottom .rotation-bar {
   gap: 6px;
 }
 
+/* The docks under one screen (A3).
+
+   ⛔ A list, because a screen can have several — the venue has eleven SBC200s
+   under one. It was a `<select>` taking exactly one.
+
+   ⚠️ Checkboxes rather than `<select multiple>`: a native multi-select is the
+   control nobody works out how to use on a touch display, and D7 reported
+   native controls rendering unreadably under the operating system's own dark
+   mode. Same shape as the Groups picker, for the same reasons. */
+.screen-docks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0 0.75rem;
+}
+
+.screen-docks .screen-dock {
+  min-width: 0;
+}
+
+.screen-docks .form-check-label {
+  overflow-wrap: anywhere;
+  padding: 0.2rem 0;
+}
+
+/* ⭐ What the board will read off the row, said back — the count an operator
+   can check against the table in front of them. Quieter than a problem: it is
+   confirmation, not a fault. */
+.screen-reading {
+  opacity: 0.75;
+}
+
 .admin-actions {
   display: flex;
   flex-wrap: wrap;
