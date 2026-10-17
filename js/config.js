@@ -4078,8 +4078,24 @@ function checkMappingAgainstPlan() {
   if (button) button.disabled = true;
   setExampleNote('Checking against the next plan\u2026', null);
 
+  // ⛔⛔ Through `syncPlanParam`, NOT the select's raw value. "Next upcoming"
+  // is the sentinel `__next__`, and this sent it as a plan id -- so the board
+  // asked Planning Center for `/plans/__next__/plan_people` and was told, with
+  // some justice, "You must pass a plan id".
+  //
+  // ⭐ That one slip produced every Planning Center failure of three venue
+  // tests. An explicit plan id means `_select_plan` returns no service type,
+  // so the server fell back to sweeping EVERY service type over three
+  // endpoints each -- 83 requests, which is why the message said "no service
+  // type set" on a board that has one, and why Planning Center eventually
+  // answered 429.
+  //
+  // ⚠️ Sending nothing is also the correct behaviour on its own terms: the
+  // server resolves "next" when it matters, so a panel left open for a week
+  // does not check last Sunday's plan. The sync path beside this one has said
+  // so since #120; only this call never asked.
   const planSel = document.getElementById('pco-plan-select');
-  const plan = (planSel && planSel.value) || '';
+  const plan = syncPlanParam((planSel && planSel.value) || '');
   const url = plan ? `api/pco/preview?plan=${encodeURIComponent(plan)}` : 'api/pco/preview';
 
   fetch(url, { cache: 'no-store' })
