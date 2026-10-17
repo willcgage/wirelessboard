@@ -3551,7 +3551,24 @@ function loadPcoTeams() {
 function loadPcoServiceTypes() {
   const sel = document.getElementById('pco-service-type-id');
   if (!sel) return;
-  const saved = sel.value || '';
+  // ⛔⛔ The stored value too, not only what the select is showing.
+  //
+  // `openPCOView` sets `sel.value = service_type_id` BEFORE this fetch has
+  // populated any options — and assigning a value a `<select>` has no option
+  // for silently leaves it as `''`. So this read it back as empty, restored
+  // nothing, and the control sat on "All service types" while the
+  // configuration said otherwise.
+  //
+  // ⛔ That is not a display bug. `Save matching` reads this control, and an
+  // empty value means *delete the service type* — so opening the section and
+  // saving anything at all silently wiped the setting. Found on the venue
+  // board: the config held `1788894` while the select showed "All service
+  // types" and held `''`.
+  //
+  // ⚠️ The select wins when it has a value, because an operator may have just
+  // picked something they have not saved yet.
+  const stored = (micboard.config && micboard.config.pco && micboard.config.pco.services) || {};
+  const saved = sel.value || String(stored.service_type_id || '');
   fetch(`api/pco/services?_=${Date.now()}`, { cache: 'no-store' })
     .then((r) => r.json())
     .then((resp) => {
@@ -4078,8 +4095,24 @@ function checkMappingAgainstPlan() {
   if (button) button.disabled = true;
   setExampleNote('Checking against the next plan\u2026', null);
 
+  // ⛔⛔ Through `syncPlanParam`, NOT the select's raw value. "Next upcoming"
+  // is the sentinel `__next__`, and this sent it as a plan id -- so the board
+  // asked Planning Center for `/plans/__next__/plan_people` and was told, with
+  // some justice, "You must pass a plan id".
+  //
+  // ⭐ That one slip produced every Planning Center failure of three venue
+  // tests. An explicit plan id means `_select_plan` returns no service type,
+  // so the server fell back to sweeping EVERY service type over three
+  // endpoints each -- 83 requests, which is why the message said "no service
+  // type set" on a board that has one, and why Planning Center eventually
+  // answered 429.
+  //
+  // ⚠️ Sending nothing is also the correct behaviour on its own terms: the
+  // server resolves "next" when it matters, so a panel left open for a week
+  // does not check last Sunday's plan. The sync path beside this one has said
+  // so since #120; only this call never asked.
   const planSel = document.getElementById('pco-plan-select');
-  const plan = (planSel && planSel.value) || '';
+  const plan = syncPlanParam((planSel && planSel.value) || '');
   const url = plan ? `api/pco/preview?plan=${encodeURIComponent(plan)}` : 'api/pco/preview';
 
   fetch(url, { cache: 'no-store' })
