@@ -339,6 +339,7 @@ function mapGroups() {
     getLockState: () => micboard.viewerLock,
     openAdmin: openAdminPage,
     getScreens: () => (micboard.config && micboard.config.screens) || [],
+    getDocks: () => (micboard.config && micboard.config.docks) || [],
     getScreenId: () => micboard.screenId || '',
     setScreenId: (id) => {
       micboard.screenId = String(id || '');
