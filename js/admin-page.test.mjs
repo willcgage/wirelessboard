@@ -196,15 +196,18 @@ test('⛔ but a LOADED configuration with no Planning Center block says so', () 
 
 test('receivers count the receivers this board has, not the scan', () => {
   // ⭐ A receiver is an address. Four slots on one box is one receiver.
-  const config = { slots: [
-    { ip: '10.0.0.61', type: 'qlxd' },
-    { ip: '10.0.0.61', type: 'qlxd' },
-    { ip: '10.0.0.62', type: 'ulxd' },
-  ] };
+  const config = {
+    slots: [
+      { ip: '10.0.0.61', type: 'qlxd' },
+      { ip: '10.0.0.61', type: 'qlxd' },
+      { ip: '10.0.0.62', type: 'ulxd' },
+    ],
+  };
   assert.equal(stateLine('receivers', { config, discovered: [] }), '2 receivers, 3 channels');
   assert.equal(
     stateLine('receivers', { config: { slots: [{ ip: '10.0.0.61', type: 'qlxd' }] }, discovered: [] }),
-    '1 receiver, 1 channel');
+    '1 receiver, 1 channel',
+  );
 });
 
 test('⛔ a working board never reads "0 found" because the scan was empty', () => {
@@ -223,19 +226,20 @@ test('⛔ a working board never reads "0 found" because the scan was empty', () 
 test('slots with no receiver behind them are not receivers', () => {
   // `offline` slots carry no address, and 1.16.0 saved receiver slots with no
   // IP at all -- neither is a box this board talks to.
-  const config = { slots: [
-    { ip: '10.0.0.61', type: 'qlxd' },
-    { type: 'offline' },
-    { type: 'slxd' },
-    { ip: '', type: 'ulxd' },
-  ] };
+  const config = {
+    slots: [
+      { ip: '10.0.0.61', type: 'qlxd' },
+      { type: 'offline' },
+      { type: 'slxd' },
+      { ip: '', type: 'ulxd' },
+    ],
+  };
   assert.equal(stateLine('receivers', { config, discovered: [] }), '1 receiver, 1 channel');
 });
 
 test('with nothing configured, the scan is what is worth saying', () => {
   const empty = { slots: [] };
-  assert.equal(
-    stateLine('receivers', { config: empty, discovered: [{}, {}] }), '2 found, none added yet');
+  assert.equal(stateLine('receivers', { config: empty, discovered: [{}, {}] }), '2 found, none added yet');
   assert.equal(stateLine('receivers', { config: empty, discovered: [] }), 'None configured');
 });
 
@@ -245,6 +249,96 @@ test('a board that has not been told anything yet says nothing', () => {
   // something is wrong.
   assert.equal(stateLine('receivers', {}), null);
   assert.equal(stateLine('receivers', { discovered: [] }), null);
+});
+
+test('groups report how many, and what is in none of them', () => {
+  // ⭐ The count alone is the boring half. A channel in no group is invisible
+  // to anyone viewing groups rather than the combined board, and nothing else
+  // on the board says so — it is the question the Groups panel exists to
+  // answer, so the rail answers it too.
+  const groups = [{ group: 1, slots: [1] }];
+  const slots = [{ slot: 1 }, { slot: 2 }, { slot: 3 }];
+
+  assert.equal(stateLine('groups', { config: { groups, slots } }), '1 group, 2 channels in none');
+  assert.equal(
+    stateLine('groups', { config: { groups, slots: [{ slot: 1 }, { slot: 2 }] } }),
+    '1 group, 1 channel in none',
+  );
+  assert.equal(
+    stateLine('groups', { config: { groups, slots: [{ slot: 1 }] } }),
+    '1 group',
+  );
+  assert.equal(
+    stateLine('groups', {
+      config: { groups: [{ group: 1, slots: [1] }, { group: 2, slots: [2] }], slots },
+    }),
+    '2 groups, 1 channel in none',
+  );
+});
+
+test('a board with no groups is not reported as having every channel loose', () => {
+  // ⚠️ True and useless: with no groups, channels still show on All channels,
+  // which is the ordinary state of a board nobody has grouped.
+  assert.equal(
+    stateLine('groups', { config: { groups: [], slots: [{ slot: 1 }, { slot: 2 }] } }),
+    'None yet',
+  );
+});
+
+test('⛔ a null in a group\'s stored list cannot claim a channel', () => {
+  // `Number(null)` is 0 — finite, and it passes every obvious guard. The slot
+  // list is read through the same helper that was hardened for #243, so junk
+  // is discarded rather than claiming a phantom channel and hiding an orphan.
+  const config = { groups: [{ group: 1, slots: [null, '', 1] }], slots: [{ slot: 1 }, { slot: 2 }] };
+  assert.equal(stateLine('groups', { config }), '1 group, 1 channel in none');
+
+  // A group saved without a membership at all claims nothing.
+  assert.equal(
+    stateLine('groups', { config: { groups: [{ group: 1 }], slots: [{ slot: 1 }] } }),
+    '1 group, 1 channel in none',
+  );
+});
+
+test('⛔ a loaded config with no groups key is not the same silence', () => {
+  // The case was written and the rail still read blank on a real board: the
+  // dev configuration has no 197609 key at all, and treating that like
+  // "not told anything yet" meant the one state worth reporting -- a board
+  // nobody has grouped -- was the one that said nothing. Found by looking at
+  // the running rail, not by this suite.
+  assert.equal(stateLine('groups', { config: {} }), 'None yet');
+  assert.equal(stateLine('groups', { config: { slots: [{ slot: 1 }] } }), 'None yet');
+
+  // Before the first payload there is still nothing honest to say.
+  assert.equal(stateLine('groups', {}), null);
+});
+
+test('⛔ every Setup item reports itself — none sits blank', () => {
+  // The general shape of the gap: Groups was the one rail item with no state
+  // line at all, so it sat blank while every neighbour reported itself. Found
+  // in a venue photograph rather than by anything in this suite.
+  //
+  // ⚠️ Scoped to Setup on purpose. Diagnostics items are doors, not settings —
+  // Logs and Demo mode have no state to report and saying nothing is correct.
+  const facts = {
+    config: {
+      screens: [{ diagonal: 55 }],
+      slots: [{ slot: 1, extended_name: 'Someone' }],
+      groups: [{ group: 1, slots: [1] }],
+      pco: {},
+    },
+    discovered: [{ channels: 4 }],
+    images: ['a.jpg'],
+    videos: [],
+  };
+
+  const setup = SECTIONS.find((s) => /setup/i.test(s.title));
+  assert.ok(setup, 'there is a Setup section');
+
+  const blank = setup.items
+    .filter((item) => stateLine(item.id, facts) === null)
+    .map((item) => item.label);
+
+  assert.deepEqual(blank, [], `these Setup items report nothing: ${blank}`);
 });
 
 test('screens and slots report what is described and what is named', () => {
