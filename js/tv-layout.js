@@ -119,9 +119,30 @@ export function updateTvLayoutMetrics() {
   // is up would be a feedback loop: the strip lowers `availableHeight`, which
   // lowers `capacity`, which can be what makes the board page, which puts the
   // bar up. `off` is there for an operator who wants the pixels back.
+  // ⛔⛔ MEASURED, not the 28px the stylesheet names. `--statusbar-height` is a
+  // constant, and the bar is text in a box: at a larger root size, or with a
+  // longer line, it is taller than the strip reserved for it and lands on the
+  // cards. Photographed on a 24in display with the bar at the top, sitting
+  // across the HH-3 and HH-4 headings.
+  //
+  // ⚠️ The floor keeps the old behaviour as the minimum, so a bar that has not
+  // rendered yet reserves what it always did rather than nothing.
+  //
+  // ⚠️ No feedback loop: the bar's type is root-relative, not board-relative,
+  // so nothing the layout does can change the height measured here.
+  const statusBarEl = document.getElementById('rotation-bar');
+  const statusFloor = readNumeric(containerStyle.getPropertyValue('--statusbar-height'), 0);
   const statusStrip = micboard.statusBar === 'off'
     ? 0
-    : readNumeric(containerStyle.getPropertyValue('--statusbar-height'), 0);
+    : Math.max(statusFloor, statusBarEl ? statusBarEl.offsetHeight : 0);
+  // ⛔ Only while it is on. Written inline this beats `body.statusbar-off`,
+  // which would hand the strip back its height on a board that asked for the
+  // pixels.
+  if (micboard.statusBar === 'off') {
+    document.body.style.removeProperty('--statusbar-height');
+  } else {
+    document.body.style.setProperty('--statusbar-height', `${statusStrip}px`);
+  }
 
   // ⛔⛔ The service-position strip, which was never reserved at all (#121).
   // `.live-strip.live-at-bottom` is `position: fixed; bottom: 0` at z-index
