@@ -7,7 +7,7 @@ import {
   screenDocks, dockPositionsForScreen, describeScreenDocks, screenNamesDock,
 } from './docks.mjs';
 import {
-  dockProblem, docksHaveProblems, toPayload, mergeSaved, saveSummary,
+  dockProblem, docksHaveProblems, toPayload, mergeSaved, saveCounts,
   uniqueDockId, screensUsing,
 } from './dock-editor.mjs';
 import {
@@ -203,9 +203,10 @@ test('incomplete rows are held back, and the summary says they are still there',
   assert.deepEqual(payload[0], {
     id: 'main-dock', name: 'Main dock', kind: 'charging', position_inches: 3.9, positions: 2,
   });
-  assert.match(saveSummary(rows), /1 dock saved/);
-  assert.match(saveSummary(rows), /still here to finish/);
-  assert.match(saveSummary([]), /Nothing described/);
+  // ⛔ Counts, not a sentence: one request saves the screens and the docks
+  // together, so one sentence has to speak for both (A2).
+  assert.deepEqual(saveCounts(rows), { saved: 1, incomplete: 1 });
+  assert.deepEqual(saveCounts([]), { saved: 0, incomplete: 0 });
 });
 
 test('⛔ a save never deletes the row somebody is typing into (#180)', () => {

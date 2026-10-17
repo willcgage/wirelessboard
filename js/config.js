@@ -18,15 +18,17 @@ import {
 } from './sync-diff.mjs';
 import { isLocked } from './viewer-lock.mjs';
 import {
-  screenProblem, toPayload as screensToPayload, saveSummary as screensSaveSummary,
+  screenProblem, toPayload as screensToPayload, saveCounts as screensSaveCounts,
   mergeSaved,
 } from './screens-editor.mjs';
 import {
   dockProblem,
   toPayload as docksToPayload,
   mergeSaved as dockMergeSaved,
+  saveCounts as docksSaveCounts,
   screensUsing,
 } from './dock-editor.mjs';
+import { pairedSaveSummary } from './editor-rows.mjs';
 import {
   DOCK_KINDS, DOCK_KIND_LABELS, dockChoices, dockKind, describeScreenDocks,
 } from './docks.mjs';
@@ -5793,7 +5795,17 @@ function saveScreens() {
   // replaces the rows. Computed afterwards it compares the saved list with
   // itself, so "1 incomplete row not saved" could never appear -- which is
   // exactly the sentence somebody needs.
-  const summary = screensSaveSummary(screenRows);
+  // ⛔ BOTH lists. This summarised the screens alone, so a dock dropped for
+  // having no name left the line underneath talking about screens -- which is
+  // how A2 was reported as something the operator had to work out for
+  // themselves: "I had to give the Dock a name before it would save."
+  const summary = pairedSaveSummary(
+    [
+      { ...screensSaveCounts(screenRows), one: 'screen', many: 'screens' },
+      { ...docksSaveCounts(dockRows), one: 'dock', many: 'docks' },
+    ],
+    { nothing: 'Nothing described. Boards will have no minimum column width.' },
+  );
   // ⛔ Its own endpoint, not the configuration save: describing a screen
   // changes how a board lays itself out and nothing about the receivers, so it
   // must not drop every socket for two seconds (#116).
