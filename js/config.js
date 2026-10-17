@@ -3551,7 +3551,24 @@ function loadPcoTeams() {
 function loadPcoServiceTypes() {
   const sel = document.getElementById('pco-service-type-id');
   if (!sel) return;
-  const saved = sel.value || '';
+  // ⛔⛔ The stored value too, not only what the select is showing.
+  //
+  // `openPCOView` sets `sel.value = service_type_id` BEFORE this fetch has
+  // populated any options — and assigning a value a `<select>` has no option
+  // for silently leaves it as `''`. So this read it back as empty, restored
+  // nothing, and the control sat on "All service types" while the
+  // configuration said otherwise.
+  //
+  // ⛔ That is not a display bug. `Save matching` reads this control, and an
+  // empty value means *delete the service type* — so opening the section and
+  // saving anything at all silently wiped the setting. Found on the venue
+  // board: the config held `1788894` while the select showed "All service
+  // types" and held `''`.
+  //
+  // ⚠️ The select wins when it has a value, because an operator may have just
+  // picked something they have not saved yet.
+  const stored = (micboard.config && micboard.config.pco && micboard.config.pco.services) || {};
+  const saved = sel.value || String(stored.service_type_id || '');
   fetch(`api/pco/services?_=${Date.now()}`, { cache: 'no-store' })
     .then((r) => r.json())
     .then((resp) => {
