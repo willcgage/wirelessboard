@@ -10,6 +10,95 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.7] - 2026-10-17
+
+The first build answering a venue test, and the first on which **the dock can reach the board at
+all**.
+
+⛔⛔ Everything that made a column line up with the microphone under it was wired, tested and
+correct, and was handed an empty list every time: `tv-layout.js` called for the screen's minimum
+column width and never passed the docks. That is the whole of why *"describe a screen, describe the
+dock under it, watch the column count follow"* has been the headline test for three releases and has
+never once worked. One omitted argument.
+
+⭐ **So that sentence is the thing to try first, again — and this is the first build where it can
+possibly do anything.** A screen can now name **several** docks, because the Green Room has eleven
+SBC200s under one television and the picker took one; and where every dock underneath says how many
+places it has, **the places set the column count**: eight channels under eleven places draw eleven
+columns rather than eight that point at nothing.
+
+⚠️ Twelve changes, and none of them has run on a television either. The rendered board cannot be
+drawn in a development browser on demo data — which is exactly why the broken argument above went
+unnoticed for three releases.
+
+### Added
+- **A screen can have several docks underneath** (#252). It named exactly one, and the field test
+  reported that as the plain limit it is: *"I can only choose 1 dock under a screen right now;
+  however, I have 11 under the Green Room Screen I am testing and using in production now."* The
+  row says back what the board will read off it — *2 docks underneath: 14 places, columns at least
+  3.9in* — so the count can be checked against the table before it drives anything. ⛔ The number of
+  positions on a dock had been typed, stored and read by nothing since it was added.
+- **The dock's places set the column count** (#255). ⛔ `board-layout.mjs` has said *"the column
+  count is the dock's, not the channel count's"* since #201 and it was never true — the dock only
+  ever *capped*, by width. Your Columns-on-screen setting still wins, and so does physics: eleven
+  places on a screen that fits eight of them is eight, because the other three cannot be pointed at.
+  ⚠️ Only where every dock under the screen declares its positions, so no board already in use moves.
+- **Channels can be put into a group again** (#243). ⛔ Nothing anywhere could do it: the board's
+  drag editor was the only writer of a group's membership and lost its only way in when the menu bar
+  was retired, so a group could be created, named, reordered and given a dwell time and would always
+  be empty. There is a channel picker in the Groups section now, and each row says which *other*
+  groups already hold that channel.
+- **Groups and Screens & docks report themselves on the rail** (#250, #251). Groups sat blank while
+  every neighbour said what was in it; it now reads *2 groups, 6 channels in none* — the count, plus
+  the thing nothing else on the board tells you, since a channel in no group is invisible to anyone
+  not on the combined view. ⚠️ Screens & docks was blank on **every** board out of the box: no
+  shipped configuration carries a screens key, and the line insisted on one.
+
+### Changed
+- **Colour on a card means state; a figure wears ink** (#249). The frequency was painted with the
+  token `.CRITICAL` uses and the offset with `.GOOD`'s, a few hundred pixels from the band those
+  colours speak for — so a channel in perfect health showed a red number and a channel in trouble a
+  green one. Reported from the venue as *"why is the frequency red"*, and the honest answer was that
+  it had always been red and meant nothing by it.
+- **The board declares that it is dark** (#253). A `<select>`'s popup, a spinner and a scrollbar are
+  drawn by the browser, not by the stylesheet, and nothing said which way to draw them — so they
+  rendered light while the controls around them were dark and handed down pale text. Reported while
+  adding a receiver: *"the text is hard to read because of Dark Mode on my system."* ⏳ Windows High
+  Contrast is a separate thing and is **not** addressed.
+- **A Planning Center sync no longer reads as a broken one** (#217). The roster is found by trying
+  several paths, and every miss was logged as a warning — measured against this account, **86
+  requests of which 84 miss**, so a sync that worked perfectly wrote 84 alarming lines into the log
+  somebody reads when something is wrong. The attempts are detail now and the *outcome* is one line,
+  which tells apart the three cases that looked identical: found on a later path, nobody scheduled
+  yet, or a token that cannot see the service type.
+- **One Save button, one sentence that speaks for both lists** (#254). The screens and the docks are
+  saved together on purpose — a screen names the dock beneath it, and two saves leave a window where
+  it points at something that does not exist yet — but only the screens were ever summarised. So a
+  dock with no name was dropped, correctly, and the line underneath talked about screens: *"I had to
+  give the Dock a name before it would save."* It now says *1 screen saved. 1 dock incomplete — the
+  row is still here to finish*, and names which list.
+
+### Fixed
+- **Logs showed nothing at all** (#244). `/api/logs` answered 200 with a JSON content type and an
+  empty body, so the viewer failed with *"Unexpected end of JSON input"*. The handler's body had
+  been deleted along with the Google Drive support that had been defined, unhelpfully, inside it.
+  ⚠️ Valid Python, so it compiled and the whole suite passed.
+- **A Planning Center failure named the request that failed** (#245). The fallback sweep makes some
+  eighty requests and the reported status belonged to whichever ran *last* — so *"Planning Center
+  returned 400"* pointed at a service type nobody had asked about. With #217 and #244, a failure
+  here is now diagnosable from the log alone.
+- **"Receivers — 0 found" on a board monitoring twelve channels** (#245). The line counted the
+  discovery scan and nothing else, so an empty scan read as *you have no receivers* beside a wall of
+  live meters. It counts the receivers the board actually talks to, by address — a four-channel box
+  being one receiver.
+- **The display mode survives a reload** (#248). Choosing a mode stored it and never cleared the old
+  one from the URL, and the URL wins — so a board set to Pocket or Rack came back as Board. ⭐ Board
+  twice was the tell: Rack is the default, so nothing was falling back.
+- **A dock a screen names is read whichever way it was saved** (#252, #255). The single-dock field is
+  still read and never written, so a board described under the older shape keeps its floor rather
+  than silently widening its columns past the dock they were measured against.
+
+
 ## [2.0.0-beta.6] - 2026-10-16
 
 Everything behind the gear. The menu bar is gone, the configuration page with it, and every surface
