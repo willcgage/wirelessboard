@@ -10,13 +10,29 @@
 ### Fixed
 - _Nothing yet._
 
-## [2.0.0-beta.11] - 2026-10-17
+## [2.0.0-beta.12] - 2026-10-17
+
+⛔ **Install this one by hand.** A board running any earlier beta cannot be offered it, for the
+reason this release fixes — see the first item. Once this build is on, the update channel works
+again by itself.
 
 Cut to clear the way for the previous build's test rather than to add anything. beta.10 changed how
 every photograph is drawn, and then a strip was found sitting across the cards it was meant to be
 judged on — so this gets the chrome off the pictures first.
 
+⚠️ **There is no beta.11.** It was tagged and built, and the fault below was found before it was
+published; everything intended for it is here.
+
 ### Fixed
+- **The update check could not count past nine.** A board running beta.9 was told it was up to date
+  and offered nothing — not beta.10, not beta.11, and not the finished 2.0.0 when it comes. Versions
+  with a suffix were compared as plain text, and as text `beta.9` sorts *after* `beta.10` exactly as
+  `9` sorts after `1`. Every comparison before the betas reached double figures happened to agree
+  with that ordering, so this had been waiting since the first one and broke on the day the counter
+  rolled over.
+  ⭐ Found while working out why the newest build could not be seen on the releases page — which has
+  the same cause and is not ours: that page is not ordered newest-first either.
+
 - **The service-position strip no longer overlaps the cards.** It is pinned to the foot of the screen
   and drawn over the board, and the only thing making room for it was a fixed allowance the layout
   never knew about — so the rows were sized for the whole screen and the last one ran on underneath
