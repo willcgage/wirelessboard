@@ -383,3 +383,14 @@ test('⛔ a slot with no role shows nothing, rather than its device id twice', (
     'the role is only drawn when it says something the heading does not',
   );
 });
+
+test('⛔⛔ the role is UNDER the device heading, not beside it', () => {
+  // It shipped beside it: `.chan-label` is a flex container and was left at the
+  // default `row`, so both lines reported `top: 0` in a browser. The comment in
+  // the markup said "under" and the CSS did not.
+  const css = readFileSync(join(HERE, '..', 'css', 'style.scss'), 'utf8');
+  const block = css.slice(css.indexOf('.chan-label {'));
+  const rule = block.slice(0, block.indexOf('}'));
+  assert.match(rule, /flex-direction:\s*column/, '.chan-label must stack its two lines');
+  assert.match(rule, /align-items:\s*center/, 'and centre them across the card');
+});
