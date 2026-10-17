@@ -215,7 +215,7 @@ export function isTypeSize(value) {
  */
 export function columnsFor({
   slotCount, maxColumns, arrangement = 'fit', columns = COLUMNS_AUTO,
-  maxColumnsAtMinimum = null,
+  maxColumnsAtMinimum = null, dockPositions = null,
 }) {
   const n = toCount(slotCount);
   const fits = toCount(maxColumns);
@@ -235,12 +235,39 @@ export function columnsFor({
     return Math.max(1, out);
   };
 
-  if (arrangement === 'row') {
-    return capped(n);
-  }
-
   if (arrangement === 'column') {
     return 1;
+  }
+
+  // ⭐⭐ The dock's own number, where it has one. This file has said "the
+  // column count is the dock's, not the channel count's" since #201 and it was
+  // never true: the dock only ever *capped*, by width, so eight channels under
+  // an eleven-position dock drew eight columns that lined up with nothing.
+  //
+  // ⛔ A column points at a physical place below the screen. With the places
+  // counted, the count is theirs — a board with fewer channels than places
+  // still draws a column per place, which is the whole reason a column means
+  // anything on that wall.
+  //
+  // ⚠️ Still `capped`. The operator's ceiling is a preference they stated, and
+  // the width floor is physics: a dock claiming eleven places on a screen that
+  // fits eight of them gets eight, because the other three cannot be pointed
+  // at. Only set when every dock under the screen declares its positions —
+  // `dockPositionsForScreen` returns null otherwise, and then nothing below
+  // changes.
+  // ⛔ NOT `toCount`. That helper falls back to **1** for anything unusable, so
+  // `toCount(null)` is 1 — and an undescribed dock would have silently given
+  // every board a single column. It is the right default for a slot count,
+  // where one is the smallest honest answer, and exactly wrong for a value
+  // whose absence means "no opinion". The same shape as `Number(null)` being
+  // 0, which cost a phantom channel in #243.
+  const places = Number(dockPositions);
+  if (Number.isFinite(places) && places > 0) {
+    return capped(Math.floor(places));
+  }
+
+  if (arrangement === 'row') {
+    return capped(n);
   }
 
   if (arrangement === 'grid') {
@@ -436,7 +463,7 @@ export function layoutSlotCount({ shown, drawn } = {}) {
 export function computeLayout({
   slotCount, containerWidth, availableHeight, slotWidth = 420, gap = 0,
   arrangement = 'fit', shape = 'auto', columns: columnChoice = COLUMNS_AUTO,
-  minColumnWidth = null,
+  minColumnWidth = null, dockPositions = null,
 }) {
   const n = toCount(slotCount);
   const width = Number(slotWidth) > 0 ? Number(slotWidth) : 420;
@@ -457,6 +484,7 @@ export function computeLayout({
     arrangement,
     columns: columnChoice,
     maxColumnsAtMinimum: floor,
+    dockPositions,
   });
 
   // ⛔⛔ `Side by side` is ALWAYS one row (#201). Settled by the maintainer,

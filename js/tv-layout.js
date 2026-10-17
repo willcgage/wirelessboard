@@ -1,6 +1,7 @@
 import { micboard } from './app.js';
 import { computeLayout, gridTemplateFor, layoutSlotCount } from './board-layout.mjs';
-import { minColumnPixelsForScreen } from './display-geometry.mjs';
+import { minColumnPixelsForScreen, screenById } from './display-geometry.mjs';
+import { dockPositionsForScreen } from './docks.mjs';
 import { repageForCapacity } from './rotation-view.js';
 
 let tvResizeObserver;
@@ -129,12 +130,36 @@ export function updateTvLayoutMetrics() {
   // ⚠️ Resolution from the browser, physical size from the configuration. The
   // screen reports its own pixels, so nobody has to type them and they cannot
   // describe a screen the board is not on.
+  // ⛔⛔ **The docks, which were never passed.** `minColumnPixelsForScreen`
+  // takes `docks = []` by default, and this call omitted it -- so the width
+  // came from the legacy `min_column_inches` on the screen row or from
+  // nothing at all, and the dock a screen names reached the layout NEVER.
+  //
+  // That is why #170/#201 "shipped three times and engaged zero": not the
+  // save, not the screen description, this one argument. A described screen
+  // over a described dock measured 3.9in positions and the board went on
+  // laying itself out as though nothing was underneath it.
   const screens = (micboard.config && micboard.config.screens) || [];
-  const minColumnWidth = minColumnPixelsForScreen({
+  const docks = (micboard.config && micboard.config.docks) || [];
+  const forScreen = {
     screens,
     screenId: micboard.screenId,
+    docks,
+  };
+  const minColumnWidth = minColumnPixelsForScreen({
+    ...forScreen,
     widthPx: (window.screen && window.screen.width) || window.innerWidth,
     heightPx: (window.screen && window.screen.height) || window.innerHeight,
+  });
+
+  // ⭐ And the dock's own count (A3). A column points at a physical place
+  // below the screen, so where the places are counted the count is theirs --
+  // eight channels under eleven places still draw eleven columns. Null unless
+  // every dock under the screen declares its positions, and then nothing
+  // changes.
+  const dockPositions = dockPositionsForScreen({
+    screen: screenById(screens, micboard.screenId),
+    docks,
   });
 
   const {
@@ -150,6 +175,7 @@ export function updateTvLayoutMetrics() {
     shape: micboard.cardShape,
     columns: micboard.columns,
     minColumnWidth,
+    dockPositions,
   });
 
   container.style.setProperty('--tvmode-rows', rows.toString());
