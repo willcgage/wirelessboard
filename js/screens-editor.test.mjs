@@ -10,7 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  screenId, uniqueScreenId, screenProblem, screensHaveProblems, toPayload, saveSummary,
+  screenId, uniqueScreenId, screenProblem, screensHaveProblems, toPayload, saveCounts,
   pairRows, mergeSaved,
 } from './screens-editor.mjs';
 
@@ -83,18 +83,15 @@ test('numbers arriving as text from a form are numbers in the payload', () => {
   assert.equal(payload[0].min_column_inches, 4.5);
 });
 
-test('⚠️ saving says when a row was not saved, and that it is still there', () => {
-  // A row silently dropped is discovered weeks later, when a board behaves oddly.
-  assert.equal(saveSummary([WALL]), '1 screen saved.');
-  assert.equal(
-    saveSummary([WALL, { name: 'Broken' }]),
-    '1 screen saved. 1 incomplete row is still here to finish.',
-  );
-  assert.match(saveSummary([WALL, {}, {}]), /2 incomplete rows are still here to finish/);
-});
-
-test('an empty list says what that means rather than nothing', () => {
-  assert.match(saveSummary([]), /No screens\. Boards will have no minimum/);
+test('⚠️ saving counts what went and what was held back', () => {
+  // A row silently dropped is discovered weeks later, when a board behaves
+  // oddly. ⛔ Counts rather than a sentence now: the screens and the docks are
+  // saved in ONE request, so the sentence has to be built from both lists --
+  // see `pairedSaveSummary`. This used to summarise the screens alone.
+  assert.deepEqual(saveCounts([WALL]), { saved: 1, incomplete: 0 });
+  assert.deepEqual(saveCounts([WALL, { name: 'Broken' }]), { saved: 1, incomplete: 1 });
+  assert.deepEqual(saveCounts([WALL, {}, {}]), { saved: 1, incomplete: 2 });
+  assert.deepEqual(saveCounts([]), { saved: 0, incomplete: 0 });
 });
 
 test('screensHaveProblems is the form-level answer', () => {

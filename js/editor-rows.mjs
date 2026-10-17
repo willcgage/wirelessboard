@@ -96,3 +96,60 @@ export function saveSummary(rows, spec, { noun, nothing }) {
   const rowWord = dropped === 1 ? 'row is' : 'rows are';
   return `${kept}. ${dropped} incomplete ${rowWord} still here to finish.`;
 }
+
+/**
+ * How many rows of one list went, and how many were held back.
+ *
+ * Separated from the sentence so two lists saved in one request can be
+ * reported together — see `pairedSaveSummary`.
+ */
+export function saveCounts(rows, spec) {
+  const saved = toPayload(rows, spec).length;
+  return { saved, incomplete: (rows || []).length - saved };
+}
+
+/**
+ * What one Save button should say when it saved two lists (A2).
+ *
+ * ⛔ The screens and the docks go in ONE request — a screen names the dock
+ * beneath it, and two saves leave a window where a screen points at something
+ * that does not exist yet — but only the screens were ever summarised. So a
+ * dock with no name was dropped from the payload and the line underneath
+ * talked about screens, which is how the field test ended up reporting it as
+ * something they had to work out: *"I had to give the Dock a name before it
+ * would save."*
+ *
+ * ⚠️ The incomplete rows are attributed. "1 incomplete row is still here" over
+ * two lists does not say which list to go and look at, and the whole value of
+ * the sentence is that somebody can act on it.
+ *
+ * `parts` is `[{ saved, incomplete, one, many }]`, in the order they should be
+ * read.
+ */
+export function pairedSaveSummary(parts, { nothing }) {
+  const lists = (parts || []).filter(Boolean);
+  const anything = lists.some((p) => p.saved || p.incomplete);
+  if (!anything) {
+    return nothing;
+  }
+
+  const name = (p, n) => (n === 1 ? p.one : p.many);
+
+  const kept = lists
+    .filter((p) => p.saved)
+    .map((p) => `${p.saved} ${name(p, p.saved)}`);
+
+  const held = lists
+    .filter((p) => p.incomplete)
+    .map((p) => `${p.incomplete} ${name(p, p.incomplete)}`);
+
+  const sentences = [];
+  if (kept.length) sentences.push(`${kept.join(' and ')} saved.`);
+  if (held.length) {
+    const rowWord = held.length === 1 && lists.find((p) => p.incomplete).incomplete === 1
+      ? 'row is'
+      : 'rows are';
+    sentences.push(`${held.join(' and ')} incomplete — the ${rowWord} still here to finish.`);
+  }
+  return sentences.join(' ');
+}

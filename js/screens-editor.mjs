@@ -2,7 +2,7 @@ import {
   pairRows as rowsPairRows,
   toPayload as rowsToPayload,
   mergeSaved as rowsMergeSaved,
-  saveSummary as rowsSaveSummary,
+  saveCounts as rowsSaveCounts,
 } from './editor-rows.mjs';
 
 /**
@@ -133,9 +133,14 @@ export function mergeSaved(rows, saved) {
   return rowsMergeSaved(rows, saved, SPEC);
 }
 
-export function saveSummary(rows) {
-  return rowsSaveSummary(rows, SPEC, {
-    noun: (n) => `screen${n === 1 ? '' : 's'}`,
-    nothing: 'No screens. Boards will have no minimum column width.',
-  });
+/**
+ * How many screens went, and how many were held back (A2).
+ *
+ * ⛔ Counts rather than a sentence. The screens and the docks are saved in one
+ * request, and only the screens were ever summarised — so a dock dropped for
+ * having no name left the line underneath talking about screens. The sentence
+ * is built from both lists now, by `pairedSaveSummary`.
+ */
+export function saveCounts(rows) {
+  return rowsSaveCounts(rows, SPEC);
 }

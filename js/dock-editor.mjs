@@ -13,7 +13,7 @@ import {
   pairRows as rowsPairRows,
   toPayload as rowsToPayload,
   mergeSaved as rowsMergeSaved,
-  saveSummary as rowsSaveSummary,
+  saveCounts as rowsSaveCounts,
 } from './editor-rows.mjs';
 import { dockKind, screenNamesDock } from './docks.mjs';
 
@@ -96,11 +96,17 @@ export function mergeSaved(rows, saved) {
   return rowsMergeSaved(rows, saved, SPEC);
 }
 
-export function saveSummary(rows) {
-  return rowsSaveSummary(rows, SPEC, {
-    noun: (n) => (n === 1 ? 'dock' : 'docks'),
-    nothing: 'Nothing described. Screens will have no minimum column width.',
-  });
+/**
+ * How many docks went, and how many were held back (A2).
+ *
+ * ⛔ This used to build its own sentence, and nothing ever called it — the
+ * save line was the screens' alone. So a dock dropped for having no name was
+ * reported by a sentence about screens, which is how the field test came to
+ * say "I had to give the Dock a name before it would save": they worked it
+ * out, the product never said it.
+ */
+export function saveCounts(rows) {
+  return rowsSaveCounts(rows, SPEC);
 }
 
 /**
