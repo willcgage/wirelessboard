@@ -10,6 +10,40 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.13] - 2026-10-17
+
+What a slot is **for** now appears on its card, and the words used for it are the same words
+everywhere else. Cut so both can be looked at on a wall, along with two strips that were sitting on
+the cards rather than beside them.
+
+### Added
+- **A slot's role is on its card**, under the radio's name: `HH-7` and beneath it `Welcome`. The
+  radio answers *which handheld is this*; the role answers *what is it for*, which is the one an
+  operator setting up a service is reading. ⚠️ A slot with no role of its own shows nothing rather
+  than repeating the radio's name underneath itself.
+- **Guidance on photographing the team**, in the README and beside the filename list in Backgrounds.
+  A card is always taller than it is wide, and a portrait photograph fills one exactly — the board
+  will never cut a face off, but a picture taken for the shape of the card needs no rescuing.
+
+### Changed
+- **Every label on a slot says one thing, and says it everywhere.** Six fields had ten names between
+  them, and two of those names were attached to the wrong field: the column headed *Device id* held
+  the role, while the radio's actual id sat in the column beside it — and the empty box offered the
+  radio's name as a suggestion, teaching the confusion to anyone setting a board up. The role itself
+  answered to three names at once, one of which was *Position*, which is also what the Planning
+  Center field is called.
+  It is now **Device**, **Role**, **Person** and **Plan position**, in every pane. *Extended Name* is
+  gone from the screen; it was a storage key on display, and the same field was already called
+  *Person* one pane away. ⚠️ Only the words changed — what is stored, and what Planning Center
+  matches on, is untouched.
+
+### Fixed
+- **The service strip and the status bar sit beside the cards, not on them.** Each was positioned
+  against a fixed allowance while the board reserved what it had actually measured, so the two
+  disagreed — the status bar landed inside the service strip, and the difference between the guess
+  and the measurement showed up as a gap along the bottom. Both now read the same measured height,
+  and the status bar's own strip is the greater of its reserve and the height it really needs.
+
 ## [2.0.0-beta.12] - 2026-10-17
 
 ⛔ **Install this one by hand.** A board running any earlier beta cannot be offered it, for the
