@@ -1,4 +1,25 @@
 :root {
+  /* ⛔⛔ D7: "the text is hard to read because of Dark Mode on my system."
+     Reported while adding a receiver, and it is the native controls.
+
+     A `<select>`'s popup, a number spinner, a scrollbar and a date picker are
+     drawn by the BROWSER, not by our CSS. With no `color-scheme` declared the
+     page is treated as light-only, so those render light while the controls
+     around them are styled dark and pass `color: #D7D7D7` down to the
+     `<option>`s inside -- pale grey text on a white popup.
+
+     This board is dark everywhere: `html, body` is black and always has been.
+     Saying so is what makes the browser draw its own widgets to match.
+
+     ⚠️ Declaring it also flips the UA's INITIAL text colour from black to
+     white, so anything relying on that default inverts. `html, body` now
+     states its colour, and every light-background rule in the stylesheet
+     states its own -- there is a test that none may do otherwise.
+
+     ⏳ Not addressed: Windows High Contrast, which the same report raised as
+     a separate worry. That is `forced-colors` and wants its own pass. */
+  color-scheme: dark;
+
   --color-black: #262626;
   --color-red: #DC493A;
   --color-red-dark: #64221B;
