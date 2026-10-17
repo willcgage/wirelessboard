@@ -91,6 +91,27 @@ export function setDisplayMode(mode, { remember = true } = {}) {
   if (mode === 'tvmode') {
     applyDefaultBackgroundIfNeeded();
   }
+
+  // ⛔⛔ The URL has to be told too, or leaving Board is not survivable (B5).
+  //
+  // The hash carries the mode as `tvmode=<drawer>` and its *presence* is the
+  // opinion -- a Board writes the parameter, a Rack or Pocket board writes
+  // nothing -- and `resolvePref` lets the hash outrank what is stored. This
+  // was the one view setter that never wrote it back, so switching away from
+  // Board left a stale `tvmode=` behind: the choice was stored correctly and
+  // then overruled on the next load by a parameter describing the mode before
+  // last. Reported from the venue as "selected Pocket, reloaded, went to
+  // Board. Set it to Rack, reloaded, went to Board" -- Board twice, which is
+  // the tell, because Board is not the fallback. Rack is.
+  //
+  // ⚠️ Gated on `remember` for the same reason the write above is. The
+  // slot-name editor forces Rack because two text fields per card cannot be
+  // typed into from across a room; that is the editor's need and not an
+  // opinion about this screen, so it must leave both records of the
+  // operator's actual choice alone.
+  if (remember) {
+    updateHash();
+  }
 }
 
 /**
