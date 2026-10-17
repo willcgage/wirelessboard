@@ -193,12 +193,25 @@ p.device-name {
   white-space: nowrap;
 }
 
+/* ⛔⛔ On this card, colour means STATE. A figure is a fact, so it wears ink.
+
+   The frequency was `--color-red` and the offset `--color-green` -- the very
+   tokens `.CRITICAL` and `.GOOD` paint the band with, a few hundred pixels
+   away on the same card. So a channel in perfect health showed a red number,
+   and a channel in trouble still showed a green one. Reported from the venue
+   as "why is the frequency red"; the honest answer was that it had always been
+   red, and meant nothing by it.
+
+   ⚠️ This is an old colour-per-figure scheme that predates the status colours
+   taking on meaning. Hue is no longer free to use for telling two facts apart,
+   so the figures are distinguished the way `.offset` already was -- by form.
+   `--color-white` is the same ink `.spark-value` beside them uses. */
 .drawer-figures .frequency {
-  color: var(--color-red);
+  color: var(--color-white, #D7D7D7);
 }
 
 .drawer-figures .offset {
-  color: var(--color-green);
+  color: var(--color-white, #D7D7D7);
   font-style: italic;
 }
 
