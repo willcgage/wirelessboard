@@ -10,6 +10,39 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.16] - 2026-10-17
+
+The frequency was being painted over. It had been on every card, in every arrangement, since the
+figures moved into the drawer — and it took a photograph of the board to find, after a hundred and
+eighty measured arrangements had all come back clean.
+
+### Fixed
+- **The frequency is no longer cut in half by the antenna bars.** The two small bars at the foot of
+  each card are positioned against the bottom of the card rather than taking their place in the
+  row, so nothing was keeping room for them — and they were drawn on top of whatever ended up
+  underneath. That was the frequency, by about four pixels of its height, on every card and in every
+  arrangement. The space is now reserved from the same measurement that sizes the bars, so the two
+  cannot come apart again. The card does not get any taller; the drawer absorbs it.
+- **The figure row no longer sits slightly below its own line.** Its line spacing was set to exactly
+  the size of the type, which puts the bottom of the digits just past the box they are laid out in.
+  Harmless on its own, and half of how the bars reached them.
+
+### Changed
+- **Fit now says that it chooses its own columns.** Fit fills the screen with the grid that suits
+  it, so a column limit has nothing to do while Fit is selected — but the control sat there looking
+  live and said nothing, which reads exactly like the limit being ignored by mistake. It now says
+  so, in place, and **your limit is kept** rather than quietly reset: switch to Grid, Side by side
+  or Stacked and the number you chose is still the number in force.
+
+### Internal
+- Three repairs to the arrangement sweep added in beta.15, each found by running it against a real
+  board. It reported a clean pass while measuring cards the board was not showing, because the
+  layout had not run; it could not see text cut off inside a card, only text escaping one; and when
+  comparing two arrangements it was not holding the status bar, the live strip or the channel
+  details steady, so it reported differences that were simply those settings doing their job. All
+  three were the same fault in different clothes — reporting clean on something it could not see —
+  and each now fails loudly instead.
+
 ## [2.0.0-beta.15] - 2026-10-17
 
 The status colour appears in one place again — and the thing that found out why is the more useful
