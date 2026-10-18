@@ -46,6 +46,7 @@ import { ROTATION_STATES } from './rotation-states.mjs';
 import { LOCK_STATES, isLocked, allows } from './viewer-lock.mjs';
 import { showLockRefusal } from './viewer-lock-view.js';
 import { startLiveStrip } from './live-strip-view.js';
+import { installSweep } from './board-sweep-run.js';
 import { startRotation, noteInteraction } from './rotation-view.js';
 
 import '../css/colors.scss';
@@ -808,6 +809,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ⚠️ Its own slow timer, not the board payload's. The Live position changes
   // every few minutes; the board's data arrives several times a second (#121).
   try { startLiveStrip(() => micboard.livePlacement); } catch (_) {}
+  // ⭐ The configuration sweep (#273, #274, #276). Attaching it costs
+  // nothing until it is called, and it has to live on a real board
+  // because that is the whole point of it -- every wrong diagnosis it
+  // answers came from measuring a card built by hand instead.
+  try { installSweep(); } catch (_) {}
   // ⚠️ Always started: the driver itself decides each tick whether there is
   // anything to page, so turning rotation on needs no restart and a board
   // where everything fits pays one cheap check a second.
