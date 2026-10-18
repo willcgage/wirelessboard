@@ -82,6 +82,39 @@ function statusPainted(cardEl, micEl) {
   return painted;
 }
 
+/**
+ * Text the card is cutting off (#273).
+ *
+ * ⛔ Measured, not inferred: `scrollWidth` past `clientWidth` is the browser
+ * saying the text does not fit the box it was given, whoever is doing the
+ * hiding. The alternative -- reading `overflow` off the stylesheet and
+ * reasoning about it -- is how the first two diagnoses of this fault went
+ * wrong.
+ *
+ * ⚠️ Leaves with text only, and horizontal only. A container reports its
+ * children's overflow as well, so walking every element reports one fault
+ * several times over; and `.device-name` is 2px vertically short of its own
+ * line in every configuration there is.
+ */
+function clippedText(cardEl) {
+  const out = [];
+  const seen = new Set();
+  cardEl.querySelectorAll('*').forEach((el) => {
+    if (el.children.length) return;
+    const text = (el.textContent || '').trim();
+    if (!text) return;
+    if (el.scrollWidth - el.clientWidth <= 1) return;
+    const part = String(el.className || el.tagName).trim().split(/\s+/)[0];
+    const key = `${part}|${text}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({
+      part, text: text.slice(0, 24), clientWidth: el.clientWidth, scrollWidth: el.scrollWidth,
+    });
+  });
+  return out;
+}
+
 function measureBoard(config) {
   const container = document.getElementById('container');
   const read = (name) => getComputedStyle(container).getPropertyValue(name).trim();
@@ -106,6 +139,7 @@ function measureBoard(config) {
         chip: part('.status-chip'),
       },
       statusPainted: mic ? statusPainted(cardEl, mic) : [],
+      clipped: clippedText(cardEl),
     };
   });
   return {

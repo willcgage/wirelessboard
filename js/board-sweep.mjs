@@ -104,6 +104,28 @@ export function checkContainment(card, slack = 1) {
 }
 
 /**
+ * ⭐ The invariant #273 is really about, and the one `checkContainment` cannot
+ * see: text clipped *inside* the card.
+ *
+ * ⛔⛔ Containment compares a part against the card, so a figure that overflows
+ * its own box and is cut off by an `overflow: hidden` ancestor is still inside
+ * the card and still reported clean. That is exactly the shape of the reported
+ * fault -- the RF figure and the frequency "cut off" -- and 144 configurations
+ * passed containment against a real board without answering it.
+ *
+ * ⚠️ Horizontal only. `.device-name` reports a 2px vertical overflow in every
+ * single configuration (a 22px line in a 20px box), so a vertical check is pure
+ * noise, and the reported fault is at the card's sides in any case.
+ */
+export function checkClipping(card) {
+  return (card.clipped || []).map((c) => ({
+    check: 'clipping',
+    part: c.part,
+    detail: `"${c.text}" is cut off: ${c.scrollWidth}px of text in ${c.clientWidth}px`,
+  }));
+}
+
+/**
  * ⭐ The invariant #274 is about: the status colour appears exactly once.
  *
  * ⛔ Each wash has one place for it and the others must be clear. `rail` was
@@ -187,12 +209,32 @@ export function checkBoard(snapshot) {
     for (const p of checkWash(card, snapshot.config.wash)) {
       problems.push({ ...p, slot: card.slot });
     }
+    for (const p of checkClipping(card)) {
+      problems.push({ ...p, slot: card.slot });
+    }
   }
   // ⛔ A board that drew no cards at all is a failure, not a pass. An empty
   // sweep step reports nothing wrong by construction, which is the quietest
   // possible way for a harness to lie.
   if (!snapshot.cards || !snapshot.cards.length) {
     problems.push({ check: 'cards', detail: 'the board drew no cards' });
+  }
+  // ⛔⛔ And neither is a board whose layout never ran. `--tvmode-columns` is
+  // empty until the layout pass has set it, and every card is then the stale
+  // default size — so the containment check measures a card the board is not
+  // showing and reports it clean.
+  //
+  // Caught doing exactly that: a run against a real board reported "all 12
+  // configurations passed" while every card was 420x1080, the untouched
+  // default, because the browser pane had gone to the background and
+  // `requestAnimationFrame` stalled with it. The answer is to say so, not to
+  // pass.
+  if (!snapshot.columns || snapshot.columns === '?') {
+    problems.push({
+      check: 'layout',
+      detail: 'the layout pass did not run — every measurement here is of a stale card. '
+        + 'Keep the board on screen while the sweep runs.',
+    });
   }
   return problems;
 }
