@@ -119,30 +119,27 @@ export function updateTvLayoutMetrics() {
   // is up would be a feedback loop: the strip lowers `availableHeight`, which
   // lowers `capacity`, which can be what makes the board page, which puts the
   // bar up. `off` is there for an operator who wants the pixels back.
-  // ⛔⛔ MEASURED, not the 28px the stylesheet names. `--statusbar-height` is a
-  // constant, and the bar is text in a box: at a larger root size, or with a
-  // longer line, it is taller than the strip reserved for it and lands on the
-  // cards. Photographed on a 24in display with the bar at the top, sitting
-  // across the HH-3 and HH-4 headings.
+  // ⛔⛔ A CONSTANT, and it has to stay one. It was briefly measured from the
+  // rendered bar, to stop a bar taller than its strip landing on the cards --
+  // and that reopened the loop the note above warns about, by a route the
+  // change did not consider.
   //
-  // ⚠️ The floor keeps the old behaviour as the minimum, so a bar that has not
-  // rendered yet reserves what it always did rather than nothing.
+  // The bar's *type* is root-relative, so the layout cannot change it. Its
+  // **content** is not: at rest it reads "Showing all N channels" on one line,
+  // and the moment a channel needs attention it gains a reason, the page dots
+  // and a countdown, wraps to two lines and doubles in height. That shrinks
+  // `availableHeight`, which shrinks `capacity`, which is what made the board
+  // page in the first place -- so it keeps paging, and keeps the taller bar up.
   //
-  // ⚠️ No feedback loop: the bar's type is root-relative, not board-relative,
-  // so nothing the layout does can change the height measured here.
-  const statusBarEl = document.getElementById('rotation-bar');
-  const statusFloor = readNumeric(containerStyle.getPropertyValue('--statusbar-height'), 0);
+  // ⛔ Reported from the wall: switching on one transmitter dropped cards off
+  // the board and left it saying "holding: a channel needs attention".
+  //
+  // The overlap it was trying to fix is now the bar's problem, not the
+  // layout's: `.rotation-bar` is clamped to exactly this height and clips its
+  // own content, so the reserve and the bar can never disagree.
   const statusStrip = micboard.statusBar === 'off'
     ? 0
-    : Math.max(statusFloor, statusBarEl ? statusBarEl.offsetHeight : 0);
-  // ⛔ Only while it is on. Written inline this beats `body.statusbar-off`,
-  // which would hand the strip back its height on a board that asked for the
-  // pixels.
-  if (micboard.statusBar === 'off') {
-    document.body.style.removeProperty('--statusbar-height');
-  } else {
-    document.body.style.setProperty('--statusbar-height', `${statusStrip}px`);
-  }
+    : readNumeric(containerStyle.getPropertyValue('--statusbar-height'), 0);
 
   // ⛔⛔ The service-position strip, which was never reserved at all (#121).
   // `.live-strip.live-at-bottom` is `position: fixed; bottom: 0` at z-index

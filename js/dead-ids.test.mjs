@@ -43,7 +43,6 @@ const INTENTIONAL = new Map([
   ['pco-credential-status', 'created on demand by ensurePcoCredentialStatusElement'],
   ['editor-waiting', 'created by initConfigEditor while the board loads (#150)'],
   ['live-strip', 'created by live-strip-view.js; tv-layout measures it to reserve its height (#121)'],
-  ['rotation-bar', 'created by rotation-view.js; tv-layout measures it to reserve its strip (#188)'],
 ]);
 
 function markupIds() {
