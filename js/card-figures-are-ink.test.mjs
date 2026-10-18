@@ -149,3 +149,81 @@ test('⚠️ --color-red-dark is not mistaken for --color-red', () => {
   assert.ok(!/var\(\s*--color-red(?![\w-])/.test('color: var(--color-red-dark);'));
   assert.ok(/var\(\s*--color-red(?![\w-])/.test('color: var(--color-red);'));
 });
+
+/**
+ * ⛔⛔ #273: the bars must not paint over the figures.
+ *
+ * `.diversity` is `position: absolute; bottom: 0` inside `.info-drawer`, so it
+ * is out of flow and reserves nothing. The drawer's bottom padding was 12px
+ * against 25px of bars, so the bars covered the drawer's last row -- the
+ * frequency -- on every card, in every configuration, by construction.
+ * Measured on the live board as 3.6px of the glyphs underneath them.
+ *
+ * ⚠️ This was invisible to everything already looking. The containment check
+ * compares each part to the *card*, and both were inside it; the clipping check
+ * asks for `scrollWidth > clientWidth`, and nothing overflowed horizontally.
+ * An out-of-flow sibling painting over a text row is a third thing, so it gets
+ * its own guard -- at the level where it can be stated as a rule rather than
+ * measured as a pixel.
+ *
+ * ⭐ The rule: wherever the bars are given a height, the drawer that contains
+ * them keeps space for the same named value.
+ */
+
+/** The body of the first rule whose selector mentions `needle`, braces counted. */
+function ruleBody(needle, index = 0) {
+  const found = rulesMentioning(needle);
+  return found[index] ? found[index].body : '';
+}
+
+test('⛔⛔ #273: the drawer keeps room for the bars that sit on top of it', () => {
+  for (const body of rulesMentioning('.info-drawer').map((r) => r.body)) {
+    if (!/--diversity-height\s*:/.test(body)) continue;
+    // Every drawer that names a height for the bars must also reserve it --
+    // except where the height is zero, which is the two modes that have
+    // nothing out of flow to keep room for.
+    const zero = /--diversity-height\s*:\s*0(px)?\s*;/.test(body);
+    if (zero) continue;
+    assert.match(
+      body,
+      /padding[^;]*var\(\s*--diversity-height/,
+      'a drawer that sizes the bars must reserve the same value in its padding',
+    );
+  }
+});
+
+test('⛔ the bars read the drawer\'s named height rather than repeating a number', () => {
+  // The two cannot drift apart only while neither restates the figure. A rule
+  // that sets `height: 25px` on the bars and leaves the padding alone puts the
+  // fault straight back.
+  //
+  // ⚠️ Scoped to the bars that are OUT OF FLOW, which is the whole mechanism:
+  // an absolutely positioned child reserves nothing, so its height has to be
+  // kept for it by hand. Rack's meter is a flex item in the drawer's own flow
+  // and sizes itself -- it is not this fault and must not be dragged into it.
+  const outOfFlow = rulesMentioning('.diversity')
+    .filter((r) => /position\s*:\s*absolute/.test(r.body)
+      || /height\s*:\s*var\(\s*--diversity-height/.test(r.body));
+  assert.ok(outOfFlow.length >= 2, 'the base rule and the board\'s override are both present');
+  for (const rule of outOfFlow) {
+    const height = rule.body.match(/(?:^|;|\n)\s*height\s*:([^;]*)/);
+    if (!height) continue;
+    assert.match(
+      height[1],
+      /var\(\s*--diversity-height/,
+      `\`${rule.selector.trim()}\` sets its own height instead of reading --diversity-height`,
+    );
+  }
+});
+
+test('⛔ the figure row\'s line box is taller than its own glyphs', () => {
+  // `line-height: 1` puts the ink ~1.1px below the box the row is laid out in,
+  // which is half of how the bars reached it. Measured on the live board.
+  const body = ruleBody('.drawer-figures');
+  const lh = body.match(/line-height\s*:\s*([\d.]+)/);
+  assert.ok(lh, 'the figure row sets a line-height');
+  assert.ok(
+    Number(lh[1]) > 1,
+    `line-height is ${lh[1]}; a line box the size of the font clips its own descenders`,
+  );
+});

@@ -142,7 +142,9 @@ test('⚠\ufe0f one arrangement is named once per geometry, however many boards 
   // arrangement reaches one geometry under several held configurations. That
   // tells a reader nothing.
   const at = (arrangement, columns) => ({
-    config: { arrangement, cardShape: 'auto', wash: 'band', columns },
+    config: {
+      arrangement, cardShape: 'auto', wash: 'band', columns,
+    },
     columns: 4,
     rows: 3,
     cards: [{ ...card({}), box: box(0, arrangement === 'fit' ? 347 : 322) }],
