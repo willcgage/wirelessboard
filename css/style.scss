@@ -714,6 +714,31 @@ p.device-name {
     background: transparent;
   }
 
+  // ⛔⛔ The wash owns the card's background. Nothing else may.
+  //
+  // It used to be owned by two other things at once, and they disagreed. The
+  // status class carries a solid `background` as well as `--status`, and
+  // `.elinfo01`/`.elinfo11` set one on `.mic_name` at a specificity that beats
+  // it. So the card was painted exactly when the info drawer was OFF:
+  //
+  //     drawer off   band -> card+band    full -> card     rail -> card+rail
+  //     drawer on    band -> band         full -> NOTHING  rail -> rail
+  //
+  // Both halves were reported from the wall: "the status colour is massive",
+  // and "Edge rail shows on the rail and also in the original place" (#274,
+  // #8) -- that board has the drawer off. The other half is quieter and just
+  // as wrong: with the drawer on, `Whole card` paints nothing at all.
+  //
+  // ⭐ Found by the configuration sweep, which is the only reason the drawer
+  // was implicated: it is not a wash setting and nobody was looking at it.
+  &.wash-full .mic_name {
+    background: var(--status, var(--color-black));
+  }
+
+  &.wash-band .mic_name {
+    background: var(--color-black);
+  }
+
   // ---- `rail`: the colour down the edge (#193) --------------------------
   //
   // ⭐ The band stops carrying the status, so it stops needing to be a band --
@@ -726,6 +751,11 @@ p.device-name {
   // `.col-sm` instead would put the rail outside the element that knows the
   // colour.
   &.wash-rail .mic_name {
+    // ⛔ Neutral here too, and stated in the block that owns the rail rather
+    // than in a second one with the same selector -- a duplicate made
+    // `card-band.test.mjs` read the wrong block and stop seeing the rail.
+    background: var(--color-black);
+
     &::before {
       content: '';
       position: absolute;
@@ -1047,8 +1077,11 @@ p.device-name {
   // lands on its intended 954px.
   .elinfo01 .col-sm .mic_name {
     max-height: calc(100% - (var(--tvmode-scale) * 125px));
-    /* background-color: black; */
-    background: #262626;
+    // ⛔⛔ No `background` here any more. It tied on specificity with the wash
+    // rules and won on source order, so `Whole card` painted nothing whenever
+    // the info drawer was on -- and, by its absence, the card stayed painted
+    // under `Band only` and `Edge rail` when the drawer was off. The wash owns
+    // the card's background now; this rule is about height.
   }
 
   .elinfo01 .col-sm .electrode {
@@ -1082,7 +1115,7 @@ p.device-name {
   // The electrode's 125px plus the drawer's 90px (#195). Was 375px.
   .elinfo11 .col-sm .mic_name {
     max-height: calc(100% - (var(--tvmode-scale) * 215px));
-    background: var(--color-black);
+    // ⛔ No `background` — see the note on `.elinfo01`. The wash owns it.
   }
 
   .elinfo11 .col-sm .electrode {
