@@ -17,6 +17,7 @@ import {
   VIEW_CONTROLS, controlGroups, controlFor, optionsInOrder, optionLabel,
   isSwitch, isValidValue, notInForce,
 } from './view-controls.mjs';
+import { BOARD_CONTROLS } from './panel-controls.mjs';
 import {
   ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES,
   COLUMN_CHOICES, WASH_STYLES,
@@ -184,4 +185,44 @@ test('⛔ no other control is stood down by Fit', () => {
       `\`${control.id}\` still applies under Fit`,
     );
   }
+});
+
+/**
+ * ⛔ Three rows beginning with "Status", doing three unrelated things.
+ *
+ * `Status colour` chooses where the channel's colour is painted on the card,
+ * `Status stripe` is a second coloured block on the card, and the third was
+ * `Status bar` — which is not about channel status at all. It reports how many
+ * channels are showing, a status bar only in the desktop-application sense,
+ * and that sense collides with `status` meaning GOOD or CRITICAL everywhere
+ * else on this board. Reported by the maintainer as "Status bar has two
+ * meanings?", which is the question a name should never provoke.
+ */
+
+test('⛔ the channel-count row is not called a status bar', () => {
+  const control = controlFor('statusBar');
+  assert.equal(control.label, 'Channel count');
+  // ⚠️ The id and storage key keep their old spelling on purpose: a rename
+  // that reached them would drop every board's stored placement.
+  assert.equal(control.id, 'statusBar');
+  assert.ok(control.storageKey, 'the stored key is untouched by the rename');
+});
+
+test('⚠️ and no third meaning of "Status" comes back', () => {
+  // The rule the rename exists to keep: "Status" in a label means the
+  // channel's own state. Two rows legitimately carry it — where the colour
+  // goes, and the stripe that repeats it; a third meaning is the fault.
+  //
+  // ⛔⛔ Both tables, because the panel shows both and the three rows were
+  // split across them: `Status colour` and the renamed row are view controls
+  // while `Status stripe` is a board control. The first version of this test
+  // read `VIEW_CONTROLS` alone, so it could only ever see two of the three —
+  // it passed with the old name planted, which is the guard that cannot fail.
+  const statusLabels = VIEW_CONTROLS.concat(BOARD_CONTROLS)
+    .map((c) => c.label)
+    .filter((l) => /^Status\b/i.test(l));
+  assert.ok(
+    statusLabels.length <= 2,
+    `rows named "Status…": ${statusLabels.join(', ')} — a third meaning is how this went wrong`,
+  );
 });
