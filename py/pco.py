@@ -218,6 +218,72 @@ def conflicted_slots(conflicts: List[Dict[str, Any]]) -> set:
     return {c.get('slot') for c in (conflicts or []) if c.get('slot') is not None}
 
 
+def find_multi_position(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Report one person holding several positions, each landing on its own slot.
+
+    ⛔ The mirror of `find_conflicts`, and invisible to it. That one is keyed
+    by slot and reports *several people claiming one slot*; this is *one person
+    claiming several slots*, so a multi-position person produced no conflict, no
+    skipped row and no log line -- the board simply wrote their name twice and
+    whoever else was on one of those slots was overwritten (#260).
+
+    ⭐ The distinction that makes this tractable is structural, not a guess.
+    One position fanning out to a handheld and its matching IEM -- which the
+    mapping is deliberately built to do -- is **one** resolved entry with
+    several `_matches`. One person in two positions is **two** resolved
+    entries carrying the same name. Only the second is reported here, so the
+    intended fan-out is untouched.
+
+    ⚠️ Reported, not resolved. Which radio a person on two positions should
+    actually hold is a question about hardware the plan cannot describe, so the
+    same answer as a contested slot applies: leave the slots alone and say so.
+    A confident wrong name is the one nobody knows to question.
+    """
+    by_name: Dict[str, List[Dict[str, Any]]] = {}
+    for entry in resolved or []:
+        key = (entry.get('name') or '').strip().lower()
+        if not key:
+            continue
+        by_name.setdefault(key, []).append(entry)
+
+    out: List[Dict[str, Any]] = []
+    for entries in by_name.values():
+        if len(entries) < 2:
+            continue
+
+        slots: List[Any] = []
+        seen = set()
+        for entry in entries:
+            for slot_info in entry.get('slots') or []:
+                number = slot_info.get('slot')
+                if number is not None and number not in seen:
+                    seen.add(number)
+                    slots.append(number)
+
+        out.append({
+            'name': entries[0].get('name') or '',
+            'positions': [{
+                'position': entry.get('position') or '',
+                'label': entry.get('label') or '',
+                'slots': [s.get('slot') for s in entry.get('slots') or []],
+            } for entry in entries],
+            'slots': slots,
+            'skipped': True,
+        })
+
+    return sorted(out, key=lambda e: (e.get('name') or '').lower())
+
+
+def multi_position_slots(entries: List[Dict[str, Any]]) -> set:
+    """The slot numbers a sync must leave alone because one person claims several."""
+    return {
+        number
+        for entry in (entries or [])
+        for number in (entry.get('slots') or [])
+        if number is not None
+    }
+
+
 def slots_to_clear(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Slots carrying somebody the new plan does not account for.
 
@@ -2564,6 +2630,7 @@ def resolve_sync(
     people = _dedupe_people(_flatten_plan_people(plan_people, category, team_filters))
     resolved, unmatched = resolve_assignments(people, options)
     conflicts = find_conflicts(resolved)
+    multi_position = find_multi_position(resolved)
 
     return {
         "ok": True,
@@ -2583,6 +2650,9 @@ def resolve_sync(
         "resolved": resolved,
         "unmatched": unmatched,
         "conflicts": conflicts,
+        # ⚠️ Beside `conflicts` on purpose: a preview has to predict the sync,
+        # and these slots are skipped by exactly the same rule (#260).
+        "multi_position": multi_position,
         "people": people,
     }
 
@@ -2648,6 +2718,7 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     resolved = resolution['resolved']
     unmatched = resolution['unmatched']
     conflicts = resolution['conflicts']
+    multi_position = resolution.get('multi_position') or []
     people = resolution['people']
     plan_id = resolution['plan_id']
 
@@ -2669,12 +2740,17 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     # it reads `extended_name` off the live slot dicts, so after
     # `_apply_assignments` every "from" would be the value just written and the
     # diff would agree with itself (#120).
-    skipped_slots = conflicted_slots(conflicts)
+    #⛔ Both kinds of skip, by the same rule. A contested slot is several
+    # people claiming one slot; a multi-position slot is one person claiming
+    # several (#260). Either way the sync leaves it alone rather than writing a
+    # name nobody can check.
+    skipped_slots = conflicted_slots(conflicts) | multi_position_slots(multi_position)
     changes = sync_diff.build_changes(
         resolved,
         stale=stale,
         conflicts=conflicts,
         skip_slots=skipped_slots,
+        multi_position=multi_position,
     )
 
     cleared = 0
@@ -2695,6 +2771,22 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
             'PCO sync: slot %s claimed by %s -- left alone, nobody written',
             conflict['slot'],
             ', '.join(sorted({c['name'] for c in conflict['claimants']})),
+        )
+
+    # ⚠️ Says the positions, not just the slots. "Christian Nuckels holds
+    # Welcome and Vocal 1" is the sentence an operator can act on; "slots 1 and
+    # 7 were skipped" sends them looking for a fault that is not there.
+    for person in multi_position:
+        logger.warning(
+            'PCO sync: %s is scheduled for %s -- slot%s %s left alone, '
+            'because the plan does not say which radio they carry',
+            person.get('name') or 'somebody',
+            ' and '.join(
+                p.get('position') or p.get('label') or '?'
+                for p in person.get('positions') or []
+            ),
+            '' if len(person.get('slots') or []) == 1 else 's',
+            ', '.join(str(n) for n in person.get('slots') or []),
         )
 
     if profile.get('description'):

@@ -153,3 +153,38 @@ test('changed and unchanged split the rows between them', () => {
   assert.equal(unchangedRows(changes).length, 1);
   assert.equal(changedRows(changes).length + unchangedRows(changes).length, changes.length);
 });
+
+test('⛔⛔ #260: a slot held by one person in two positions says so, not "claimed by two people"', () => {
+  // The two skips are different problems and need different sentences. This
+  // one is one person on several positions; the operator has to decide which
+  // radio that person carries, not which of two people wins. Phrasing it as a
+  // contest sends them looking for a second person who does not exist.
+  assert.equal(
+    describeRow(row('skipped', {
+      skip_reason: 'multi-position',
+      claimants: [],
+      held_by: { name: 'Christian Nuckels', positions: ['Welcome', 'Vocal 1'] },
+    })),
+    'Christian Nuckels is on Welcome and Vocal 1',
+  );
+});
+
+test('⚠️ and it still names the positions when only one is known', () => {
+  assert.equal(
+    describeRow(row('skipped', {
+      skip_reason: 'multi-position',
+      claimants: [],
+      held_by: { name: 'Bob Berryman', positions: [] },
+    })),
+    'Bob Berryman holds more than one position',
+  );
+});
+
+test('⛔ a contested row is unaffected by the multi-position branch', () => {
+  // Both kinds arrive on the same `skipped` action, so the contested case has
+  // to keep working unchanged.
+  assert.equal(
+    describeRow(row('skipped', { skip_reason: 'contested', claimants: ['Amy', 'Zoe'] })),
+    'Amy and Zoe both claim it',
+  );
+});

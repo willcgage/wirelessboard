@@ -35,6 +35,8 @@ class TestWhatChanges:
             'slot': 3, 'from': '', 'to': 'Fatai', 'action': 'assign',
             'position': '', 'team': '', 'matched_via': 'position',
             'describe': '', 'claimants': [],
+            # An assignment is never a skip, so it carries neither reason (#260).
+            'skip_reason': '', 'held_by': {},
         }]
 
     def test_a_different_person_is_a_change_and_names_both(self):
@@ -64,6 +66,8 @@ class TestWhatChanges:
             'slot': 5, 'from': 'Bob', 'to': '', 'action': 'clear',
             'position': '', 'team': '', 'matched_via': '',
             'describe': '', 'claimants': [],
+            # A clear is never a skip, so it carries neither reason (#260).
+            'skip_reason': '', 'held_by': {},
         }
 
 

@@ -451,3 +451,116 @@ class TestContestedSlotsAreSkipped:
         resolved, _conflicts = self.contested(slots)
 
         assert 1 not in [s['slot'] for s in pco.slots_to_clear(resolved)]
+
+
+class TestMultiPosition:
+    """One person holding several positions (#260).
+
+    ⛔ The mirror of a contested slot and invisible to `find_conflicts`, which
+    is keyed by slot. Measured on the venue's own plan: Christian Nuckels held
+    Welcome **and** Vocal 1, so the board wrote his name on both and whoever was
+    on the Welcome slot was overwritten without a word.
+    """
+
+    @pytest.fixture
+    def board(self, monkeypatch):
+        tree = {
+            'slots': [
+                {'slot': 1, 'type': 'qlxd', 'extended_id': 'Vocal 1'},
+                {'slot': 7, 'type': 'qlxd', 'extended_id': 'Welcome',
+                 'extended_name': 'Casie Hamilton'},
+                {'slot': 11, 'type': 'ulxd', 'extended_id': 'Acoustic Guitar'},
+                {'slot': 9, 'type': 'p10t', 'extended_id': 'Vocal 1'},
+            ]
+        }
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    def resolve(self, people):
+        return pco.resolve_assignments(people, {
+            'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False,
+        })
+
+    def test_one_person_two_positions_is_reported(self, board):
+        resolved, _ = self.resolve([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ])
+        found = pco.find_multi_position(resolved)
+
+        assert len(found) == 1
+        assert found[0]['name'] == 'Christian Nuckels'
+        assert sorted(found[0]['slots']) == [1, 7, 9]
+        assert sorted(p['position'] for p in found[0]['positions']) == ['Vocal 1', 'Welcome']
+
+    def test_the_intended_fan_out_is_not_reported(self, board):
+        # ⭐ The distinction the whole fix rests on. "Vocal 1" matches a
+        # handheld AND its IEM -- one resolved entry with two matches, which is
+        # what the mapping is built to do. Reporting it would break the feature
+        # the project argues for in `pco_mapping`'s own docstring.
+        resolved, _ = self.resolve([person('Fatai', position='Vocal 1')])
+
+        assert len(resolved) == 1
+        assert len(resolved[0]['slots']) == 2
+        assert pco.find_multi_position(resolved) == []
+
+    def test_one_person_one_position_is_not_reported(self, board):
+        resolved, _ = self.resolve([person('Chris Wall', position='Welcome')])
+        assert pco.find_multi_position(resolved) == []
+
+    def test_find_conflicts_cannot_see_it(self, board):
+        # ⛔ Stated as a test because it is the reason this went unnoticed:
+        # the existing guard is keyed by slot and this is the other axis.
+        resolved, _ = self.resolve([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ])
+        assert pco.find_conflicts(resolved) == []
+        assert pco.find_multi_position(resolved) != []
+
+    def test_the_slots_are_left_alone_so_nobody_is_evicted(self, board):
+        # ⛔⛔ The sharp half. Casie Hamilton is on the Welcome slot; Christian
+        # holds Welcome and Vocal 1. Writing him to both takes her off a slot
+        # and gives her nothing, because neither of her own positions matches.
+        resolved, _ = self.resolve([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ])
+        skip = pco.multi_position_slots(pco.find_multi_position(resolved))
+        pco._apply_assignments(resolved, {'seed_extended_id': False}, skip)
+
+        by_slot = {s['slot']: s for s in board}
+        assert by_slot[7].get('extended_name') == 'Casie Hamilton'
+        assert not (by_slot[1].get('extended_name') or '')
+
+    def test_without_the_skip_she_is_evicted(self, board):
+        # The guard proves itself: the same resolution, applied with no skip
+        # set, is exactly the reported fault.
+        resolved, _ = self.resolve([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ])
+        pco._apply_assignments(resolved, {'seed_extended_id': False}, set())
+
+        by_slot = {s['slot']: s for s in board}
+        assert by_slot[7].get('extended_name') == 'Christian Nuckels'
+        assert by_slot[1].get('extended_name') == 'Christian Nuckels'
+
+    def test_a_multi_position_slot_is_never_also_cleared(self, board):
+        # `slots_to_clear` excludes anything matched, and a skipped slot is
+        # still matched -- so a held slot must not be swept up by
+        # `clear_unmatched`, which would evict by the other route.
+        resolved, _ = self.resolve([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ])
+        stale = [s.get('slot') for s in pco.slots_to_clear(resolved)]
+        assert 7 not in stale
+
+    def test_names_are_matched_without_case_or_padding(self, board):
+        resolved, _ = self.resolve([
+            person(' christian nuckels ', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ])
+        assert len(pco.find_multi_position(resolved)) == 1
