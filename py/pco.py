@@ -267,9 +267,20 @@ def live_device_kinds() -> Dict[Any, Optional[str]]:
     return kinds
 
 
+def slot_occupants() -> Dict[Any, str]:
+    """Slot number -> the person currently on it, trimmed."""
+    out: Dict[Any, str] = {}
+    for slot in _configured_slots():
+        number = slot.get('slot')
+        if number is not None:
+            out[number] = (slot.get('extended_name') or '').strip()
+    return out
+
+
 def find_multi_position(
     resolved: List[Dict[str, Any]],
     kinds: Optional[Dict[Any, Optional[str]]] = None,
+    occupants: Optional[Dict[Any, str]] = None,
 ) -> List[Dict[str, Any]]:
     """Report one person holding several positions, each landing on its own slot.
 
@@ -301,9 +312,22 @@ def find_multi_position(
     ⛔ "Cannot tell" is not "typical". A slot whose receiver carries no
     recognisable label yields no kind, and a person whose slots are unknown is
     left alone rather than written on the strength of a guess.
+
+    ⭐⭐ **An impossible pair keeps the radio the person already has.** Two
+    handhelds is not merely unusual, it is impossible -- somebody cannot carry
+    both -- so one of those positions is not a radio at all. When exactly one of
+    the candidate slots already carries that person's name, that is the radio
+    they have: it is kept and the others are left alone. The board stops
+    asserting they are on two channels without having to ask anybody.
+
+    ⚠️ Only when exactly one slot already has them. On none, or on several,
+    there is nothing to reason from and every slot is left alone -- the
+    behaviour this replaces, kept as the fallback rather than guessed past.
     """
     if kinds is None:
         kinds = live_device_kinds()
+    if occupants is None:
+        occupants = slot_occupants()
 
     by_name: Dict[str, List[Dict[str, Any]]] = {}
     for entry in resolved or []:
@@ -333,8 +357,26 @@ def find_multi_position(
         known = [k for k in slot_kinds if k]
         typical = len(known) == len(slots) and len(set(known)) == len(known)
 
+        name = entries[0].get('name') or ''
+        anchor_slot = None
+        if typical:
+            held: List[Any] = []
+        else:
+            # The slot this person is already on, if exactly one of the
+            # candidates has them. That is the radio they actually carry.
+            already = [
+                number for number in slots
+                if (occupants.get(number) or '').strip().lower() == name.strip().lower()
+                and name.strip()
+            ]
+            if len(already) == 1:
+                anchor_slot = already[0]
+                held = [number for number in slots if number != anchor_slot]
+            else:
+                held = list(slots)
+
         out.append({
-            'name': entries[0].get('name') or '',
+            'name': name,
             'positions': [{
                 'position': entry.get('position') or '',
                 'label': entry.get('label') or '',
@@ -343,7 +385,9 @@ def find_multi_position(
             'slots': slots,
             'kinds': slot_kinds,
             'typical': typical,
-            'skipped': not typical,
+            'anchor_slot': anchor_slot,
+            'held': held,
+            'skipped': bool(held),
         })
 
     return sorted(out, key=lambda e: (e.get('name') or '').lower())
@@ -352,15 +396,15 @@ def find_multi_position(
 def multi_position_slots(entries: List[Dict[str, Any]]) -> set:
     """The slot numbers a sync must leave alone because one person claims several.
 
-    ⭐ Only the unusual ones. A handheld-and-bodypack pairing is the ordinary
-    way somebody holds two radios, so those slots are written like any other;
-    `typical` is what says which is which.
+    ⭐ Only the ones actually held back. A handheld-and-bodypack pairing is
+    the ordinary way somebody holds two radios and nothing is held; an
+    impossible pair holds everything except the radio the person already
+    carries. `held` is what each entry worked out.
     """
     return {
         number
         for entry in (entries or [])
-        if not entry.get('typical')
-        for number in (entry.get('slots') or [])
+        for number in (entry.get('held') or [])
         if number is not None
     }
 
@@ -2858,6 +2902,22 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     # Welcome and Vocal 1" is the sentence an operator can act on; "slots 1 and
     # 7 were skipped" sends them looking for a fault that is not there.
     for person in multi_position:
+        if not person.get('held'):
+            continue
+        if person.get('anchor_slot') is not None:
+            logger.warning(
+                'PCO sync: %s is scheduled for %s, which is more radios than '
+                'one person carries -- kept on slot %s, slot%s %s left alone',
+                person.get('name') or 'somebody',
+                ' and '.join(
+                    p.get('position') or p.get('label') or '?'
+                    for p in person.get('positions') or []
+                ),
+                person.get('anchor_slot'),
+                '' if len(person.get('held') or []) == 1 else 's',
+                ', '.join(str(n) for n in person.get('held') or []),
+            )
+            continue
         logger.warning(
             'PCO sync: %s is scheduled for %s -- slot%s %s left alone, '
             'because the plan does not say which radio they carry',
@@ -2866,8 +2926,8 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
                 p.get('position') or p.get('label') or '?'
                 for p in person.get('positions') or []
             ),
-            '' if len(person.get('slots') or []) == 1 else 's',
-            ', '.join(str(n) for n in person.get('slots') or []),
+            '' if len(person.get('held') or []) == 1 else 's',
+            ', '.join(str(n) for n in person.get('held') or []),
         )
 
     if profile.get('description'):

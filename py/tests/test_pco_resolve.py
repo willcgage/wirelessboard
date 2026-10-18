@@ -652,3 +652,85 @@ class TestTwoRadiosIsNormalWhenTheEquipmentDiffers:
         # "cannot tell", never a guess.
         assert pco.device_kind_for_slot('Slot 3') is None
         assert pco.device_kind_for_slot('') is None
+
+
+class TestAnImpossiblePairKeepsTheRadioTheyHave:
+    """⭐⭐ The maintainer's refinement (#260, 2026-10-18):
+
+        "Christian can't have two Handhelds, so, he wouldn't technically be
+         in two slots."
+
+    Two handhelds is not merely unusual, it is impossible — so one of those
+    positions is not a radio at all. When exactly one candidate slot already
+    carries the person, that is the radio they have: keep it, leave the rest
+    alone. On none or several there is nothing to reason from, and every slot
+    is left alone — the earlier behaviour, kept as the fallback.
+    """
+
+    KINDS = {1: 'handheld', 7: 'handheld', 11: 'bodypack'}
+
+    def board(self, monkeypatch, occupants):
+        tree = {'slots': [
+            {'slot': 1, 'type': 'qlxd', 'extended_id': 'Vocal 1',
+             'extended_name': occupants.get(1, '')},
+            {'slot': 7, 'type': 'qlxd', 'extended_id': 'Welcome',
+             'extended_name': occupants.get(7, '')},
+        ]}
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    def resolve(self):
+        return pco.resolve_assignments([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ], {'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False})[0]
+
+    def test_the_slot_he_is_already_on_is_kept(self, monkeypatch):
+        slots = self.board(monkeypatch, {1: 'Christian Nuckels'})
+        found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
+
+        assert found[0]['anchor_slot'] == 1
+        assert found[0]['held'] == [7]
+        # ⭐ The board stops claiming he is on two channels, and the slot he is
+        # not on is never written.
+        assert pco.multi_position_slots(found) == {7}
+
+        pco._apply_assignments(self.resolve(), {'seed_extended_id': False},
+                               pco.multi_position_slots(found))
+        by_slot = {s['slot']: s for s in slots}
+        assert by_slot[1].get('extended_name') == 'Christian Nuckels'
+        assert not (by_slot[7].get('extended_name') or '')
+
+    def test_on_neither_slot_every_slot_is_left_alone(self, monkeypatch):
+        # ⚠️ Fallback A. Nothing says which radio he has, so nothing is written
+        # rather than one being picked.
+        self.board(monkeypatch, {7: 'Casie Hamilton'})
+        found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
+
+        assert found[0]['anchor_slot'] is None
+        assert sorted(found[0]['held']) == [1, 7]
+
+    def test_on_both_slots_every_slot_is_left_alone(self, monkeypatch):
+        # Already on two handhelds, which should not have happened. There is
+        # no single radio to keep, so nothing is decided for the operator.
+        self.board(monkeypatch, {1: 'Christian Nuckels', 7: 'Christian Nuckels'})
+        found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
+
+        assert found[0]['anchor_slot'] is None
+        assert sorted(found[0]['held']) == [1, 7]
+
+    def test_a_normal_pair_holds_nothing_and_needs_no_anchor(self, monkeypatch):
+        self.board(monkeypatch, {1: 'Christian Nuckels'})
+        found = pco.find_multi_position(
+            self.resolve(), kinds={1: 'handheld', 7: 'bodypack'})
+
+        assert found[0]['typical'] is True
+        assert found[0]['held'] == []
+        assert found[0]['anchor_slot'] is None
+        assert pco.multi_position_slots(found) == set()
+
+    def test_the_match_ignores_case_and_padding(self, monkeypatch):
+        self.board(monkeypatch, {1: '  christian nuckels '})
+        found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
+        assert found[0]['anchor_slot'] == 1
