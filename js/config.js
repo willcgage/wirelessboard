@@ -2647,8 +2647,24 @@ function renderGroupSummary() {
         title.value = row.title;
         return;
       }
-      postJSON('api/group', { group: row.group, title: next });
-      row.title = next;
+      postJSON('api/group', { group: row.group, title: next }, () => {
+        row.title = next;
+        // ⛔⛔ `micboard.groups` as well, not just the row. It is built ONCE,
+        // by `groupTableBuilder` in `initialMap`, and never rebuilt -- while
+        // `renderGroupSummary` reads it on every render. So a rename reached
+        // the server, was written to disk, and then the next render put the
+        // old name back from a table nothing had updated.
+        //
+        // Reported from the wall as "Groups won't allow for saving names",
+        // which is how it looks: the name is accepted, and comes back wrong
+        // the moment the section is reopened. Verified separately that the
+        // endpoint itself stores the title correctly.
+        const table = micboard.groups;
+        const entry = table && (table[row.group] ?? table[String(row.group)]);
+        if (entry) {
+          entry.title = next;
+        }
+      });
     });
     head.appendChild(title);
 
