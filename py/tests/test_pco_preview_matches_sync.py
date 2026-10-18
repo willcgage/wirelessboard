@@ -44,7 +44,7 @@ def live(number):
     return by_number[number]
 
 
-def resolution(assignments, clear_unmatched=False, conflicts=None):
+def resolution(assignments, clear_unmatched=False, conflicts=None, multi_position=None):
     """`assignments` is {person: [slot numbers]}."""
     options = dict(pco._mapping_options({'clear_unmatched': clear_unmatched}))
     return {
@@ -60,6 +60,7 @@ def resolution(assignments, clear_unmatched=False, conflicts=None):
         } for name, numbers in assignments.items()],
         'unmatched': [],
         'conflicts': conflicts or [],
+        'multi_position': multi_position or [],
         'people': [],
         'plan_id': '42',
     }
@@ -145,3 +146,88 @@ class TestWhatTheDiffSays:
 
         assert sync_diff.is_noop(result['changes'])
         assert len(result['changes']) == 2, 'the rows are still there to be shown'
+
+
+class TestAMultiPositionSlotIsAPromiseToo:
+    """The same contract for the other kind of skip (#260).
+
+    ⛔ Detection was well covered and the wiring was not: nothing called
+    `build_changes` with `multi_position`, so the row shape Python emits and
+    the sentence the browser writes from it were only ever tested apart. These
+    close that seam — the row is produced by a real `finish_sync`, which is
+    what the preview and the sync both go through.
+    """
+
+    def held(self, name='Amy', slots_held=(2,), anchor=None, positions=('Welcome', 'Vocal 1')):
+        return [{
+            'name': name,
+            'positions': [{'position': p, 'label': p, 'slots': list(slots_held)} for p in positions],
+            'slots': list(slots_held),
+            'kinds': ['handheld'] * len(slots_held),
+            'typical': False,
+            'anchor_slot': anchor,
+            'held': list(slots_held),
+            'skipped': True,
+        }]
+
+    def test_the_row_says_it_was_skipped_and_why(self, slots):
+        result = pco.finish_sync(
+            resolution({'Amy': [2]}, multi_position=self.held()),
+            dry_run=True,
+        )
+        row = next(r for r in result['changes'] if r['slot'] == 2)
+
+        assert row['action'] == 'skipped'
+        # ⛔ The reason, not just the fact. "claimed by two people" would be a
+        # lie here and would send an operator looking for a second person.
+        assert row['skip_reason'] == 'multi-position'
+        assert row['held_by']['name'] == 'Amy'
+        assert row['held_by']['positions'] == ['Welcome', 'Vocal 1']
+        assert row['claimants'] == [], 'nobody is contesting it'
+        assert row['from'] == row['to'] == 'Dave', 'nobody is written to a held slot'
+
+    def test_it_really_is_left_alone_by_a_real_sync(self, slots):
+        pco.finish_sync(
+            resolution({'Amy': [2]}, multi_position=self.held()),
+            dry_run=False,
+        )
+
+        assert live(2)['extended_name'] == 'Dave'
+
+    def test_the_preview_and_the_sync_agree_about_it(self, slots):
+        # The property the whole file exists for, applied to this skip.
+        preview = pco.finish_sync(
+            resolution({'Amy': [2]}, multi_position=self.held()), dry_run=True)
+        applied = pco.finish_sync(
+            resolution({'Amy': [2]}, multi_position=self.held()), dry_run=False)
+
+        assert preview['changes'] == applied['changes']
+
+    def test_the_slot_the_person_is_kept_on_is_written_not_skipped(self, slots):
+        # ⚠️ The anchor is not a skip and must not be explained as one. Amy is
+        # kept on slot 1 and held off slot 2.
+        result = pco.finish_sync(
+            resolution({'Amy': [1, 2]},
+                       multi_position=self.held(slots_held=(2,), anchor=1)),
+            dry_run=True,
+        )
+        kept = next(r for r in result['changes'] if r['slot'] == 1)
+        dropped = next(r for r in result['changes'] if r['slot'] == 2)
+
+        assert kept['action'] == 'change', 'the slot she keeps is written'
+        assert kept['to'] == 'Amy'
+        assert kept['skip_reason'] == ''
+        assert kept['held_by'] == {}
+        assert dropped['action'] == 'skipped'
+
+    def test_a_normal_pair_holds_nothing_and_both_rows_are_written(self, slots):
+        # A typical pair reports `held: []`, so neither slot is skipped.
+        typical = [{
+            'name': 'Amy', 'positions': [], 'slots': [1, 2],
+            'kinds': ['handheld', 'bodypack'], 'typical': True,
+            'anchor_slot': None, 'held': [], 'skipped': False,
+        }]
+        result = pco.finish_sync(
+            resolution({'Amy': [1, 2]}, multi_position=typical), dry_run=True)
+
+        assert [r['action'] for r in result['changes'] if r['slot'] in (1, 2)] == ['change', 'change']
