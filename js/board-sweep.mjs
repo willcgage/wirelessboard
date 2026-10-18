@@ -104,6 +104,28 @@ export function checkContainment(card, slack = 1) {
 }
 
 /**
+ * ⭐ The invariant #273 is really about, and the one `checkContainment` cannot
+ * see: text clipped *inside* the card.
+ *
+ * ⛔⛔ Containment compares a part against the card, so a figure that overflows
+ * its own box and is cut off by an `overflow: hidden` ancestor is still inside
+ * the card and still reported clean. That is exactly the shape of the reported
+ * fault -- the RF figure and the frequency "cut off" -- and 144 configurations
+ * passed containment against a real board without answering it.
+ *
+ * ⚠️ Horizontal only. `.device-name` reports a 2px vertical overflow in every
+ * single configuration (a 22px line in a 20px box), so a vertical check is pure
+ * noise, and the reported fault is at the card's sides in any case.
+ */
+export function checkClipping(card) {
+  return (card.clipped || []).map((c) => ({
+    check: 'clipping',
+    part: c.part,
+    detail: `"${c.text}" is cut off: ${c.scrollWidth}px of text in ${c.clientWidth}px`,
+  }));
+}
+
+/**
  * ⭐ The invariant #274 is about: the status colour appears exactly once.
  *
  * ⛔ Each wash has one place for it and the others must be clear. `rail` was
@@ -185,6 +207,9 @@ export function checkBoard(snapshot) {
       problems.push({ ...p, slot: card.slot });
     }
     for (const p of checkWash(card, snapshot.config.wash)) {
+      problems.push({ ...p, slot: card.slot });
+    }
+    for (const p of checkClipping(card)) {
       problems.push({ ...p, slot: card.slot });
     }
   }
