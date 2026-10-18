@@ -10,6 +10,38 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.17] - 2026-10-18
+
+The RF figure, the audio level and both trend lines were being covered up — on every card, in every
+arrangement, by a stripe the board was drawing on top of them.
+
+### Fixed
+- **The status stripe no longer covers the signal rows.** The coloured block under the person's name
+  was being drawn over the AF and RF figures and their trend lines, leaving the two labels with
+  nothing after them. It had been doing this on every card since the figures moved into the drawer;
+  it was only visible on a channel with a transmitter actually switched on, because a channel
+  without one takes the same colour as the card behind it. The stripe is now a thin rule with a
+  place of its own, and nothing it can sit on top of. If you turned **Status stripe** off to get the
+  numbers back, you can turn it on again.
+
+### Changed
+- **The battery and the time remaining have moved** out of the band under the person's name, into
+  the space beside the audio and RF rows. That space was empty — the trend lines are a fixed width
+  — and the band now carries the person alone.
+- **The battery changes colour as it empties.** Amber when the transmitter wants replacing, red when
+  it is nearly flat, and the red flashes so it can be found across a wall of twelve cards. It uses
+  the same thresholds the card colour already uses, so the two can never disagree. The flash is off
+  for anyone whose system asks for reduced motion, and the time beside it stays in plain ink: on
+  this card colour means state, and a figure is a fact.
+- **`Status bar` is now called `Channel count`.** Three rows in the panel began with "Status" and
+  did three unrelated things; this one is not about channel status at all, it reports how many
+  channels are showing. Where it sits and what it does are unchanged.
+
+### Internal
+- The README's card picture is rendered by the board itself rather than drawn, so it cannot drift
+  from the product again, and `config/backgrounds/` — where a venue's own photographs are kept — is
+  no longer eligible to be committed.
+
 ## [2.0.0-beta.16] - 2026-10-17
 
 The frequency was being painted over. It had been on every card, in every arrangement, since the
