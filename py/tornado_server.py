@@ -918,6 +918,15 @@ class PcoPreviewHandler(web.RequestHandler):
         await self.get()
 
 
+class PcoWatchHandler(web.RequestHandler):
+    """What automation will do on its own, without asking Planning Center."""
+
+    def get(self):
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.write(json.dumps(pco.watch_report()))
+
+
 class PcoConfigHandler(web.RequestHandler):
     def get(self):
         self.set_header('Content-Type', 'application/json')
@@ -1349,6 +1358,7 @@ def twisted():
         (r'/api/pco/sync', PcoSyncHandler),
         (r'/api/pco/preview', PcoPreviewHandler),
         (r'/api/pco/config', PcoConfigHandler),
+        (r'/api/pco/watch', PcoWatchHandler),
         (r'/api/pco/services', PcoServicesHandler),
         (r'/api/pco/plans', PcoPlansHandler),
         (r'/api/pco/folders', PcoFoldersHandler),
