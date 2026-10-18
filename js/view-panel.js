@@ -17,6 +17,7 @@
 
 import {
   VIEW_CONTROLS, controlGroups, optionsInOrder, optionLabel, isSwitch, controlDescription,
+  notInForce,
 } from './view-controls.mjs';
 import { BOARD_CONTROLS, groupChoices } from './panel-controls.mjs';
 import { screenChoices, describeScreenChoice } from './display-geometry.mjs';
@@ -419,6 +420,21 @@ export function renderViewPanel() {
         const note = document.createElement('p');
         note.className = 'vp-row-note';
         note.textContent = described;
+        section.appendChild(note);
+      }
+
+      // ⭐ The same shape, said once for every control that can be stood down
+      // (#276). Fit means auto rows and auto columns, so a column ceiling has
+      // nothing to do while it is selected — but a control that sits there
+      // looking live and says nothing is indistinguishable from the count being
+      // ignored by mistake, which is how it was first reported.
+      const idle = notInForce(control.id, {
+        arrangement: board.viewOptionValue('arrangement'),
+      });
+      if (idle) {
+        const note = document.createElement('p');
+        note.className = 'vp-row-note is-forced';
+        note.textContent = idle;
         section.appendChild(note);
       }
 

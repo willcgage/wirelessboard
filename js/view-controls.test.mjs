@@ -15,7 +15,7 @@ import path from 'node:path';
 
 import {
   VIEW_CONTROLS, controlGroups, controlFor, optionsInOrder, optionLabel,
-  isSwitch, isValidValue,
+  isSwitch, isValidValue, notInForce,
 } from './view-controls.mjs';
 import {
   ARRANGEMENTS, CARD_SHAPES, TYPE_SIZES,
@@ -136,4 +136,52 @@ test('controls are grouped, in a stable order', () => {
     VIEW_CONTROLS.length,
     'every control belongs to exactly one group',
   );
+});
+
+/**
+ * ⭐ #276: Fit means auto rows and auto columns.
+ *
+ * The sweep found that `fit` drew 4x3 at every column setting — auto, 4, 6, 8
+ * and 12 alike. That is settled behaviour and not a bug: Fit picks the grid
+ * that fills the screen, which is what the arrangement is *for*. What was
+ * wrong is that the column control sat there looking live and said nothing,
+ * which is indistinguishable from the count being ignored by mistake — and is
+ * exactly how it was first reported from the wall.
+ *
+ * ⛔ The control keeps the operator's value. Rewriting their stored ceiling to
+ * "auto" would be the "never flip a persisted flag as a side effect" mistake,
+ * and would leave a board later switched back to Grid with a ceiling it never
+ * chose.
+ */
+
+test('⭐ #276: the column ceiling stands down while Fit is chosen', () => {
+  const note = notInForce('columns', { arrangement: 'fit' });
+  assert.ok(note, 'Fit must say the ceiling is not in force');
+  assert.match(note, /not in force/i);
+  // ⚠️ And it must say the stored value survives, or the reasonable reading is
+  // that switching arrangement has thrown the setting away.
+  assert.match(note, /kept/i);
+});
+
+test('⚠️ and it is in force for every other arrangement', () => {
+  for (const arrangement of ARRANGEMENTS.filter((a) => a !== 'fit')) {
+    assert.equal(
+      notInForce('columns', { arrangement }),
+      null,
+      `${arrangement} honours the column ceiling, so nothing may claim otherwise`,
+    );
+  }
+});
+
+test('⛔ no other control is stood down by Fit', () => {
+  // Fit still obeys the card shape — the sweep measured 420x560 under
+  // `fit` + `tall`. Only the column count is the arrangement's own business.
+  for (const control of VIEW_CONTROLS) {
+    if (control.id === 'columns') continue;
+    assert.equal(
+      notInForce(control.id, { arrangement: 'fit' }),
+      null,
+      `\`${control.id}\` still applies under Fit`,
+    );
+  }
 });
