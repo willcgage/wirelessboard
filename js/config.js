@@ -40,6 +40,7 @@ import {
   PCO_SECTIONS, payloadFor, sectionAvailable, NOT_CONNECTED_NOTE,
   isConnected as isPcoConnected,
 } from './pco-sections.mjs';
+import { watchLines } from './pco-watch.mjs';
 import { workedExample, NOT_RUN_YET } from './pco-example.mjs';
 import { STRATEGIES, CONSEQUENCES, CONSEQUENCE_KEYS } from './pco-strategies.mjs';
 import { assignNumbers } from './slot-numbering.mjs';
@@ -3898,6 +3899,11 @@ function fillPcoSection(sectionId) {
       break;
     case 'pco-calendar':
       applyPcoWatchToForm(pco);
+      // ⭐ On open, not on a button. It asks Planning Center nothing -- it
+      // reads the watcher's own record -- and the whole point is that the
+      // settings above cannot tell you the watcher is unarmed. A status
+      // somebody has to press for is a status nobody reads.
+      loadWatchStatus();
       break;
     case 'pco-live':
       applyPcoLiveToForm(pco);
@@ -4028,20 +4034,41 @@ function applyConsequenceCopy() {
 // The worked example (#179)
 // ---------------------------------------------------------------------------
 
-function setExampleNote(message, tone) {
-  const host = document.getElementById('pco-example-note');
+function setExampleNote(message, tone, target = null) {
+  const host = target || document.getElementById('pco-example-note');
   if (!host) return;
   host.textContent = message || '';
   host.className = `pco-example__note${tone ? ` is-${tone}` : ''}`;
 }
 
-function renderWorkedExample(example) {
-  const host = document.getElementById('pco-example-body');
+/**
+ * Draw a worked example.
+ *
+ * ⚠️ `target` because this is rendered in two places now: the Matching
+ * section's single example, and one card per rule set. Without it the rule-set
+ * previews all drew into Matching's pane, each overwriting the last -- the
+ * host was hardcoded and the argument silently ignored.
+ */
+function renderWorkedExample(example, target = null) {
+  const host = target || document.getElementById('pco-example-body');
   if (!host) return;
   host.replaceChildren();
 
+  // The shared note element belongs to Matching; a rule-set card carries its
+  // own line instead of writing into somebody else's.
+  const note = (message, tone) => {
+    if (!target) {
+      setExampleNote(message, tone);
+      return;
+    }
+    const line = document.createElement('p');
+    line.className = `pco-example__note${tone ? ` is-${tone}` : ''}`;
+    line.textContent = message || '';
+    host.appendChild(line);
+  };
+
   if (!example || !example.ok) {
-    setExampleNote((example && example.error) || 'Could not check this mapping.', 'error');
+    note((example && example.error) || 'Could not check this mapping.', 'error');
     return;
   }
 
@@ -4104,7 +4131,7 @@ function renderWorkedExample(example) {
     host.appendChild(list);
   }
 
-  setExampleNote(example.note, 'ok');
+  note(example.note, 'ok');
 }
 
 /**
@@ -4158,6 +4185,109 @@ function checkMappingAgainstPlan() {
     .finally(() => {
       if (button) button.disabled = false;
     });
+}
+
+/**
+ * Run a preview or a sync from a section that is not the weekly panel.
+ *
+ * ⛔ It opens the weekly panel and runs there rather than rendering a second
+ * diff in place. One surface for the slot-by-slot result: a preview and a sync
+ * read from two places that could disagree is worse than one extra click.
+ */
+function runSyncFromSection(dryRun) {
+  window.dispatchEvent(new Event('wirelessboard:open-pco'));
+  // The panel has to be on screen before the diff renders into it.
+  window.setTimeout(() => handlePcoSync(dryRun), 60);
+}
+
+/**
+ * What each rule set would do to the next plan.
+ *
+ * ⭐⭐ A rule set is only understandable by what it does to a real plan. The
+ * board settings have had that since #179; a rule set that *overrides* them
+ * had nothing — so the one thing a rule set exists for, being different, was
+ * the one thing that could not be seen.
+ *
+ * ⚠️ One request per rule set, run in sequence rather than together. The
+ * server resolves a plan on a single worker and a handful of parallel previews
+ * is how the 429 in the venue tests happened.
+ */
+function previewRuleSets() {
+  const host = document.getElementById('pco-ruleset-previews');
+  if (!host) return;
+
+  const sets = (pcoProfiles || []).filter((p) => p && p.id);
+  host.innerHTML = '';
+  if (!sets.length) {
+    const note = document.createElement('p');
+    note.className = 'admin-section__lead';
+    note.textContent = 'No rule sets yet. The board settings apply to every plan.';
+    host.appendChild(note);
+    return;
+  }
+
+  const planSel = document.getElementById('pco-plan-select');
+  const plan = syncPlanParam((planSel && planSel.value) || '');
+  const slotCount = (micboard.config && Array.isArray(micboard.config.slots))
+    ? micboard.config.slots.length : 0;
+
+  const run = (index) => {
+    if (index >= sets.length) return;
+    const set = sets[index];
+
+    const card = document.createElement('div');
+    card.className = 'pco-example mb-3';
+    const title = document.createElement('p');
+    title.className = 'pco-example__title';
+    title.textContent = set.name || set.id;
+    card.appendChild(title);
+    const body = document.createElement('div');
+    body.className = 'pco-example__body';
+    body.textContent = 'Checking…';
+    card.appendChild(body);
+    host.appendChild(card);
+
+    const params = new URLSearchParams({ profile: set.id });
+    if (plan) params.set('plan', plan);
+
+    fetch(`api/pco/preview?${params.toString()}`, { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((preview) => {
+        body.textContent = '';
+        renderWorkedExample(workedExample(preview, { slotCount }), body);
+      })
+      .catch((err) => {
+        body.textContent = `Could not check this rule set: ${formatError(err)}`;
+      })
+      .finally(() => run(index + 1));
+  };
+
+  run(0);
+}
+
+/** The watcher's own state, which the settings above cannot tell you. */
+function renderWatchStatus(report) {
+  const host = document.getElementById('pco-watch-status');
+  if (!host) return;
+  host.innerHTML = '';
+
+  watchLines(report).forEach((entry) => {
+    const row = document.createElement('p');
+    row.className = `pco-watch__line is-${entry.level}`;
+    row.textContent = entry.text;
+    host.appendChild(row);
+  });
+}
+
+function loadWatchStatus() {
+  const host = document.getElementById('pco-watch-status');
+  if (!host) return;
+  host.textContent = 'Checking…';
+
+  fetch('api/pco/watch', { cache: 'no-store' })
+    .then((res) => res.json())
+    .then(renderWatchStatus)
+    .catch((err) => renderWatchStatus({ ok: false, error: formatError(err) }));
 }
 
 function ensureNotePreviewUI() {
@@ -4661,6 +4791,21 @@ export function bindPcoHandlers() {
     if (t.id === 'pco-example-run') {
       e.preventDefault();
       checkMappingAgainstPlan();
+      return;
+    }
+    if (t.id === 'pco-matching-preview' || t.id === 'pco-matching-sync') {
+      e.preventDefault();
+      runSyncFromSection(t.id === 'pco-matching-preview');
+      return;
+    }
+    if (t.id === 'pco-watch-refresh') {
+      e.preventDefault();
+      loadWatchStatus();
+      return;
+    }
+    if (t.id === 'pco-rulesets-check') {
+      e.preventDefault();
+      previewRuleSets();
       return;
     }
     // ⭐ One Save per section (#179), each writing only the keys it owns.
