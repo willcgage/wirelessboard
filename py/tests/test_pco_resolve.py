@@ -487,7 +487,7 @@ class TestMultiPosition:
             person('Christian Nuckels', position='Welcome'),
             person('Christian Nuckels', position='Vocal 1'),
         ])
-        found = pco.find_multi_position(resolved)
+        found = pco.find_multi_position(resolved, kinds={})
 
         assert len(found) == 1
         assert found[0]['name'] == 'Christian Nuckels'
@@ -503,11 +503,11 @@ class TestMultiPosition:
 
         assert len(resolved) == 1
         assert len(resolved[0]['slots']) == 2
-        assert pco.find_multi_position(resolved) == []
+        assert pco.find_multi_position(resolved, kinds={}) == []
 
     def test_one_person_one_position_is_not_reported(self, board):
         resolved, _ = self.resolve([person('Chris Wall', position='Welcome')])
-        assert pco.find_multi_position(resolved) == []
+        assert pco.find_multi_position(resolved, kinds={}) == []
 
     def test_find_conflicts_cannot_see_it(self, board):
         # ⛔ Stated as a test because it is the reason this went unnoticed:
@@ -517,7 +517,7 @@ class TestMultiPosition:
             person('Christian Nuckels', position='Vocal 1'),
         ])
         assert pco.find_conflicts(resolved) == []
-        assert pco.find_multi_position(resolved) != []
+        assert pco.find_multi_position(resolved, kinds={}) != []
 
     def test_the_slots_are_left_alone_so_nobody_is_evicted(self, board):
         # ⛔⛔ The sharp half. Casie Hamilton is on the Welcome slot; Christian
@@ -527,7 +527,7 @@ class TestMultiPosition:
             person('Christian Nuckels', position='Welcome'),
             person('Christian Nuckels', position='Vocal 1'),
         ])
-        skip = pco.multi_position_slots(pco.find_multi_position(resolved))
+        skip = pco.multi_position_slots(pco.find_multi_position(resolved, kinds={}))
         pco._apply_assignments(resolved, {'seed_extended_id': False}, skip)
 
         by_slot = {s['slot']: s for s in board}
@@ -563,4 +563,307 @@ class TestMultiPosition:
             person(' christian nuckels ', position='Welcome'),
             person('Christian Nuckels', position='Vocal 1'),
         ])
-        assert len(pco.find_multi_position(resolved)) == 1
+        assert len(pco.find_multi_position(resolved, kinds={})) == 1
+
+
+class TestTwoRadiosIsNormalWhenTheEquipmentDiffers:
+    """⭐⭐ The maintainer's rule, 2026-10-18 (#260):
+
+        "A person can hold two, but typically that would be with a Handheld
+         (HH) and a Bodypack (BP)."
+
+    So the question is not *whether* somebody may hold two radios -- they may --
+    but whether the pair is the ordinary shape. Both of these are live on the
+    venue board: Brandon Risinger carries HH-2 and BP-11, which is normal;
+    one person on two handhelds is not.
+    """
+
+    @pytest.fixture
+    def board(self, monkeypatch):
+        tree = {
+            'slots': [
+                {'slot': 1, 'type': 'qlxd', 'extended_id': 'Vocal 1'},
+                {'slot': 2, 'type': 'qlxd', 'extended_id': 'Vocal 2'},
+                {'slot': 7, 'type': 'qlxd', 'extended_id': 'Welcome'},
+                {'slot': 11, 'type': 'ulxd', 'extended_id': 'Acoustic Guitar'},
+            ]
+        }
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    # The venue's own labelling, read off the receivers.
+    KINDS = {1: 'handheld', 2: 'handheld', 7: 'handheld', 11: 'bodypack'}
+
+    def resolve(self, people):
+        return pco.resolve_assignments(people, {
+            'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False,
+        })
+
+    def test_handheld_and_bodypack_is_normal_and_both_are_written(self, board):
+        # Brandon Risinger, exactly as the board carries him today.
+        resolved, _ = self.resolve([
+            person('Brandon Risinger', position='Vocal 2'),
+            person('Brandon Risinger', position='Acoustic Guitar'),
+        ])
+        found = pco.find_multi_position(resolved, kinds=self.KINDS)
+
+        assert len(found) == 1
+        assert found[0]['typical'] is True
+        assert found[0]['skipped'] is False
+        # Nothing is held back, so the sync writes him to both.
+        assert pco.multi_position_slots(found) == set()
+
+        pco._apply_assignments(resolved, {'seed_extended_id': False},
+                               pco.multi_position_slots(found))
+        by_slot = {s['slot']: s for s in board}
+        assert by_slot[2].get('extended_name') == 'Brandon Risinger'
+        assert by_slot[11].get('extended_name') == 'Brandon Risinger'
+
+    def test_two_handhelds_is_unusual_and_left_alone(self, board):
+        resolved, _ = self.resolve([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ])
+        found = pco.find_multi_position(resolved, kinds=self.KINDS)
+
+        assert found[0]['typical'] is False
+        assert found[0]['skipped'] is True
+        assert pco.multi_position_slots(found) == {1, 7}
+
+    def test_equipment_that_cannot_be_identified_is_not_assumed_typical(self, board):
+        # ⛔ "Cannot tell" is not "normal". A receiver with no recognisable
+        # label yields no kind, and writing both on the strength of a guess is
+        # the behaviour this whole issue is about.
+        resolved, _ = self.resolve([
+            person('Brandon Risinger', position='Vocal 2'),
+            person('Brandon Risinger', position='Acoustic Guitar'),
+        ])
+        found = pco.find_multi_position(resolved, kinds={2: 'handheld'})
+
+        assert found[0]['typical'] is False
+        assert pco.multi_position_slots(found) == {2, 11}
+
+    def test_the_kind_is_read_from_the_receiver_label(self):
+        assert pco.device_kind_for_slot('HH-1') == 'handheld'
+        assert pco.device_kind_for_slot('BP-11') == 'bodypack'
+        assert pco.device_kind_for_slot('IEM 1') == 'iem'
+        # ⚠️ A convention, not a protocol fact. An unrecognised label is
+        # "cannot tell", never a guess.
+        assert pco.device_kind_for_slot('Slot 3') is None
+        assert pco.device_kind_for_slot('') is None
+
+
+class TestAnImpossiblePairKeepsTheRadioTheyHave:
+    """⭐⭐ The maintainer's refinement (#260, 2026-10-18):
+
+        "Christian can't have two Handhelds, so, he wouldn't technically be
+         in two slots."
+
+    Two handhelds is not merely unusual, it is impossible — so one of those
+    positions is not a radio at all. When exactly one candidate slot already
+    carries the person, that is the radio they have: keep it, leave the rest
+    alone. On none or several there is nothing to reason from, and every slot
+    is left alone — the earlier behaviour, kept as the fallback.
+    """
+
+    KINDS = {1: 'handheld', 7: 'handheld', 11: 'bodypack'}
+
+    def board(self, monkeypatch, occupants):
+        tree = {'slots': [
+            {'slot': 1, 'type': 'qlxd', 'extended_id': 'Vocal 1',
+             'extended_name': occupants.get(1, '')},
+            {'slot': 7, 'type': 'qlxd', 'extended_id': 'Welcome',
+             'extended_name': occupants.get(7, '')},
+        ]}
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    def resolve(self):
+        return pco.resolve_assignments([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ], {'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False})[0]
+
+    def test_the_slot_he_is_already_on_is_kept(self, monkeypatch):
+        slots = self.board(monkeypatch, {1: 'Christian Nuckels'})
+        found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
+
+        assert found[0]['anchor_slot'] == 1
+        assert found[0]['held'] == [7]
+        # ⭐ The board stops claiming he is on two channels, and the slot he is
+        # not on is never written.
+        assert pco.multi_position_slots(found) == {7}
+
+        pco._apply_assignments(self.resolve(), {'seed_extended_id': False},
+                               pco.multi_position_slots(found))
+        by_slot = {s['slot']: s for s in slots}
+        assert by_slot[1].get('extended_name') == 'Christian Nuckels'
+        assert not (by_slot[7].get('extended_name') or '')
+
+    def test_on_neither_slot_every_slot_is_left_alone(self, monkeypatch):
+        # ⚠️ Fallback A. Nothing says which radio he has, so nothing is written
+        # rather than one being picked.
+        self.board(monkeypatch, {7: 'Casie Hamilton'})
+        found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
+
+        assert found[0]['anchor_slot'] is None
+        assert sorted(found[0]['held']) == [1, 7]
+
+    def test_on_both_slots_every_slot_is_left_alone(self, monkeypatch):
+        # Already on two handhelds, which should not have happened. There is
+        # no single radio to keep, so nothing is decided for the operator.
+        self.board(monkeypatch, {1: 'Christian Nuckels', 7: 'Christian Nuckels'})
+        found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
+
+        assert found[0]['anchor_slot'] is None
+        assert sorted(found[0]['held']) == [1, 7]
+
+    def test_a_normal_pair_holds_nothing_and_needs_no_anchor(self, monkeypatch):
+        self.board(monkeypatch, {1: 'Christian Nuckels'})
+        found = pco.find_multi_position(
+            self.resolve(), kinds={1: 'handheld', 7: 'bodypack'})
+
+        assert found[0]['typical'] is True
+        assert found[0]['held'] == []
+        assert found[0]['anchor_slot'] is None
+        assert pco.multi_position_slots(found) == set()
+
+    def test_the_match_ignores_case_and_padding(self, monkeypatch):
+        self.board(monkeypatch, {1: '  christian nuckels '})
+        found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
+        assert found[0]['anchor_slot'] == 1
+
+
+class TestWhatAPersonCanPhysicallyCarry:
+    """⭐⭐ The maintainer's correction (#260, 2026-10-18):
+
+        "Bodypacks can have two purposes. One being a headset mic and the
+         second an instrument. So, the example with Brandon is a Handheld with
+         an Instrument Bodypack. This works. Two bodypacks are possible if it
+         is one headset and one instrument."
+
+    ⛔ So the test is NOT whether the equipment differs — an earlier version of
+    this rule required every kind to be distinct and would have held back two
+    bodypacks, which is a shape people actually run. A person has one voice, so
+    two handhelds is impossible; that is the only pairing the labels can prove.
+    """
+
+    @pytest.fixture
+    def board(self, monkeypatch):
+        tree = {'slots': [
+            {'slot': 2, 'type': 'qlxd', 'extended_id': 'Vocal 2'},
+            {'slot': 10, 'type': 'ulxd', 'extended_id': 'Headset'},
+            {'slot': 11, 'type': 'ulxd', 'extended_id': 'Acoustic Guitar'},
+        ]}
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    def resolve(self, *positions):
+        return pco.resolve_assignments(
+            [person('Sam Reed', position=p) for p in positions],
+            {'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False},
+        )[0]
+
+    def test_two_bodypacks_are_possible_headset_and_instrument(self, board):
+        # ⛔ The case the earlier "all kinds must differ" rule got wrong.
+        found = pco.find_multi_position(
+            self.resolve('Headset', 'Acoustic Guitar'),
+            kinds={10: 'bodypack', 11: 'bodypack'},
+        )
+        assert found[0]['typical'] is True
+        assert found[0]['held'] == []
+        assert pco.multi_position_slots(found) == set()
+
+    def test_a_handheld_and_an_instrument_bodypack_is_fine(self, board):
+        found = pco.find_multi_position(
+            self.resolve('Vocal 2', 'Acoustic Guitar'),
+            kinds={2: 'handheld', 11: 'bodypack'},
+        )
+        assert found[0]['typical'] is True
+
+    def test_two_handhelds_is_the_one_impossible_pair(self, board):
+        found = pco.find_multi_position(
+            self.resolve('Vocal 2', 'Headset'),
+            kinds={2: 'handheld', 10: 'handheld'},
+        )
+        assert found[0]['typical'] is False
+        assert sorted(found[0]['held']) == [2, 10]
+
+    def test_an_unreadable_label_is_not_a_clearance(self, board):
+        # ⚠️ On a board that does not use the HH/BP convention nothing can be
+        # proved either way. Writing both is how somebody already on a slot
+        # gets overwritten, which is the whole of #260 — so it is held.
+        found = pco.find_multi_position(
+            self.resolve('Headset', 'Acoustic Guitar'),
+            kinds={10: 'bodypack'},
+        )
+        assert found[0]['typical'] is False
+
+
+class TestCarriesIsWhatTheOperatorDeclared:
+    """⭐⭐ The `Carries` field on the Receivers pane (#260).
+
+    ⛔ The hardware never says this. A QLX-D serves a handheld or a bodypack,
+    and a bodypack is a headset on somebody's face or a pack on a guitar — the
+    receiver reports the same thing either way. So the one case the naming
+    convention can never settle is two bodypacks: is that a headset and an
+    instrument (fine) or two headsets (impossible)?
+    """
+
+    def board(self, monkeypatch, carries):
+        tree = {'slots': [
+            {'slot': 10, 'type': 'ulxd', 'extended_id': 'Headset',
+             **({'carries': carries[10]} if 10 in carries else {})},
+            {'slot': 11, 'type': 'ulxd', 'extended_id': 'Acoustic Guitar',
+             **({'carries': carries[11]} if 11 in carries else {})},
+        ]}
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    def resolve(self):
+        return pco.resolve_assignments([
+            person('Sam Reed', position='Headset'),
+            person('Sam Reed', position='Acoustic Guitar'),
+        ], {'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False})[0]
+
+    def test_headset_plus_instrument_is_allowed(self, monkeypatch):
+        self.board(monkeypatch, {10: 'headset', 11: 'instrument'})
+        found = pco.find_multi_position(self.resolve())
+        assert found[0]['typical'] is True
+        assert pco.multi_position_slots(found) == set()
+
+    def test_two_headsets_is_impossible_which_the_label_could_never_tell(self, monkeypatch):
+        # ⭐ The case the field exists for. Both are BP- to the receiver, so the
+        # naming convention calls them a normal pair; only the operator knows
+        # that two headsets is one person with two voices.
+        self.board(monkeypatch, {10: 'headset', 11: 'headset'})
+        found = pco.find_multi_position(self.resolve())
+        assert found[0]['typical'] is False
+        assert sorted(found[0]['held']) == [10, 11]
+
+    def test_a_handheld_and_a_headset_is_still_two_voices(self, monkeypatch):
+        self.board(monkeypatch, {10: 'handheld', 11: 'headset'})
+        assert pco.find_multi_position(self.resolve())[0]['typical'] is False
+
+    def test_an_unset_slot_falls_back_and_is_not_assumed(self, monkeypatch):
+        # ⚠️ One declared, one not. Nothing can be proved, so nothing is written.
+        self.board(monkeypatch, {10: 'headset'})
+        found = pco.find_multi_position(self.resolve(), kinds=None)
+        assert found[0]['typical'] is False
+
+    def test_an_unknown_value_is_not_stored(self):
+        assert config.normalize_carries('handheld') == 'handheld'
+        assert config.normalize_carries(' HEADSET ') == 'headset'
+        # ⛔ A field whose job is to settle a question must not become a second
+        # source of nonsense.
+        assert config.normalize_carries('trombone') == ''
+        assert config.normalize_carries(None) == ''
+
+    def test_the_voice_pair_is_named_once(self):
+        # Both of the board's voices, and nothing else.
+        assert set(config.CARRIES_VOICE) == {'handheld', 'headset'}
+        assert set(config.CARRIES_VOICE).issubset(set(config.CARRIES_VALUES))

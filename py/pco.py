@@ -218,7 +218,86 @@ def conflicted_slots(conflicts: List[Dict[str, Any]]) -> set:
     return {c.get('slot') for c in (conflicts or []) if c.get('slot') is not None}
 
 
-def find_multi_position(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+# The equipment a label prefix names. ⛔ A naming convention, not a protocol
+# fact: receivers are labelled "HH-1" or "BP-9" by whoever set them up, and a
+# board that labels them some other way simply gets `None` and is treated as
+# "cannot tell". Guessing a kind would be worse than not knowing one.
+DEVICE_KIND_PREFIXES = {
+    'hh': 'handheld',
+    'bp': 'bodypack',
+    'iem': 'iem',
+}
+
+
+def device_kind_for_slot(device_id: Any) -> Optional[str]:
+    """Classify a slot's equipment from the receiver's own label."""
+    label = str(device_id or '').strip().lower()
+    if not label:
+        return None
+    prefix = re.split(r'[-\s0-9]', label, 1)[0]
+    return DEVICE_KIND_PREFIXES.get(prefix)
+
+
+def live_device_kinds() -> Dict[Any, Optional[str]]:
+    """Slot number -> 'handheld' / 'bodypack' / 'iem', from the live receivers.
+
+    ⭐ The receiver knows this even when the transmitter is switched off, which
+    is when a sync usually runs. `device_id` is parsed from `chan_name_raw`,
+    which the *receiver* reports -- so a channel reading NO TX still says
+    "HH-7". Reading the transmitter's own model instead would answer nothing on
+    a pre-service board with every pack in the case.
+
+    ⚠️ Imported here rather than at module scope. `pco` is imported by the
+    server during start-up and `shure` owns the device list it is still
+    building; a top-level import ties the two together for one lookup.
+    """
+    kinds: Dict[Any, Optional[str]] = {}
+
+    # ⭐⭐ What the operator said, first. `carries` is set in the Receivers
+    # pane and is the only thing that can tell a headset bodypack from an
+    # instrument one -- the receiver reports the same for both, so the label
+    # below can never answer it.
+    for slot in _configured_slots():
+        number = slot.get('slot')
+        declared = config.normalize_carries(slot.get('carries'))
+        if number is not None and declared:
+            kinds[number] = declared
+
+    # ⚠️ The naming convention fills the gaps, for boards that have not set
+    # the field. It is a convention and not a fact, which is why it is the
+    # fallback and not the source.
+    try:
+        import shure  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return kinds
+
+    for receiver in list(getattr(shure, 'NetworkDevices', []) or []):
+        for channel in getattr(receiver, 'channels', []) or []:
+            try:
+                number = channel.slot
+                if number in kinds:
+                    continue
+                kinds[number] = device_kind_for_slot(channel.device_id())
+            except Exception:  # noqa: BLE001
+                continue
+    return kinds
+
+
+def slot_occupants() -> Dict[Any, str]:
+    """Slot number -> the person currently on it, trimmed."""
+    out: Dict[Any, str] = {}
+    for slot in _configured_slots():
+        number = slot.get('slot')
+        if number is not None:
+            out[number] = (slot.get('extended_name') or '').strip()
+    return out
+
+
+def find_multi_position(
+    resolved: List[Dict[str, Any]],
+    kinds: Optional[Dict[Any, Optional[str]]] = None,
+    occupants: Optional[Dict[Any, str]] = None,
+) -> List[Dict[str, Any]]:
     """Report one person holding several positions, each landing on its own slot.
 
     ⛔ The mirror of `find_conflicts`, and invisible to it. That one is keyed
@@ -234,11 +313,46 @@ def find_multi_position(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     entries carrying the same name. Only the second is reported here, so the
     intended fan-out is untouched.
 
-    ⚠️ Reported, not resolved. Which radio a person on two positions should
-    actually hold is a question about hardware the plan cannot describe, so the
-    same answer as a contested slot applies: leave the slots alone and say so.
-    A confident wrong name is the one nobody knows to question.
+    ⭐⭐ **Two radios is normal. Only a physically impossible pair is held.**
+    The maintainer's rule, refined twice:
+
+        "A person can hold two, but typically that would be with a Handheld
+         (HH) and a Bodypack (BP)."
+        "Bodypacks can have two purposes. One being a headset mic and the
+         second an instrument. [...] Two bodypacks are possible if it is one
+         headset and one instrument."
+
+    So the test is not whether the equipment *differs*. A person has one voice,
+    so **two handhelds is impossible**; everything else is a shape somebody
+    actually runs -- handheld plus instrument pack, headset pack plus
+    instrument pack, a radio plus an IEM.
+
+    ⛔ Two handhelds is the only combination the equipment labels can prove
+    impossible, because a bodypack does not say which of its two jobs it is
+    doing. Whether a `BP` is a headset or an instrument lives in the position
+    name, not the hardware, and reading intent out of free text is the rule
+    sprawl this is deliberately avoiding.
+
+    ⚠️ So the default is to allow. An unidentifiable label proves nothing,
+    and a pair that cannot be shown to be impossible is written -- the plan
+    said two, and two is ordinary.
+
+    ⭐⭐ **An impossible pair keeps the radio the person already has.** Two
+    handhelds is not merely unusual, it is impossible -- somebody cannot carry
+    both -- so one of those positions is not a radio at all. When exactly one of
+    the candidate slots already carries that person's name, that is the radio
+    they have: it is kept and the others are left alone. The board stops
+    asserting they are on two channels without having to ask anybody.
+
+    ⚠️ Only when exactly one slot already has them. On none, or on several,
+    there is nothing to reason from and every slot is left alone -- the
+    behaviour this replaces, kept as the fallback rather than guessed past.
     """
+    if kinds is None:
+        kinds = live_device_kinds()
+    if occupants is None:
+        occupants = slot_occupants()
+
     by_name: Dict[str, List[Dict[str, Any]]] = {}
     for entry in resolved or []:
         key = (entry.get('name') or '').strip().lower()
@@ -260,26 +374,74 @@ def find_multi_position(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     seen.add(number)
                     slots.append(number)
 
+        # ⭐ Handheld plus bodypack is the ordinary shape and needs no
+        # intervention. Two of one kind -- or any slot whose equipment cannot
+        # be identified -- is the case worth stopping on.
+        slot_kinds = [kinds.get(number) for number in slots]
+        # ⛔ One person, one voice. A handheld and a headset are both somebody
+        # talking, so two of them -- in any combination -- is impossible. Two
+        # bodypacks is fine when one is a headset and the other an instrument,
+        # which is why the test is the *voice* count and not the variety.
+        #
+        # ⚠️ Not knowing is not a clearance. Where `carries` is unset the kind
+        # comes from a naming convention that a board need not follow, and
+        # writing both is how somebody already on a slot gets overwritten --
+        # the whole of #260. So a pair is allowed only when every slot's
+        # equipment is known and at most one of them is a voice.
+        known = [k for k in slot_kinds if k]
+        typical = (
+            len(known) == len(slots)
+            and len([k for k in known if k in config.CARRIES_VOICE]) < 2
+        )
+
+        name = entries[0].get('name') or ''
+        anchor_slot = None
+        if typical:
+            held: List[Any] = []
+        else:
+            # The slot this person is already on, if exactly one of the
+            # candidates has them. That is the radio they actually carry.
+            already = [
+                number for number in slots
+                if (occupants.get(number) or '').strip().lower() == name.strip().lower()
+                and name.strip()
+            ]
+            if len(already) == 1:
+                anchor_slot = already[0]
+                held = [number for number in slots if number != anchor_slot]
+            else:
+                held = list(slots)
+
         out.append({
-            'name': entries[0].get('name') or '',
+            'name': name,
             'positions': [{
                 'position': entry.get('position') or '',
                 'label': entry.get('label') or '',
                 'slots': [s.get('slot') for s in entry.get('slots') or []],
             } for entry in entries],
             'slots': slots,
-            'skipped': True,
+            'kinds': slot_kinds,
+            'typical': typical,
+            'anchor_slot': anchor_slot,
+            'held': held,
+            'skipped': bool(held),
         })
 
     return sorted(out, key=lambda e: (e.get('name') or '').lower())
 
 
 def multi_position_slots(entries: List[Dict[str, Any]]) -> set:
-    """The slot numbers a sync must leave alone because one person claims several."""
+    """The slot numbers a sync must leave alone because one person claims several.
+
+    ⭐ Only the ones actually held back. A handheld-and-bodypack pairing is
+    the ordinary way somebody holds two radios and nothing is held; an
+    impossible pair holds everything except the radio the person already
+    carries. `held` is what each entry worked out.
+    """
     return {
         number
         for entry in (entries or [])
-        for number in (entry.get('slots') or [])
+        for number in (entry.get('held') or [])
         if number is not None
     }
 
@@ -2777,6 +2939,22 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     # Welcome and Vocal 1" is the sentence an operator can act on; "slots 1 and
     # 7 were skipped" sends them looking for a fault that is not there.
     for person in multi_position:
+        if not person.get('held'):
+            continue
+        if person.get('anchor_slot') is not None:
+            logger.warning(
+                'PCO sync: %s is scheduled for %s, which is more radios than '
+                'one person carries -- kept on slot %s, slot%s %s left alone',
+                person.get('name') or 'somebody',
+                ' and '.join(
+                    p.get('position') or p.get('label') or '?'
+                    for p in person.get('positions') or []
+                ),
+                person.get('anchor_slot'),
+                '' if len(person.get('held') or []) == 1 else 's',
+                ', '.join(str(n) for n in person.get('held') or []),
+            )
+            continue
         logger.warning(
             'PCO sync: %s is scheduled for %s -- slot%s %s left alone, '
             'because the plan does not say which radio they carry',
@@ -2785,8 +2963,8 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
                 p.get('position') or p.get('label') or '?'
                 for p in person.get('positions') or []
             ),
-            '' if len(person.get('slots') or []) == 1 else 's',
-            ', '.join(str(n) for n in person.get('slots') or []),
+            '' if len(person.get('held') or []) == 1 else 's',
+            ', '.join(str(n) for n in person.get('held') or []),
         )
 
     if profile.get('description'):

@@ -50,7 +50,9 @@ def _multi_position_by_slot(
             p.get('position') or p.get('label') or ''
             for p in entry.get('positions') or []
         ]
-        for number in entry.get('slots') or []:
+        # ⚠️ Only the slots actually held back. The one the person is kept on
+        # is written like any other row and must not be explained as a skip.
+        for number in entry.get('held') or entry.get('slots') or []:
             if number is None:
                 continue
             out[number] = {
