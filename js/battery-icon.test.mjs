@@ -120,3 +120,74 @@ test('the battery takes the band ink rather than a colour of its own', () => {
   const fill = css.split('.batt-fill {')[1].split('}')[0];
   assert.match(fill, /fill:\s*currentColor/);
 });
+
+/**
+ * ⭐⭐ The battery changes colour as it empties (asked for 2026-10-18).
+ *
+ * ⛔ On the board's own thresholds, which live in `py/mic.py` and nowhere
+ * else: 4–5 bars is GOOD, 3 is REPLACE, 0–2 is CRITICAL. The icon reads
+ * `data.status`, so there is exactly one answer to "how low is low". A second
+ * set of boundaries in the front end is how a board ends up amber on the card
+ * and green on the icon, which is worse than no colour at all.
+ */
+
+test('⭐ the icon takes the server\'s status rather than its own thresholds', () => {
+  // ⚠️ The guard that matters: the front end may not compare a battery level
+  // to a threshold of its own. The boundaries live in `py/mic.py` and arrive
+  // as `data.status`; a number here means a second answer has been written.
+  //
+  // ⚠️ Levels 0–5 only. `battery === 255` is allowed and is not a threshold:
+  // 255 is the "nothing reported" sentinel, and telling it apart from a real
+  // level is the front end's own business (it is why the icon has an outline
+  // state at all). `[0-5]\b` cannot match the 2 in 255 — a digit follows it,
+  // so there is no word boundary.
+  assert.ok(
+    !/battery\s*(?:<=?|>=?|={2,3})\s*[0-5]\b/.test(view),
+    'the front end compares a battery level to a threshold of its own',
+  );
+  assert.match(view, /batt-replace[^;]*REPLACE/, 'replace follows the REPLACE status');
+  assert.match(view, /batt-critical[^;]*CRITICAL/, 'critical follows the CRITICAL status');
+});
+
+test('⚠️ a PREV_ state keeps the same colour as the state it remembers', () => {
+  // `PREV_REPLACE` is the same battery reading after the transmitter stopped
+  // reporting — not a different level, the last level we were told. A board
+  // that dropped the colour there would look as though the battery recovered.
+  assert.match(view, /\(PREV_\)\?REPLACE/, 'PREV_REPLACE is still a replace');
+  assert.match(view, /\(PREV_\)\?CRITICAL/, 'PREV_CRITICAL is still a critical');
+});
+
+test('⛔ only the icon takes the colour; the time stays in band ink', () => {
+  // The rule that took red off the frequency: colour means STATE, and a figure
+  // is a fact. A battery level is a state, so the icon may wear it — `6:42` is
+  // a figure and may not.
+  // ⚠️ Plain string matching, not `new RegExp` with a template literal. A
+  // template literal eats the backslash before it ever reaches the RegExp, so
+  // `\.` becomes `.` and `\s` becomes `s` — the guard then matches nothing and
+  // fails on correct CSS. (Regex *literals* elsewhere in this file are fine;
+  // it is only the template-literal form that loses them.)
+  for (const state of ['batt-replace', 'batt-critical']) {
+    assert.ok(
+      css.includes(`.card-runtime.${state} .batt-icon {`),
+      `${state} should colour the icon`,
+    );
+    assert.ok(
+      !css.includes(`.card-runtime.${state} {`),
+      `${state} must not colour the whole row, which includes the time`,
+    );
+  }
+});
+
+test('⛔ the flash is opt-out: no motion for anyone who asked for less', () => {
+  const block = css.split('@media (prefers-reduced-motion: no-preference)')
+    .find((chunk, i) => i > 0 && chunk.includes('batt-critical'));
+  assert.ok(block, 'the flash sits inside a no-preference query');
+  assert.match(block, /animation:\s*batt-critical-flash/);
+  // ⚠️ The fill flashes, not the shell: the outline has to stay legible as a
+  // battery through the swing, or at the bottom there is nothing to recognise.
+  assert.match(block, /\.batt-fill\s*\{/);
+  assert.ok(
+    !/\.batt-shell[^}]*animation/.test(css),
+    'the outline must not blink with the fill',
+  );
+});

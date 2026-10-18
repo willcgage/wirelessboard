@@ -270,6 +270,19 @@ function updateCardBattery(slotSelector, data) {
   // ⛔ Unknown is not empty. An empty fill reads as "about to die"; the outline
   // on its own reads as "nothing has told us", which is what 255 means.
   holder.classList.toggle('batt-unknown', fraction === null);
+
+  // ⭐⭐ The icon wears the state the SERVER already decided, never its own
+  // copy of the thresholds. `py/mic.py` draws the lines -- 4-5 bars is GOOD,
+  // 3 is REPLACE, 0-2 is CRITICAL -- and they reach us as `data.status`. A
+  // second set of boundaries in here is how a board ends up amber on the card
+  // and green on the icon, which is worse than no colour at all.
+  //
+  // ⚠️ The `PREV_` states are the same battery reading after the transmitter
+  // stopped reporting, so they keep the same colour. They are not a different
+  // level; they are the last level we were told.
+  const status = (data && data.status) || '';
+  holder.classList.toggle('batt-replace', /^(PREV_)?REPLACE$/.test(status));
+  holder.classList.toggle('batt-critical', /^(PREV_)?CRITICAL$/.test(status));
   holder.style.setProperty('--batt', fraction === null ? '0' : String(fraction));
   holder.setAttribute('title', batteryDescription(data && data.battery, data && data.runtime));
 }

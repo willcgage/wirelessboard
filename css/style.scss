@@ -2679,6 +2679,46 @@ a:link, a:visited, a:hover, a:active {
   display: none;
 }
 
+/* ⭐⭐ The battery changes colour as it empties, on the board's own
+   thresholds -- `py/mic.py` says 4-5 bars is GOOD, 3 is REPLACE, 0-2 is
+   CRITICAL, and `channelview.js` passes that through rather than deciding
+   again.
+
+   ⛔ Only the ICON takes the colour. The time beside it stays in band ink,
+   because "on this card, colour means STATE; a figure is a fact, so it wears
+   ink" -- the rule that took red off the frequency. A battery level IS a
+   state, which is why the icon may wear it and `6:42` may not. */
+.card-runtime.batt-replace .batt-icon {
+  color: var(--color-yellow);
+}
+
+.card-runtime.batt-critical .batt-icon {
+  color: var(--color-red);
+}
+
+/* ⚠️ The fill flashes, not the outline: the shell has to stay legible as a
+   battery while the fill blinks, or at the bottom of the swing there is
+   nothing on the card to recognise. */
+@keyframes batt-critical-flash {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/* ⛔ Opt-out by default: anyone who has asked their system for less motion
+   gets the colour and no flashing. The red already carries the message; the
+   flash only makes it findable across a wall of twelve cards. */
+@media (prefers-reduced-motion: no-preference) {
+  .card-runtime.batt-critical .batt-fill {
+    animation: batt-critical-flash 1.6s ease-in-out infinite;
+  }
+}
+
 /* Which boards a pane's changes reach (#116). Quiet, because it is a standing
    fact rather than a warning -- the confirmation does the warning, and only
    when somebody else is actually connected. */
