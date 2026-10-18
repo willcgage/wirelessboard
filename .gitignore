@@ -26,6 +26,13 @@ static/*.LICENSE.txt
 # Runtime configuration containing secrets (see config/config.json.example
 # for a sanitized template)
 config/config.json
+config/config.json.bak
+
+# ⛔ Somebody's team photographs live here. They are runtime data, not source,
+# and this repository is public — one stray "git add ." would publish faces.
+# scripts/make-demo-portraits.py regenerates the placeholder set used for the
+# README mockup, so nothing in here ever needs to be kept.
+config/backgrounds/
 
 # macOS metadata
 .DS_Store
