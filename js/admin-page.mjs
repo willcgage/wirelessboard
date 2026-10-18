@@ -81,11 +81,29 @@ export const SECTIONS = [
     //
     // ⚠️ All five keep `action: 'pco'`, so the lock refuses the whole group on
     // a locked board exactly as the single item did.
-    items: PCO_SECTIONS.map((section) => ({
-      id: section.id,
-      label: section.label,
-      action: 'pco',
-    })),
+    items: [
+      // ⛔⛔ The weekly surface had NO DOOR. #222 moved the five setup
+      // sections onto this rail, and every one of them is in `IN_PAGE_ITEMS`
+      // -- so each renders a pane and none ever reaches the `pco` route. The
+      // plan picker, Preview Sync and Sync Now live in `#pco-settings`, which
+      // nothing on the rail opened: the board could be configured and could
+      // not be synced. Reported from the venue as "You have no preview button,
+      // nor do you have a Sync button!", and the only way in was a URL.
+      //
+      // ⚠️ The id is `pco` because routes are keyed by item id and that
+      // route was already registered. It is the one Planning Center item NOT
+      // in `IN_PAGE_ITEMS`, which is exactly what sends it to the route.
+      //
+      // ⭐ First in the group, because it is the only part most weeks need --
+      // the same argument the group's own note makes about connecting being
+      // done once ever.
+      { id: 'pco', label: "This week's plan", action: 'pco' },
+      ...PCO_SECTIONS.map((section) => ({
+        id: section.id,
+        label: section.label,
+        action: 'pco',
+      })),
+    ],
   },
   {
     title: 'Diagnostics',

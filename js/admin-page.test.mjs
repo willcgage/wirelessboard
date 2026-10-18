@@ -751,3 +751,51 @@ test('⛔⛔ every id a moved pane is bound through still exists in the markup',
   assert.ok(!html.includes('id="cfg-screens-col"'), 'the screens column is still in Config');
   assert.ok(!html.includes('id="config-logs-view"'), 'the logs view is still in Config');
 });
+
+/**
+ * ⛔⛔ Every registered route must be reachable from the rail.
+ *
+ * The `pco` route existed, was registered, guarded, and tested — and **no rail
+ * item pointed at it**. #222 moved the five Planning Center setup sections into
+ * `IN_PAGE_ITEMS`, so each renders a pane and none ever reaches the route. The
+ * weekly surface behind it — the plan picker, Preview Sync, Sync Now — had no
+ * door at all: the board could be configured and could not be synced.
+ *
+ * Reported from the venue as "You have no preview button, nor do you have a
+ * Sync button!" after it had been described, by me, from the source.
+ *
+ * ⚠️ `unroutedItems` was the mirror of this and could not catch it: it asks
+ * "does every item have a route", never "does every route have an item".
+ */
+test('⛔⛔ a registered route with no rail item is unreachable', () => {
+  resetAdminRoutes();
+  const reached = new Set(allItems().map((item) => item.id));
+
+  // The routes the application actually registers, named here because this
+  // module cannot import `app.js` without booting a board.
+  for (const id of ['pco', 'demo']) {
+    assert.ok(
+      reached.has(id),
+      `the "${id}" route has no rail item, so nothing can reach it`,
+    );
+  }
+});
+
+test('⭐ the weekly plan is the first thing under Planning Center', () => {
+  const group = SECTIONS.find((s) => s.title === 'Planning Center');
+  assert.ok(group, 'the group exists');
+
+  // It is the only part most weeks need; connecting is done once ever.
+  assert.equal(group.items[0].id, 'pco');
+  assert.match(group.items[0].label, /plan/i);
+});
+
+test('⚠️ and it is the one Planning Center item that is not drawn in the page', () => {
+  // That is what sends it to the route rather than to a pane — the exact
+  // distinction the five setup sections get wrong by design.
+  const group = SECTIONS.find((s) => s.title === 'Planning Center');
+  const inPage = group.items.filter((i) => IN_PAGE_ITEMS.includes(i.id));
+
+  assert.equal(inPage.length, group.items.length - 1);
+  assert.ok(!IN_PAGE_ITEMS.includes('pco'));
+});
