@@ -195,4 +195,11 @@ def needs_attention(result: Optional[Dict[str, Any]]) -> bool:
         return True
     # Contested slots were skipped, so somebody has to decide. Cleared slots
     # are reported but not flagged: the admin turned that option on.
-    return bool(result.get('skipped'))
+    #
+    # ⛔⛔ A HELD slot is flagged too, and reading only `skipped` meant it was
+    # not. It is the clearest case in the whole function of something only a
+    # person can settle: nobody is contesting the slot, one person is on
+    # several positions, and only they know which radio they are carrying
+    # (#260). On the venue board that is the single thing the sync declines to
+    # do, and it was the one thing that never raised a flag.
+    return bool(result.get('skipped')) or bool(result.get('held'))

@@ -251,3 +251,14 @@ def test_the_sentence_never_has_an_empty_clause():
         assert '. .' not in text, text
         assert '  ' not in text, text
         assert not text.rstrip('.').endswith('\u2014'), text
+
+
+def test_a_held_slot_asks_the_operator_to_look():
+    # ⛔⛔ `needs_attention` read only `skipped`, so the one outcome that
+    # genuinely cannot be settled without a person raised no flag at all.
+    # `js/plan-change.mjs` shows the banner on this boolean.
+    assert auto.needs_attention({'ok': True, 'held': _HELD}) is True
+    assert auto.needs_attention({'ok': True, 'skipped': [{'slot': 9}]}) is True
+    assert auto.needs_attention({'ok': True, 'updates': 3}) is False
+    # ⚠️ A clear is reported but deliberately not flagged: the admin asked for it.
+    assert auto.needs_attention({'ok': True, 'cleared': 2}) is False
