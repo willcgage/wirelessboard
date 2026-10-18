@@ -129,8 +129,17 @@ export const VIEW_CONTROLS = [
     //
     // ⛔ Reserved whether or not the board is paging — see `STATUS_BAR_KEY` for
     // why reserving it on demand would be a feedback loop.
+    // ⛔ Named `Channel count`, NOT "Status bar". The panel had three rows
+    // beginning with "Status" -- colour, stripe, bar -- doing three unrelated
+    // things, and this was the one that is not about channel status at all: it
+    // reports how many channels are showing. A status bar only in the
+    // desktop-application sense, which collides with `status` meaning GOOD or
+    // CRITICAL everywhere else on this board.
+    //
+    // ⚠️ The id and the storage key stay `statusBar`, so no board loses its
+    // stored placement to a rename.
     id: 'statusBar',
-    label: 'Status bar',
+    label: 'Channel count',
     group: 'On screen',
     storageKey: STATUS_BAR_KEY,
     options: STATUS_BAR_PLACEMENTS,
