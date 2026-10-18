@@ -10,6 +10,24 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.14] - 2026-10-17
+
+Two faults found by running the previous build on a wall, one of which that build introduced.
+
+### Fixed
+- **Switching on a transmitter no longer takes cards off the board.** A channel coming to life could
+  leave the board showing fewer channels than it has, holding on one page and reporting that a
+  channel needed attention. The strip kept clear for that message was being sized from the message
+  itself, so the longer wording that arrives with trouble made the strip taller, which left less room
+  for cards, which is what made the board start paging — and paging is what kept the longer wording
+  on screen. The strip is a fixed size again and the message now fits it, trimmed if it must be.
+  ⚠️ Introduced in the previous build while fixing that same strip overlapping the cards. The
+  overlap stays fixed.
+- **Renaming a group keeps the new name.** The name was always being saved — it reached the server
+  and was written to disk every time — but the screen was redrawn from a copy held in memory that
+  nothing had updated, so reopening the section put the old name back over it. Which looks exactly
+  like a rename that did not take.
+
 ## [2.0.0-beta.13] - 2026-10-17
 
 What a slot is **for** now appears on its card, and the words used for it are the same words
