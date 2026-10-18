@@ -174,12 +174,25 @@ export function checkWash(card, wash) {
  * arrangement is for. What they may not do is produce different card geometry
  * for the same column count, which is the difference between a choice and an
  * inconsistency.
+ *
+ * ⛔⛔ **The key must hold every control except the arrangement.** The first
+ * version keyed on shape, wash and the resulting grid only, so it compared
+ * boards that differed in `statusBar`, `livePlacement` or the drawer -- each of
+ * which takes height from the card by design -- and called the difference a
+ * fault. It reported one against a real board (`fit: 420x347; grid: 420x322`,
+ * six geometries in all) where every number was correct and the check was
+ * simply not looking at what varied. That is the same failure as reporting a
+ * stale card clean: a check that cannot see the thing it is holding constant.
+ *
+ * ⚠️ So the key is built from the config itself rather than a hand-written
+ * list, and a control added to `SWEEP_CONTROLS` later is in it automatically.
  */
 export function compareArrangements(results) {
   const byShape = new Map();
   for (const r of results) {
     if (!r.cards || !r.cards.length) continue;
-    const key = [r.config.cardShape, r.config.wash, r.columns, r.rows].join('|');
+    const held = Object.keys(r.config).filter((k) => k !== 'arrangement').sort();
+    const key = [...held.map((k) => `${k}=${r.config[k]}`), r.columns, r.rows].join('|');
     const geometry = `${Math.round(r.cards[0].box.width)}x${Math.round(r.cards[0].box.height)}`;
     if (!byShape.has(key)) byShape.set(key, new Map());
     const seen = byShape.get(key);
@@ -189,11 +202,18 @@ export function compareArrangements(results) {
   const problems = [];
   for (const [key, seen] of byShape) {
     if (seen.size <= 1) continue;
-    const parts = [...seen.entries()].map(([g, arr]) => `${arr.join('/')}: ${g}`);
-    const [shape, wash, columns, rows] = key.split('|');
+    // ⚠️ One entry per geometry, each naming its arrangements once. Printing
+    // `fit/fit/fit/fit/grid/grid` -- which the first version did, because the
+    // same arrangement reaches one geometry under several held configurations
+    // -- says nothing a reader can act on.
+    const parts = [...seen.entries()]
+      .map(([g, arr]) => `${[...new Set(arr)].sort().join('/')}: ${g}`);
+    const fields = key.split('|');
+    const rows = fields.pop();
+    const columns = fields.pop();
     problems.push({
       check: 'arrangement',
-      detail: `same ${columns}x${rows} board (shape ${shape}, wash ${wash}) drew different cards — ${parts.join('; ')}`,
+      detail: `same ${columns}x${rows} board (${fields.join(' ')}) drew different cards — ${parts.join('; ')}`,
     });
   }
   return problems;
