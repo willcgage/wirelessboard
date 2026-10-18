@@ -231,3 +231,50 @@ class TestAMultiPositionSlotIsAPromiseToo:
             resolution({'Amy': [1, 2]}, multi_position=typical), dry_run=True)
 
         assert [r['action'] for r in result['changes'] if r['slot'] in (1, 2)] == ['change', 'change']
+
+    def test_the_response_names_them_not_just_the_diff_rows(self, slots):
+        # ⛔⛔ The gap this closes. The diff rows carried the reason, but
+        # `skipped` is what the summary and the worked example read — so a slot
+        # was marked skipped with no reason given anywhere an operator looks.
+        result = pco.finish_sync(
+            resolution({'Amy': [2]}, multi_position=self.held()),
+            dry_run=True,
+        )
+
+        assert 'held' in result, 'the response must name the held slots'
+        assert result['held'] == [{
+            'slot': 2, 'name': 'Amy',
+            'positions': ['Welcome', 'Vocal 1'],
+            'kept_on': None,
+        }]
+
+    def test_held_is_not_folded_into_skipped(self, slots):
+        # ⛔ `skipped` means contested, and both readers phrase it as "claimed
+        # by N people". A multi-position entry in there would put back the
+        # exact sentence #260 removed.
+        result = pco.finish_sync(
+            resolution({'Amy': [2]}, multi_position=self.held()),
+            dry_run=True,
+        )
+
+        assert result['skipped'] == [], 'nobody is contesting anything here'
+
+    def test_the_slot_kept_is_reported_so_the_operator_can_check_it(self, slots):
+        result = pco.finish_sync(
+            resolution({'Amy': [1, 2]},
+                       multi_position=self.held(slots_held=(2,), anchor=1)),
+            dry_run=True,
+        )
+
+        assert result['held'][0]['kept_on'] == 1
+
+    def test_a_typical_pair_reports_nothing_held(self, slots):
+        typical = [{
+            'name': 'Amy', 'positions': [], 'slots': [1, 2],
+            'kinds': ['handheld', 'bodypack'], 'typical': True,
+            'anchor_slot': None, 'held': [], 'skipped': False,
+        }]
+        result = pco.finish_sync(
+            resolution({'Amy': [1, 2]}, multi_position=typical), dry_run=True)
+
+        assert result['held'] == []

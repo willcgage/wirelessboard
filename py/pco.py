@@ -3014,6 +3014,26 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
              "claimants": sorted({x.get('name') or '' for x in c.get('claimants') or []})}
             for c in conflicts
         ],
+        # ⛔⛔ Its own key, NOT appended to `skipped`. Both readers of that
+        # list phrase every entry as "claimed by N people", which is the exact
+        # sentence #260 removed -- one person on two positions is not a contest
+        # and there is no second person to go and ask about.
+        #
+        # ⚠️ The diff rows already carried this, but `skipped` is what the
+        # summary and the worked example read. Reaching the rows and not the
+        # summary meant an operator saw a slot marked skipped with no reason
+        # given anywhere they were looking.
+        "held": [
+            {"slot": number,
+             "name": entry.get('name') or '',
+             "positions": [
+                 p.get('position') or p.get('label') or ''
+                 for p in entry.get('positions') or []
+             ],
+             "kept_on": entry.get('anchor_slot')}
+            for entry in multi_position
+            for number in entry.get('held') or []
+        ],
         # ⚠️ Which rules ran is no longer obvious from the screen once profiles
         # exist, so every sync and every preview says so.
         "profile": profile,
