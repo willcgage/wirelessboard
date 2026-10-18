@@ -10,6 +10,46 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.20] - 2026-10-18
+
+Three things the board was getting right and then describing wrongly — or not describing at all.
+Two of them were found by reading the board in the Green Room rather than by any test.
+
+### Fixed
+- **The channel count bar is no longer hidden underneath the service strip.** Put both of them at
+  the top and the service strip was drawn straight over the channel count, which was invisible —
+  not behind the board, but underneath its neighbour. The two had always been pinned to the same
+  edge: the bottom of the screen had a rule keeping them apart and the top never got one. Both bars
+  now stack, and the cards start below both of them.
+
+  ⚠️ The gap each bar reserves is measured from the strip as it is actually drawn, because its text
+  scales with the board — on a television it is taller than any fixed number written in advance.
+
+- **A sync that leaves a channel alone because somebody is on two positions now says so everywhere.**
+  beta.19 added that explanation to the row-by-row diff. The three summaries an operator actually
+  reads had not been told about it, and each got it wrong differently: the line above the diff called
+  it *"claimed by two people"* — directly above a row naming one person — an automatic sync said
+  nothing at all about it, and nothing raised the flag that asks somebody to look.
+
+  ⛔ That last one is the one that mattered. On a board that syncs by itself, an automatic sync
+  would report *"nothing on the board needed changing"* while a channel sat unassigned.
+
+- **A sync that writes nothing because it is holding a channel back no longer claims the board was
+  already correct.** "Nothing needed changing" and "nothing was written" are different statements,
+  and only one of them was true.
+
+### Added
+- **Every Planning Center section can show what its own settings would do.** Matching has had a
+  worked example against a real plan since 2.0 began; the sections that *override* it had nothing,
+  so the one thing a rule set exists for — being different — was the one thing you could not see.
+  Rule sets now resolve each set against the next plan, Calendar & automation says what will happen
+  if nobody touches anything, and Matching carries the Preview Sync and Sync Now buttons so you can
+  act on what the example just told you.
+
+  ⚠️ The automation panel reports the watcher's own state rather than the settings above it. A board
+  set to watch every 120 seconds is doing nothing at all until a sync has run since it started, and
+  until now every setting on screen read "on" while nothing happened.
+
 ## [2.0.0-beta.19] - 2026-10-18
 
 A follow-up to beta.18: the board was making the right decision and keeping the reason to itself.
