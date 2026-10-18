@@ -487,7 +487,7 @@ class TestMultiPosition:
             person('Christian Nuckels', position='Welcome'),
             person('Christian Nuckels', position='Vocal 1'),
         ])
-        found = pco.find_multi_position(resolved)
+        found = pco.find_multi_position(resolved, kinds={})
 
         assert len(found) == 1
         assert found[0]['name'] == 'Christian Nuckels'
@@ -503,11 +503,11 @@ class TestMultiPosition:
 
         assert len(resolved) == 1
         assert len(resolved[0]['slots']) == 2
-        assert pco.find_multi_position(resolved) == []
+        assert pco.find_multi_position(resolved, kinds={}) == []
 
     def test_one_person_one_position_is_not_reported(self, board):
         resolved, _ = self.resolve([person('Chris Wall', position='Welcome')])
-        assert pco.find_multi_position(resolved) == []
+        assert pco.find_multi_position(resolved, kinds={}) == []
 
     def test_find_conflicts_cannot_see_it(self, board):
         # ⛔ Stated as a test because it is the reason this went unnoticed:
@@ -517,7 +517,7 @@ class TestMultiPosition:
             person('Christian Nuckels', position='Vocal 1'),
         ])
         assert pco.find_conflicts(resolved) == []
-        assert pco.find_multi_position(resolved) != []
+        assert pco.find_multi_position(resolved, kinds={}) != []
 
     def test_the_slots_are_left_alone_so_nobody_is_evicted(self, board):
         # ⛔⛔ The sharp half. Casie Hamilton is on the Welcome slot; Christian
@@ -527,7 +527,7 @@ class TestMultiPosition:
             person('Christian Nuckels', position='Welcome'),
             person('Christian Nuckels', position='Vocal 1'),
         ])
-        skip = pco.multi_position_slots(pco.find_multi_position(resolved))
+        skip = pco.multi_position_slots(pco.find_multi_position(resolved, kinds={}))
         pco._apply_assignments(resolved, {'seed_extended_id': False}, skip)
 
         by_slot = {s['slot']: s for s in board}
@@ -563,4 +563,92 @@ class TestMultiPosition:
             person(' christian nuckels ', position='Welcome'),
             person('Christian Nuckels', position='Vocal 1'),
         ])
-        assert len(pco.find_multi_position(resolved)) == 1
+        assert len(pco.find_multi_position(resolved, kinds={})) == 1
+
+
+class TestTwoRadiosIsNormalWhenTheEquipmentDiffers:
+    """⭐⭐ The maintainer's rule, 2026-10-18 (#260):
+
+        "A person can hold two, but typically that would be with a Handheld
+         (HH) and a Bodypack (BP)."
+
+    So the question is not *whether* somebody may hold two radios -- they may --
+    but whether the pair is the ordinary shape. Both of these are live on the
+    venue board: Brandon Risinger carries HH-2 and BP-11, which is normal;
+    one person on two handhelds is not.
+    """
+
+    @pytest.fixture
+    def board(self, monkeypatch):
+        tree = {
+            'slots': [
+                {'slot': 1, 'type': 'qlxd', 'extended_id': 'Vocal 1'},
+                {'slot': 2, 'type': 'qlxd', 'extended_id': 'Vocal 2'},
+                {'slot': 7, 'type': 'qlxd', 'extended_id': 'Welcome'},
+                {'slot': 11, 'type': 'ulxd', 'extended_id': 'Acoustic Guitar'},
+            ]
+        }
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    # The venue's own labelling, read off the receivers.
+    KINDS = {1: 'handheld', 2: 'handheld', 7: 'handheld', 11: 'bodypack'}
+
+    def resolve(self, people):
+        return pco.resolve_assignments(people, {
+            'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False,
+        })
+
+    def test_handheld_and_bodypack_is_normal_and_both_are_written(self, board):
+        # Brandon Risinger, exactly as the board carries him today.
+        resolved, _ = self.resolve([
+            person('Brandon Risinger', position='Vocal 2'),
+            person('Brandon Risinger', position='Acoustic Guitar'),
+        ])
+        found = pco.find_multi_position(resolved, kinds=self.KINDS)
+
+        assert len(found) == 1
+        assert found[0]['typical'] is True
+        assert found[0]['skipped'] is False
+        # Nothing is held back, so the sync writes him to both.
+        assert pco.multi_position_slots(found) == set()
+
+        pco._apply_assignments(resolved, {'seed_extended_id': False},
+                               pco.multi_position_slots(found))
+        by_slot = {s['slot']: s for s in board}
+        assert by_slot[2].get('extended_name') == 'Brandon Risinger'
+        assert by_slot[11].get('extended_name') == 'Brandon Risinger'
+
+    def test_two_handhelds_is_unusual_and_left_alone(self, board):
+        resolved, _ = self.resolve([
+            person('Christian Nuckels', position='Welcome'),
+            person('Christian Nuckels', position='Vocal 1'),
+        ])
+        found = pco.find_multi_position(resolved, kinds=self.KINDS)
+
+        assert found[0]['typical'] is False
+        assert found[0]['skipped'] is True
+        assert pco.multi_position_slots(found) == {1, 7}
+
+    def test_equipment_that_cannot_be_identified_is_not_assumed_typical(self, board):
+        # ⛔ "Cannot tell" is not "normal". A receiver with no recognisable
+        # label yields no kind, and writing both on the strength of a guess is
+        # the behaviour this whole issue is about.
+        resolved, _ = self.resolve([
+            person('Brandon Risinger', position='Vocal 2'),
+            person('Brandon Risinger', position='Acoustic Guitar'),
+        ])
+        found = pco.find_multi_position(resolved, kinds={2: 'handheld'})
+
+        assert found[0]['typical'] is False
+        assert pco.multi_position_slots(found) == {2, 11}
+
+    def test_the_kind_is_read_from_the_receiver_label(self):
+        assert pco.device_kind_for_slot('HH-1') == 'handheld'
+        assert pco.device_kind_for_slot('BP-11') == 'bodypack'
+        assert pco.device_kind_for_slot('IEM 1') == 'iem'
+        # ⚠️ A convention, not a protocol fact. An unrecognised label is
+        # "cannot tell", never a guess.
+        assert pco.device_kind_for_slot('Slot 3') is None
+        assert pco.device_kind_for_slot('') is None

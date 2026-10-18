@@ -218,7 +218,59 @@ def conflicted_slots(conflicts: List[Dict[str, Any]]) -> set:
     return {c.get('slot') for c in (conflicts or []) if c.get('slot') is not None}
 
 
-def find_multi_position(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+# The equipment a label prefix names. ⛔ A naming convention, not a protocol
+# fact: receivers are labelled "HH-1" or "BP-9" by whoever set them up, and a
+# board that labels them some other way simply gets `None` and is treated as
+# "cannot tell". Guessing a kind would be worse than not knowing one.
+DEVICE_KIND_PREFIXES = {
+    'hh': 'handheld',
+    'bp': 'bodypack',
+    'iem': 'iem',
+}
+
+
+def device_kind_for_slot(device_id: Any) -> Optional[str]:
+    """Classify a slot's equipment from the receiver's own label."""
+    label = str(device_id or '').strip().lower()
+    if not label:
+        return None
+    prefix = re.split(r'[-\s0-9]', label, 1)[0]
+    return DEVICE_KIND_PREFIXES.get(prefix)
+
+
+def live_device_kinds() -> Dict[Any, Optional[str]]:
+    """Slot number -> 'handheld' / 'bodypack' / 'iem', from the live receivers.
+
+    ⭐ The receiver knows this even when the transmitter is switched off, which
+    is when a sync usually runs. `device_id` is parsed from `chan_name_raw`,
+    which the *receiver* reports -- so a channel reading NO TX still says
+    "HH-7". Reading the transmitter's own model instead would answer nothing on
+    a pre-service board with every pack in the case.
+
+    ⚠️ Imported here rather than at module scope. `pco` is imported by the
+    server during start-up and `shure` owns the device list it is still
+    building; a top-level import ties the two together for one lookup.
+    """
+    kinds: Dict[Any, Optional[str]] = {}
+    try:
+        import shure  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return kinds
+
+    for receiver in list(getattr(shure, 'NetworkDevices', []) or []):
+        for channel in getattr(receiver, 'channels', []) or []:
+            try:
+                number = channel.slot
+                kinds[number] = device_kind_for_slot(channel.device_id())
+            except Exception:  # noqa: BLE001
+                continue
+    return kinds
+
+
+def find_multi_position(
+    resolved: List[Dict[str, Any]],
+    kinds: Optional[Dict[Any, Optional[str]]] = None,
+) -> List[Dict[str, Any]]:
     """Report one person holding several positions, each landing on its own slot.
 
     ⛔ The mirror of `find_conflicts`, and invisible to it. That one is keyed
@@ -234,11 +286,25 @@ def find_multi_position(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     entries carrying the same name. Only the second is reported here, so the
     intended fan-out is untouched.
 
-    ⚠️ Reported, not resolved. Which radio a person on two positions should
-    actually hold is a question about hardware the plan cannot describe, so the
-    same answer as a contested slot applies: leave the slots alone and say so.
-    A confident wrong name is the one nobody knows to question.
+    ⭐⭐ **Two radios is normal when they are different equipment.** The
+    maintainer's rule: *"A person can hold two, but typically that would be
+    with a Handheld (HH) and a Bodypack (BP)."* So a person on a handheld and a
+    bodypack is the ordinary case and both slots are written; a person on two
+    handhelds is the odd one, and only that is left alone.
+
+    ⚠️ Reported, not resolved, when the shape is unusual. Which of two
+    handhelds somebody should carry is a question about hardware the plan cannot
+    describe, so the same answer as a contested slot applies: leave the slots
+    alone and say so. A confident wrong name is the one nobody knows to
+    question.
+
+    ⛔ "Cannot tell" is not "typical". A slot whose receiver carries no
+    recognisable label yields no kind, and a person whose slots are unknown is
+    left alone rather than written on the strength of a guess.
     """
+    if kinds is None:
+        kinds = live_device_kinds()
+
     by_name: Dict[str, List[Dict[str, Any]]] = {}
     for entry in resolved or []:
         key = (entry.get('name') or '').strip().lower()
@@ -260,6 +326,13 @@ def find_multi_position(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     seen.add(number)
                     slots.append(number)
 
+        # ⭐ Handheld plus bodypack is the ordinary shape and needs no
+        # intervention. Two of one kind -- or any slot whose equipment cannot
+        # be identified -- is the case worth stopping on.
+        slot_kinds = [kinds.get(number) for number in slots]
+        known = [k for k in slot_kinds if k]
+        typical = len(known) == len(slots) and len(set(known)) == len(known)
+
         out.append({
             'name': entries[0].get('name') or '',
             'positions': [{
@@ -268,17 +341,25 @@ def find_multi_position(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 'slots': [s.get('slot') for s in entry.get('slots') or []],
             } for entry in entries],
             'slots': slots,
-            'skipped': True,
+            'kinds': slot_kinds,
+            'typical': typical,
+            'skipped': not typical,
         })
 
     return sorted(out, key=lambda e: (e.get('name') or '').lower())
 
 
 def multi_position_slots(entries: List[Dict[str, Any]]) -> set:
-    """The slot numbers a sync must leave alone because one person claims several."""
+    """The slot numbers a sync must leave alone because one person claims several.
+
+    ⭐ Only the unusual ones. A handheld-and-bodypack pairing is the ordinary
+    way somebody holds two radios, so those slots are written like any other;
+    `typical` is what says which is which.
+    """
     return {
         number
         for entry in (entries or [])
+        if not entry.get('typical')
         for number in (entry.get('slots') or [])
         if number is not None
     }
