@@ -117,7 +117,7 @@ test('⛔⛔ a board that drew nothing is a failure, not a pass', () => {
   // The quietest way for a harness to lie: a step that rendered no cards has
   // no card to find fault with, and would otherwise report clean.
   const empty = {
-    config: { wash: 'band' }, columns: 0, rows: 0, cards: [],
+    config: { wash: 'band' }, columns: '6', rows: '2', cards: [],
   };
   const found = checkBoard(empty);
   assert.equal(found.length, 1);
@@ -160,7 +160,12 @@ test('⛔⛔ a card with no distinguishable status colour is skipped, not guesse
   };
   assert.deepEqual(checkWash(cannotTell, 'rail'), []);
   assert.deepEqual(checkWash(cannotTell, 'band'), []);
-  assert.deepEqual(checkBoard({ config: { wash: 'rail' }, cards: [cannotTell] }), []);
+  assert.deepEqual(
+    checkBoard({
+      config: { wash: 'rail' }, columns: '6', rows: '2', cards: [cannotTell],
+    }),
+    [],
+  );
 });
 
 test('⚠️ but an empty list still means "nowhere", which is a real answer', () => {
@@ -171,4 +176,35 @@ test('⚠️ but an empty list still means "nowhere", which is a real answer', (
   };
   assert.equal(checkWash(lookedAndFoundNothing, 'band').length, 1);
   assert.match(checkWash(lookedAndFoundNothing, 'band')[0].detail, /nowhere/);
+});
+
+test('⛔⛔ a board whose layout never ran is reported, not passed', () => {
+  // Caught against a real board: "all 12 configurations passed" while every
+  // card was the untouched 420x1080 default, because the browser pane had gone
+  // to the background and requestAnimationFrame stalled with it. The cards
+  // existed and were inside themselves, so every other check was happy.
+  const stale = {
+    config: { wash: 'band' },
+    columns: '?',
+    rows: '?',
+    cards: [{
+      slot: 1, box: box(0, 1080), parts: { figures: box(900, 1000) }, statusPainted: ['band'],
+    }],
+  };
+  const found = checkBoard(stale);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].check, 'layout');
+  assert.match(found[0].detail, /stale card/);
+});
+
+test('a board that did lay out is judged normally', () => {
+  const live = {
+    config: { wash: 'band' },
+    columns: '6',
+    rows: '2',
+    cards: [{
+      slot: 1, box: box(0, 520), parts: { figures: box(400, 500) }, statusPainted: ['band'],
+    }],
+  };
+  assert.deepEqual(checkBoard(live), []);
 });

@@ -194,6 +194,23 @@ export function checkBoard(snapshot) {
   if (!snapshot.cards || !snapshot.cards.length) {
     problems.push({ check: 'cards', detail: 'the board drew no cards' });
   }
+  // ⛔⛔ And neither is a board whose layout never ran. `--tvmode-columns` is
+  // empty until the layout pass has set it, and every card is then the stale
+  // default size — so the containment check measures a card the board is not
+  // showing and reports it clean.
+  //
+  // Caught doing exactly that: a run against a real board reported "all 12
+  // configurations passed" while every card was 420x1080, the untouched
+  // default, because the browser pane had gone to the background and
+  // `requestAnimationFrame` stalled with it. The answer is to say so, not to
+  // pass.
+  if (!snapshot.columns || snapshot.columns === '?') {
+    problems.push({
+      check: 'layout',
+      detail: 'the layout pass did not run — every measurement here is of a stale card. '
+        + 'Keep the board on screen while the sweep runs.',
+    });
+  }
   return problems;
 }
 
