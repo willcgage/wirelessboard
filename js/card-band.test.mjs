@@ -47,9 +47,15 @@ const cardMarkup = markup
 
 test('the card has a band, and the text lives inside it', () => {
   assert.match(cardMarkup, /class="card-band"/, 'the card needs a band to put text in');
-  for (const line of ['class="name"', 'class="card-runtime"']) {
-    assert.ok(cardMarkup.includes(line), `${line} should be inside the card`);
-  }
+  assert.ok(cardMarkup.includes('class="name"'), 'class="name" should be inside the card');
+  // ⚠️ `card-runtime` was in this list. The battery and the time moved to the
+  // drawer, beside the signal rows, because the maintainer asked for them in
+  // the space the sparklines leave -- see `battery-icon.test.mjs`, which now
+  // guards the new home. The band carries the person, and only the person.
+  assert.ok(
+    !cardMarkup.includes('class="card-runtime"'),
+    'the runtime lives in the drawer now, not the band',
+  );
   // ⛔ #206. The device name is the column heading and nothing else. It sat in
   // the band as well until the duplicate was found on a running board -- the
   // same string, twice, on every card, in both desk and TV mode.

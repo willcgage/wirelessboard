@@ -1193,16 +1193,6 @@
             <!-- ⛔ No device name here. It is the column heading above the card
                  (p.device-name); printing it here as well put the same string
                  on every card twice over, which #206 removed. -->
-            <!-- The battery, beside the time it is a measure of. The outline
-                 stays when nothing has been reported; only the fill goes. -->
-            <p class="card-runtime">
-              <svg class="batt-icon" viewBox="0 0 24 12" aria-hidden="true" focusable="false">
-                <rect class="batt-shell" x="0.6" y="0.6" width="19.8" height="10.8" rx="2.2"></rect>
-                <rect class="batt-cap" x="21.4" y="3.6" width="2.4" height="4.8" rx="1.2"></rect>
-                <rect class="batt-fill" x="2.4" y="2.4" width="16.2" height="7.2" rx="1.2"></rect>
-              </svg>
-              <span class="runtime-text"></span>
-            </p>
           </div>
         </div>
         <div class="electrode"></div>
@@ -1231,6 +1221,30 @@
               </svg>
               <span class="spark-value"></span>
             </p>
+            <!-- ⭐ The battery, beside the time it is a measure of, in the
+                 space the two signal rows leave to their right. It sat in the
+                 band under the person's name until the maintainer asked for it
+                 here, pointing at the gap: the sparklines are a fixed width and
+                 everything right of them was empty.
+
+                 ⛔ It spans both signal rows as its own grid column, so it
+                 cannot cover them. "I don't want to have anything that covers
+                 the information/data" is the standing rule, and #273 and #282
+                 are what happens when a part of the card has no space of its
+                 own.
+
+                 ⚠️ The outline stays when nothing has been reported; only the
+                 fill goes. An empty fill would read as "about to die" rather
+                 than "no idea". -->
+            <p class="card-runtime">
+              <svg class="batt-icon" viewBox="0 0 24 12" aria-hidden="true" focusable="false">
+                <rect class="batt-shell" x="0.6" y="0.6" width="19.8" height="10.8" rx="2.2"></rect>
+                <rect class="batt-cap" x="21.4" y="3.6" width="2.4" height="4.8" rx="1.2"></rect>
+                <rect class="batt-fill" x="2.4" y="2.4" width="16.2" height="7.2" rx="1.2"></rect>
+              </svg>
+              <span class="runtime-text"></span>
+            </p>
+
             <!-- The figures that are said nowhere else. `quality` is the
                  receiver's own link rating, which is a different measurement
                  from the RF level the line above plots. -->
