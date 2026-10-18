@@ -734,3 +734,70 @@ class TestAnImpossiblePairKeepsTheRadioTheyHave:
         self.board(monkeypatch, {1: '  christian nuckels '})
         found = pco.find_multi_position(self.resolve(), kinds=self.KINDS)
         assert found[0]['anchor_slot'] == 1
+
+
+class TestWhatAPersonCanPhysicallyCarry:
+    """⭐⭐ The maintainer's correction (#260, 2026-10-18):
+
+        "Bodypacks can have two purposes. One being a headset mic and the
+         second an instrument. So, the example with Brandon is a Handheld with
+         an Instrument Bodypack. This works. Two bodypacks are possible if it
+         is one headset and one instrument."
+
+    ⛔ So the test is NOT whether the equipment differs — an earlier version of
+    this rule required every kind to be distinct and would have held back two
+    bodypacks, which is a shape people actually run. A person has one voice, so
+    two handhelds is impossible; that is the only pairing the labels can prove.
+    """
+
+    @pytest.fixture
+    def board(self, monkeypatch):
+        tree = {'slots': [
+            {'slot': 2, 'type': 'qlxd', 'extended_id': 'Vocal 2'},
+            {'slot': 10, 'type': 'ulxd', 'extended_id': 'Headset'},
+            {'slot': 11, 'type': 'ulxd', 'extended_id': 'Acoustic Guitar'},
+        ]}
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    def resolve(self, *positions):
+        return pco.resolve_assignments(
+            [person('Sam Reed', position=p) for p in positions],
+            {'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False},
+        )[0]
+
+    def test_two_bodypacks_are_possible_headset_and_instrument(self, board):
+        # ⛔ The case the earlier "all kinds must differ" rule got wrong.
+        found = pco.find_multi_position(
+            self.resolve('Headset', 'Acoustic Guitar'),
+            kinds={10: 'bodypack', 11: 'bodypack'},
+        )
+        assert found[0]['typical'] is True
+        assert found[0]['held'] == []
+        assert pco.multi_position_slots(found) == set()
+
+    def test_a_handheld_and_an_instrument_bodypack_is_fine(self, board):
+        found = pco.find_multi_position(
+            self.resolve('Vocal 2', 'Acoustic Guitar'),
+            kinds={2: 'handheld', 11: 'bodypack'},
+        )
+        assert found[0]['typical'] is True
+
+    def test_two_handhelds_is_the_one_impossible_pair(self, board):
+        found = pco.find_multi_position(
+            self.resolve('Vocal 2', 'Headset'),
+            kinds={2: 'handheld', 10: 'handheld'},
+        )
+        assert found[0]['typical'] is False
+        assert sorted(found[0]['held']) == [2, 10]
+
+    def test_an_unreadable_label_is_not_a_clearance(self, board):
+        # ⚠️ On a board that does not use the HH/BP convention nothing can be
+        # proved either way. Writing both is how somebody already on a slot
+        # gets overwritten, which is the whole of #260 — so it is held.
+        found = pco.find_multi_position(
+            self.resolve('Headset', 'Acoustic Guitar'),
+            kinds={10: 'bodypack'},
+        )
+        assert found[0]['typical'] is False

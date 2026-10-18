@@ -297,21 +297,29 @@ def find_multi_position(
     entries carrying the same name. Only the second is reported here, so the
     intended fan-out is untouched.
 
-    ⭐⭐ **Two radios is normal when they are different equipment.** The
-    maintainer's rule: *"A person can hold two, but typically that would be
-    with a Handheld (HH) and a Bodypack (BP)."* So a person on a handheld and a
-    bodypack is the ordinary case and both slots are written; a person on two
-    handhelds is the odd one, and only that is left alone.
+    ⭐⭐ **Two radios is normal. Only a physically impossible pair is held.**
+    The maintainer's rule, refined twice:
 
-    ⚠️ Reported, not resolved, when the shape is unusual. Which of two
-    handhelds somebody should carry is a question about hardware the plan cannot
-    describe, so the same answer as a contested slot applies: leave the slots
-    alone and say so. A confident wrong name is the one nobody knows to
-    question.
+        "A person can hold two, but typically that would be with a Handheld
+         (HH) and a Bodypack (BP)."
+        "Bodypacks can have two purposes. One being a headset mic and the
+         second an instrument. [...] Two bodypacks are possible if it is one
+         headset and one instrument."
 
-    ⛔ "Cannot tell" is not "typical". A slot whose receiver carries no
-    recognisable label yields no kind, and a person whose slots are unknown is
-    left alone rather than written on the strength of a guess.
+    So the test is not whether the equipment *differs*. A person has one voice,
+    so **two handhelds is impossible**; everything else is a shape somebody
+    actually runs -- handheld plus instrument pack, headset pack plus
+    instrument pack, a radio plus an IEM.
+
+    ⛔ Two handhelds is the only combination the equipment labels can prove
+    impossible, because a bodypack does not say which of its two jobs it is
+    doing. Whether a `BP` is a headset or an instrument lives in the position
+    name, not the hardware, and reading intent out of free text is the rule
+    sprawl this is deliberately avoiding.
+
+    ⚠️ So the default is to allow. An unidentifiable label proves nothing,
+    and a pair that cannot be shown to be impossible is written -- the plan
+    said two, and two is ordinary.
 
     ⭐⭐ **An impossible pair keeps the radio the person already has.** Two
     handhelds is not merely unusual, it is impossible -- somebody cannot carry
@@ -354,8 +362,21 @@ def find_multi_position(
         # intervention. Two of one kind -- or any slot whose equipment cannot
         # be identified -- is the case worth stopping on.
         slot_kinds = [kinds.get(number) for number in slots]
+        # ⛔ One voice, one handheld. Two handhelds is the only pairing the
+        # labels can prove impossible -- two bodypacks is a headset and an
+        # instrument, which is a shape people run, and a bodypack never says
+        # which of its two jobs it is doing.
+        #
+        # ⚠️ An unreadable label is not a clearance. On a board that does not
+        # use the HH/BP convention nothing can be proved either way, and
+        # writing both is how somebody already on a slot gets overwritten --
+        # the whole of #260. So a pair is allowed only when every slot's
+        # equipment is known AND it is not two handhelds.
         known = [k for k in slot_kinds if k]
-        typical = len(known) == len(slots) and len(set(known)) == len(known)
+        typical = (
+            len(known) == len(slots)
+            and len([k for k in known if k == 'handheld']) < 2
+        )
 
         name = entries[0].get('name') or ''
         anchor_slot = None
