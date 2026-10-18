@@ -33,6 +33,29 @@ function rows(changes) {
   return Array.isArray(changes) ? changes.filter((row) => row && typeof row === 'object') : [];
 }
 
+/**
+ * Whether this skipped row is a HELD slot rather than a contested one.
+ *
+ * ⛔⛔ A slot is left alone for one of two reasons and they are not the same
+ * sentence. Several people claiming one slot is a **contest**. One person
+ * claiming several is **#260**, and the operator has to decide which radio
+ * that person carries -- not which of two people wins.
+ *
+ * ⚠️ Exported and shared because `describeRow` got this right and
+ * `diffHeadline` did not: the row said "Christian Nuckels is on Welcome and
+ * Vocal 1" while the sentence above it said "1 slot left alone (claimed by two
+ * people)" about the very same slot. Two readers of one fact, and only one of
+ * them was taught about it.
+ */
+export function isHeldRow(row) {
+  if (!row || typeof row !== 'object' || row.action !== 'skipped') {
+    return false;
+  }
+  const held = row.held_by && typeof row.held_by === 'object' ? row.held_by : {};
+  const positions = Array.isArray(held.positions) ? held.positions.filter(Boolean) : [];
+  return row.skip_reason === 'multi-position' || positions.length > 0;
+}
+
 export function changedRows(changes) {
   return rows(changes).filter((row) => CHANGING.includes(row.action));
 }
@@ -75,7 +98,22 @@ export function diffHeadline(changes, { dryRun = true } = {}) {
   if (tally.skipped) {
     // ⛔ Last and separate: it is not one of the changes, it is the sync
     // declining to guess, and it is the only line that needs somebody to act.
-    text += `. ${tally.skipped} slot${tally.skipped === 1 ? '' : 's'} left alone (claimed by two people)`;
+    //
+    // ⛔⛔ And it says WHICH kind of declining. Phrasing every skip as
+    // "claimed by two people" was wrong on the venue board's own plan, where
+    // the one skipped slot is Christian Nuckels on Welcome *and* Vocal 1 --
+    // nobody is contesting it.
+    const heldCount = all.filter(isHeldRow).length;
+    const contested = tally.skipped - heldCount;
+    text += `. ${tally.skipped} slot${tally.skipped === 1 ? '' : 's'} left alone`;
+    if (heldCount && !contested) {
+      text += ' (one person is on several positions)';
+    } else if (contested && !heldCount) {
+      text += ' (claimed by two people)';
+    } else if (contested && heldCount) {
+      text += ` (${contested} claimed by two people, ${heldCount} where one`
+        + ' person is on several positions)';
+    }
   }
   if (tally.unchanged) {
     text += `. ${tally.unchanged} already correct`;
@@ -119,7 +157,7 @@ export function describeRow(row) {
     // that person carries — not which of two people wins.
     const held = row.held_by && typeof row.held_by === 'object' ? row.held_by : {};
     const positions = Array.isArray(held.positions) ? held.positions.filter(Boolean) : [];
-    if (row.skip_reason === 'multi-position' || positions.length) {
+    if (isHeldRow(row)) {
       const who = held.name || 'one person';
       return positions.length
         ? `${who} is on ${positions.join(' and ')}`

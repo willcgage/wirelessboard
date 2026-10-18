@@ -107,6 +107,32 @@ def should_auto_sync(
     return True, 'the plan changed and this profile syncs automatically'
 
 
+def _describe_held(held: Any) -> str:
+    """The held slots, named rather than counted.
+
+    ⭐ One person is worth naming: the operator reading this on a phone can
+    act on "Christian Nuckels is on Welcome and Vocal 1" and can do nothing
+    with "1 slot held". Several, and the count is the honest summary.
+    """
+    rows = [row for row in (held or []) if isinstance(row, dict)]
+    if not rows:
+        return ''
+
+    if len(rows) == 1:
+        row = rows[0]
+        name = str(row.get('name') or '').strip() or 'One person'
+        positions = [str(p).strip() for p in (row.get('positions') or []) if str(p).strip()]
+        kept = row.get('kept_on')
+        where = f" is on {' and '.join(positions)}" if positions else ' is on several positions'
+        tail = f', so slot {kept} was left as it is' if kept else ', so nothing was written'
+        return f'{name}{where}{tail} — somebody has to say which radio they carry'
+
+    return (
+        f'{len(rows)} slots left alone because one person is on several positions'
+        ' — somebody has to say which radio they carry'
+    )
+
+
 def describe_outcome(result: Optional[Dict[str, Any]]) -> str:
     """One sentence about what an automatic sync just did.
 
@@ -121,9 +147,21 @@ def describe_outcome(result: Optional[Dict[str, Any]]) -> str:
     updates = int(result.get('updates') or 0)
     cleared = int(result.get('cleared') or 0)
     skipped = len(result.get('skipped') or [])
+    # ⛔⛔ `held` is its own list and was not read here at all, so an
+    # automatic sync that left a slot alone because one person is on two
+    # positions said **nothing about it**. On the venue board's own plan that
+    # is the only thing the sync declines to do: Christian Nuckels on Welcome
+    # and Vocal 1, `skipped: []`, `held: [...]` -- and the operator who was not
+    # in the room read "nothing on the board needed changing".
+    held = result.get('held') or []
 
     if not updates and not cleared:
-        text = 'Synced automatically — nothing on the board needed changing'
+        # ⚠️ A held slot means the sync ran and chose to write nothing, which
+        # is not the same as the board already being right -- and saying
+        # "nothing needed changing" ahead of "Christian is on two positions"
+        # contradicts itself in one sentence.
+        text = ('Synced automatically — nothing was written' if held
+                else 'Synced automatically — nothing on the board needed changing')
     else:
         parts = []
         if updates:
@@ -139,6 +177,13 @@ def describe_outcome(result: Optional[Dict[str, Any]]) -> str:
             f". {skipped} slot{'' if skipped == 1 else 's'} left alone"
             ' (claimed by two people) — these still need checking'
         )
+
+    if held:
+        # ⛔ A different sentence, because it is a different decision. Nobody
+        # is contesting the slot: one person is on several positions and only
+        # they know which radio they are carrying (#260).
+        text += '. ' + _describe_held(held)
+
     return f'{text}.'
 
 
@@ -150,4 +195,11 @@ def needs_attention(result: Optional[Dict[str, Any]]) -> bool:
         return True
     # Contested slots were skipped, so somebody has to decide. Cleared slots
     # are reported but not flagged: the admin turned that option on.
-    return bool(result.get('skipped'))
+    #
+    # ⛔⛔ A HELD slot is flagged too, and reading only `skipped` meant it was
+    # not. It is the clearest case in the whole function of something only a
+    # person can settle: nobody is contesting the slot, one person is on
+    # several positions, and only they know which radio they are carrying
+    # (#260). On the venue board that is the single thing the sync declines to
+    # do, and it was the one thing that never raised a flag.
+    return bool(result.get('skipped')) or bool(result.get('held'))

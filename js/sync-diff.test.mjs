@@ -9,9 +9,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  ACTION_LABELS, CHANGING,
-  changedRows, unchangedRows, isNoop, diffHeadline, counts,
-  nameCell, describeRow, rowClass, shouldFoldUnchanged, foldedLabel,
+  ACTION_LABELS,
+  CHANGING,
+  changedRows,
+  unchangedRows,
+  isNoop,
+  diffHeadline,
+  counts,
+  nameCell,
+  describeRow,
+  rowClass,
+  shouldFoldUnchanged,
+  foldedLabel,
+  isHeldRow,
 } from './sync-diff.mjs';
 
 const row = (action, extra = {}) => ({
@@ -220,4 +230,62 @@ test('⛔ the fields this reader depends on are the ones Python emits', async ()
       `sync_diff.py should still produce the skip reason "${value}"`,
     );
   }
+});
+
+/**
+ * ⛔⛔ The headline and the row disagreed about the same slot.
+ *
+ * Taken from the venue board's own plan, read live from `api/pco/preview`:
+ * one skipped row, `claimants: []`, `skip_reason: 'multi-position'`,
+ * `held_by: { name: 'Christian Nuckels', positions: ['Welcome', 'Vocal 1'] }`.
+ *
+ * `describeRow` said "Christian Nuckels is on Welcome and Vocal 1".
+ * `diffHeadline` said "1 slot left alone (claimed by two people)".
+ * Nobody was contesting it.
+ */
+const heldRow = (over = {}) => row('skipped', {
+  slot: 7,
+  claimants: [],
+  skip_reason: 'multi-position',
+  held_by: { name: 'Christian Nuckels', positions: ['Welcome', 'Vocal 1'] },
+  ...over,
+});
+
+test('⛔⛔ a held slot is never described as claimed by two people', () => {
+  const headline = diffHeadline([row('assign', { slot: 1 }), heldRow()]);
+
+  assert.doesNotMatch(headline, /claimed by two people/);
+  assert.match(headline, /1 slot left alone \(one person is on several positions\)/);
+});
+
+test('⛔ the headline and the row agree on which kind of skip it is', () => {
+  // The two readers of one fact. They drifted once; they share `isHeldRow` now.
+  for (const [r, held] of [[heldRow(), true], [row('skipped', { claimants: ['Amy', 'Zoe'] }), false]]) {
+    assert.equal(isHeldRow(r), held);
+    const headline = diffHeadline([row('assign', { slot: 1 }), r]);
+    const contested = /claimed by two people/.test(headline);
+    assert.equal(contested, !held, `headline disagrees with describeRow: ${describeRow(r)}`);
+  }
+});
+
+test('⚠️ a held slot with only a skip_reason still counts as held', () => {
+  // ⛔ `held_by` may be absent while the reason is set. Reading only `held_by`
+  // would silently send it back down the contested branch.
+  assert.equal(isHeldRow(row('skipped', { skip_reason: 'multi-position' })), true);
+  assert.equal(isHeldRow(row('skipped', { held_by: { positions: ['A', 'B'] } })), true);
+  assert.equal(isHeldRow(row('skipped', {})), false);
+  // ⚠️ Only a skipped row can be held; `unchanged` carried a `held_by` once.
+  assert.equal(isHeldRow(row('unchanged', { skip_reason: 'multi-position' })), false);
+});
+
+test('⭐ both kinds at once are both named, with their counts', () => {
+  const headline = diffHeadline([
+    row('assign', { slot: 1 }),
+    heldRow(),
+    row('skipped', { slot: 9, claimants: ['Amy', 'Zoe'] }),
+  ]);
+
+  assert.match(headline, /2 slots left alone/);
+  assert.match(headline, /1 claimed by two people/);
+  assert.match(headline, /1 where one person is on several positions/);
 });

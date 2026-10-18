@@ -169,3 +169,96 @@ class TestWhetherSomebodyHasToLook:
         # Reported loudly, but not flagged: the admin turned that option on,
         # and a prompt that always appears is one nobody reads.
         assert not auto.needs_attention({'ok': True, 'updates': 0, 'cleared': 3})
+
+
+# ⛔⛔ An automatic sync that held a slot said NOTHING about it.
+#
+# `describe_outcome` read `result['skipped']` only. On the venue board's own
+# plan that list is empty and `held` carries the one thing the sync declined to
+# do -- so the operator who was not in the room read "nothing on the board
+# needed changing" while a slot sat unassigned.
+#
+# Taken from `api/pco/preview` on the live board:
+#   held: [{"slot": 7, "name": "Christian Nuckels",
+#           "positions": ["Welcome", "Vocal 1"], "kept_on": 1}]
+
+_HELD = [{
+    'slot': 7,
+    'name': 'Christian Nuckels',
+    'positions': ['Welcome', 'Vocal 1'],
+    'kept_on': 1,
+}]
+
+
+def test_a_held_slot_is_reported_rather_than_silently_dropped():
+    text = auto.describe_outcome({'ok': True, 'updates': 0, 'cleared': 0, 'held': _HELD})
+
+    assert 'nothing on the board needed changing' not in text
+    assert 'Christian Nuckels' in text
+    assert 'Welcome and Vocal 1' in text
+    # ⛔ Nobody is contesting it; that wording belongs to the other case.
+    assert 'claimed by two people' not in text
+
+
+def test_a_held_slot_says_which_slot_was_left_as_it_is():
+    text = auto.describe_outcome({'ok': True, 'updates': 2, 'held': _HELD})
+
+    assert 'slot 1' in text
+    assert 'which radio they carry' in text
+
+
+def test_held_and_contested_are_different_sentences():
+    both = auto.describe_outcome({
+        'ok': True, 'updates': 1,
+        'skipped': [{'slot': 9}],
+        'held': _HELD,
+    })
+
+    assert 'claimed by two people' in both
+    assert 'Christian Nuckels' in both
+
+
+def test_several_held_slots_are_counted_rather_than_listed():
+    many = auto.describe_outcome({
+        'ok': True, 'updates': 0, 'cleared': 0,
+        'held': _HELD + [{'slot': 3, 'name': 'Dana Reed', 'positions': ['Host', 'Vocal 2']}],
+    })
+
+    assert '2 slots left alone because one person is on several positions' in many
+
+
+def test_a_malformed_held_entry_never_crashes_the_summary():
+    # ⚠️ This string is pushed to a phone. A KeyError here loses the whole
+    # notification, which is worse than a vague one.
+    for bad in ([{}], [None], ['nonsense'], [{'name': '', 'positions': []}]):
+        text = auto.describe_outcome({'ok': True, 'updates': 1, 'held': bad})
+        assert text.endswith('.')
+
+
+def test_the_sentence_never_has_an_empty_clause():
+    # ⛔ It did: with nothing written and one slot held, the lead was
+    # "Synced automatically — " with no parts, giving "Synced automatically —
+    # . Christian Nuckels is on ...". Caught by running the real venue plan
+    # through it rather than a fixture.
+    for result in (
+        {'ok': True, 'updates': 0, 'cleared': 0, 'held': _HELD},
+        {'ok': True, 'updates': 0, 'cleared': 0, 'skipped': [{'slot': 9}]},
+        {'ok': True, 'updates': 1, 'held': _HELD},
+        {'ok': True, 'updates': 0, 'cleared': 0},
+    ):
+        text = auto.describe_outcome(result)
+        assert '\u2014 .' not in text, text
+        assert '. .' not in text, text
+        assert '  ' not in text, text
+        assert not text.rstrip('.').endswith('\u2014'), text
+
+
+def test_a_held_slot_asks_the_operator_to_look():
+    # ⛔⛔ `needs_attention` read only `skipped`, so the one outcome that
+    # genuinely cannot be settled without a person raised no flag at all.
+    # `js/plan-change.mjs` shows the banner on this boolean.
+    assert auto.needs_attention({'ok': True, 'held': _HELD}) is True
+    assert auto.needs_attention({'ok': True, 'skipped': [{'slot': 9}]}) is True
+    assert auto.needs_attention({'ok': True, 'updates': 3}) is False
+    # ⚠️ A clear is reported but deliberately not flagged: the admin asked for it.
+    assert auto.needs_attention({'ok': True, 'cleared': 2}) is False
