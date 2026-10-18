@@ -214,3 +214,31 @@ export function controlDescription(control, value) {
 export function isValidValue(control, value) {
   return Boolean(control) && control.options.includes(value);
 }
+
+/**
+ * Why a control is not in force right now, or null when it is.
+ *
+ * ⛔⛔ The control keeps the operator's value and the board says why it does
+ * not apply. This is the #202 shape, and it is the shape on purpose: writing
+ * their stored setting for them is the mistake behind "never flip a persisted
+ * flag as a side effect of a helpful action", and it would leave a board that
+ * later switches back to Grid with a column ceiling it never chose.
+ *
+ * ⭐ Fit means auto rows and auto columns -- it picks the grid that fits the
+ * screen, which is what the arrangement is for. So a column ceiling genuinely
+ * has nothing to do while Fit is selected. That is settled behaviour, not a
+ * bug (#276); what was wrong is that the control sat there looking live and
+ * said nothing, which is indistinguishable from the count being ignored by
+ * mistake -- and is exactly how it was first reported.
+ *
+ * ⚠️ A pure function, deliberately. The panel is a thin DOM layer over these
+ * modules, and a rule that only exists inside a render callback cannot be
+ * tested without booting a board.
+ */
+export function notInForce(controlId, values = {}) {
+  if (controlId === 'columns' && values.arrangement === 'fit') {
+    return 'Not in force — Fit chooses its own rows and columns to fill the screen. '
+      + 'Your ceiling is kept for the other arrangements.';
+  }
+  return null;
+}
