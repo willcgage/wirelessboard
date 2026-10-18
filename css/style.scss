@@ -1134,14 +1134,36 @@ p.device-name {
   }
 
   /* electrode and info drawer */
-  // The electrode's 125px plus the drawer's 90px (#195). Was 375px.
+  // The stripe's 20px plus the drawer's 90px (#195, #282). Was 375px, then 215.
   .elinfo11 .col-sm .mic_name {
-    max-height: calc(100% - (var(--tvmode-scale) * 215px));
+    max-height: calc(100% - (var(--tvmode-scale) * 110px));
     // ⛔ No `background` — see the note on `.elinfo01`. The wash owns it.
   }
 
+  // ⛔⛔ #282: with the drawer on, the status stripe is a RULE, not a block.
+  //
+  // It was `position: absolute; bottom: 90px × scale; height: 125px × scale`
+  // while the drawer — in ordinary flow since #195 — begins at the *top* of
+  // that same band. The two occupied one space by construction, and the stripe,
+  // being the positioned one, painted over it: the AF value, the RF value and
+  // the sparkline were all underneath it. Only the labels survived, which is
+  // why the board read `AF` and `RF` with nothing after them — on every card,
+  // in every arrangement, since #195.
+  //
+  // ⚠️ It looked like a colour problem and was not. A receiver with no
+  // transmitter resolves `--status` to the neutral card ground, so the stripe
+  // hid the numbers invisibly; only a channel with a live transmitter showed
+  // the block that gave it away.
+  //
+  // ⭐ In flow it needs no arithmetic at all. The markup already orders
+  // photo → electrode → drawer, so `position: static` puts the rule exactly
+  // where it belongs and the card's own layout keeps the three apart. Two
+  // hand-kept numbers that could disagree become none.
   .elinfo11 .col-sm .electrode {
     display: block;
+    position: static;
+    height: calc(var(--tvmode-scale) * 20px);
+    width: 100%;
   }
 
   // ⚠️ This selector was `info-drawer` -- no leading dot -- so it matched an
