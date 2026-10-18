@@ -10,6 +10,36 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.18] - 2026-10-18
+
+When somebody is scheduled for two things on the same plan, the board used to put their name on
+both channels without a word — and whoever was on one of them lost their microphone.
+
+### Fixed
+- **Somebody scheduled twice no longer takes a channel from somebody else.** If a person is down for
+  two positions on a plan, the board worked out a channel for each and wrote their name to both. The
+  person already on one of those channels was simply replaced, and nothing in the preview, the log
+  or the board said it had happened — the existing check looks for two people wanting one channel,
+  and this is one person wanting two, which is the other way round.
+- **A sync now says which kind of slot it left alone, and why.** Every skipped channel was described
+  as "claimed by two people", which is wrong for this case and sends you looking for a second
+  person who is not there. It now reads, for example, "Christian Nuckels is on Welcome and Vocal 1".
+
+### Added
+- **Two radios for one person, where that makes sense.** A handheld and an instrument pack, or a
+  headset and an instrument pack, are ordinary and both channels are filled in. What is not possible
+  is two voices at once — nobody carries two handhelds, or a handheld and a headset — and that is
+  the case the board stops and reports.
+- **When the plan asks for something impossible, the radio somebody already has is kept.** If they
+  are on one of those channels already, that is the one they keep; the other is left for whoever is
+  genuinely scheduled to it. If they are on neither, both are left alone rather than guessed at.
+- **A `Carries` setting on each receiver channel** — Handheld, Headset, Instrument or In-ear — in the
+  Receivers section. The hardware cannot tell you this: a bodypack is a headset on somebody's face
+  or a pack on a guitar, and the receiver reports the same thing either way. Setting it is what lets
+  the board tell two headsets (impossible) from a headset and a guitar (ordinary).
+
+  Leave it blank and nothing changes: the board goes on reading the "HH-"/"BP-" labels as before.
+
 ## [2.0.0-beta.17] - 2026-10-18
 
 The RF figure, the audio level and both trend lines were being covered up — on every card, in every
