@@ -10,6 +10,28 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.15] - 2026-10-17
+
+The status colour appears in one place again — and the thing that found out why is the more useful
+half of this release.
+
+### Fixed
+- **The status colour is drawn once, wherever you put it.** With the channel details hidden, the
+  colour was washing the whole card *as well as* the band or the edge rail, which is why it looked
+  so large and why Edge rail appeared to draw it twice. With the details shown, the opposite was
+  true and *Whole card* painted nothing at all. The card's background was being decided by two
+  things that disagreed, and which one won depended on a setting that has nothing to do with colour.
+  Whichever way the board is set, each of the three choices now puts the colour in exactly one
+  place.
+
+### Added
+- **A way to check every arrangement of the board at once.** Seven settings, three or four values
+  each — several thousand boards, far more than anyone will sit and click through. The board can now
+  walk them itself, look at what it actually drew, and report the combinations that came out wrong.
+  ⭐ It found the fault above on its second run, in a setting nobody thought was involved. ⚠️ It
+  puts the board back the way it found it, and is meant to be run on the real screen rather than a
+  copy of it — every recent wrong guess came from reasoning about a board nobody was looking at.
+
 ## [2.0.0-beta.14] - 2026-10-17
 
 Two faults found by running the previous build on a wall, one of which that build introduced.
