@@ -272,3 +272,37 @@ test('⛔⛔ the headline can never print more filled than exist', () => {
   assert.ok(!headline({ slotsMatched: 11, slotCount: 2 }).includes('11'));
   assert.equal(headline({ slotsMatched: 99, slotCount: 12 }), 'Every slot would be filled — 12 of 12.');
 });
+
+test('⛔⛔ #260: a held slot gets its own sentence, not the contested one', () => {
+  // "Claimed by two people" sends an operator looking for a second person who
+  // is not there. What they have to settle is which radio one person carries.
+  const lines = warnings({
+    held: [{
+      slot: 7,
+      name: 'Christian Nuckels',
+      positions: ['Welcome', 'Vocal 1'],
+      kept_on: 1,
+    }],
+  });
+  const held = lines.find((l) => l.kind === 'held');
+
+  assert.ok(held, 'a held slot should be reported');
+  assert.match(held.text, /Christian Nuckels is on Welcome and Vocal 1/);
+  assert.match(held.text, /more radios than one person carries/);
+  // ⭐ And where they were kept, so the operator can check that slot rather
+  // than hunt for what happened.
+  assert.match(held.text, /kept on slot 1/i);
+  assert.doesNotMatch(held.text, /claimed by/i);
+});
+
+test('⚠️ a held slot with nobody kept says so without inventing a slot', () => {
+  const lines = warnings({
+    held: [{
+      slot: 7, name: 'Amy', positions: ['Welcome', 'Vocal 1'], kept_on: null,
+    }],
+  });
+  const held = lines.find((l) => l.kind === 'held');
+
+  assert.match(held.text, /Amy is on Welcome and Vocal 1/);
+  assert.doesNotMatch(held.text, /kept on slot/i);
+});

@@ -151,6 +151,25 @@ export function warnings(preview) {
     });
   });
 
+  // ⛔ A different sentence, because it is a different problem. "Claimed by
+  // two people" sends an operator looking for a second person who is not
+  // there; what they actually have to settle is which radio one person is
+  // carrying (#260).
+  const held = preview && Array.isArray(preview.held) ? preview.held : [];
+  held.forEach((entry) => {
+    const positions = (entry.positions || []).filter((n) => text(n));
+    const who = text(entry.name) || 'One person';
+    const where = positions.length ? ` is on ${positions.join(' and ')}` : ' holds more than one position';
+    const kept = entry.kept_on
+      ? ` They are kept on slot ${entry.kept_on}.`
+      : '';
+    out.push({
+      kind: 'held',
+      text: `Slot ${entry.slot} would be left alone — ${who}${where}, which is more radios `
+        + `than one person carries.${kept}`,
+    });
+  });
+
   clearable.forEach((slot) => {
     const name = text(slot.name);
     out.push({

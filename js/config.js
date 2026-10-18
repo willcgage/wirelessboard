@@ -4456,10 +4456,41 @@ function renderSyncDiff(changes) {
   tbl.style.display = rows.length ? 'block' : 'none';
 }
 
-function renderSyncConflicts(conflicts) {
+/** The slots left alone because one person is on more positions than they carry. */
+function renderHeldSlots(target, held) {
+  if (!Array.isArray(held) || !held.length) return;
+
+  const heading = document.createElement('div');
+  heading.className = 'text-warning';
+  heading.textContent = `${held.length} slot${held.length === 1 ? '' : 's'} left alone `
+    + '— somebody is scheduled for more radios than one person carries:';
+  target.appendChild(heading);
+
+  const list = document.createElement('ul');
+  list.className = 'mb-2';
+  held.forEach((entry) => {
+    const item = document.createElement('li');
+    const positions = (entry.positions || []).filter(Boolean);
+    const where = positions.length
+      ? `is on ${positions.join(' and ')}`
+      : 'holds more than one position';
+    item.textContent = `Slot ${entry.slot}: ${entry.name || 'somebody'} ${where}.${
+      entry.kept_on ? ` Kept on slot ${entry.kept_on}.` : ''}`;
+    list.appendChild(item);
+  });
+  target.appendChild(list);
+}
+
+function renderSyncConflicts(conflicts, held = []) {
   const target = document.getElementById('pco-conflicts');
   if (!target) return;
   target.innerHTML = '';
+
+  // ⛔ Two different problems, two different sentences. A contested slot has
+  // a second person to go and ask about; a held slot has one person on more
+  // positions than they can carry, and nothing to arbitrate (#260).
+  renderHeldSlots(target, held);
+
   if (!Array.isArray(conflicts) || !conflicts.length) return;
 
   const heading = document.createElement('div');
@@ -4608,7 +4639,7 @@ function handlePcoSync(dryRun = false) {
       );
 
       renderSyncDiff(changes);
-      renderSyncConflicts(conflicts);
+      renderSyncConflicts(conflicts, Array.isArray(resp.held) ? resp.held : []);
       renderSyncUnmatched(unmatched);
     })
     .catch((err) => {
