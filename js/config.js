@@ -652,6 +652,8 @@ function renderDiscoveredDeviceList() {
       // instead. The address identifies a receiver; a slot number never did.
       row.dataset.receiverIp = slot.ip || '';
       row.querySelector('.cfg-type').value = slot.type || '';
+      const carriesEl = row.querySelector('.cfg-carries');
+      if (carriesEl) carriesEl.value = slot.carries || '';
       row.querySelector('.cfg-ip').value = slot.ip || '';
       row.querySelector('.cfg-channel').value = slot.channel || '';
       const deviceInput = row.querySelector('.cfg-device-name');
@@ -1595,6 +1597,13 @@ function collectSlotConfiguration() {
         output.extended_id = idVal;
       }
 
+      // ⭐ What the channel carries (#260). Same rule as above: sent only when
+      // the field is on the page, so an older editor cannot blank it.
+      const carriesField = configBoard[i].querySelector('.cfg-carries');
+      if (carriesField) {
+        output.carries = String(carriesField.value || '').trim();
+      }
+
       slotList.push(output);
     }
   }
@@ -1628,6 +1637,7 @@ function appendChannelRows(rows) {
       if (el) el.value = value;
     };
     set('.cfg-type', row.type || '');
+    set('.cfg-carries', row.carries || '');
     set('.cfg-ip', row.ip || '');
     set('.cfg-channel', String(row.channel));
     set('.cfg-device-name', row.device_name || '');
@@ -2990,6 +3000,8 @@ export function initConfigEditor(force = false) {
           row.id = `slot-${slot.slot}`;
           // Populate fields
           row.querySelector('.cfg-type').value = slot.type || '';
+          const carriesEl = row.querySelector('.cfg-carries');
+          if (carriesEl) carriesEl.value = slot.carries || '';
           row.querySelector('.cfg-ip').value = slot.ip || '';
           row.querySelector('.cfg-channel').value = slot.channel || '';
           const deviceInput = row.querySelector('.cfg-device-name');

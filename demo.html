@@ -1306,6 +1306,30 @@
         </div>
 
         <div class="col col-md-2 col-6 cfg-row-form">
+          <!-- ⭐ What this channel actually carries, which the hardware never
+               says. A QLX-D serves a handheld or a bodypack, and a bodypack is
+               a headset on somebody's face or a pack on a guitar -- the
+               receiver reports the same thing either way.
+
+               ⛔ The board needed it because a person has ONE voice: two voice
+               channels for one person is impossible, two bodypacks (a headset
+               and an instrument) is ordinary (#260). Until this field existed
+               that was guessed from an "HH-"/"BP-" naming convention, which is
+               a convention and not a fact.
+
+               ⚠️ Blank keeps the guess, so no existing board changes
+               behaviour by being upgraded. -->
+          <label class="form-label text-light small">Carries</label>
+          <select class="form-control cfg-carries">
+            <option value="">Work it out from the label</option>
+            <option value="handheld">Handheld</option>
+            <option value="headset">Headset (bodypack)</option>
+            <option value="instrument">Instrument (bodypack)</option>
+            <option value="iem">In-ear</option>
+          </select>
+        </div>
+
+        <div class="col col-md-2 col-6 cfg-row-form">
           <label class="form-label text-light small">Channel</label>
           <select class="form-control cfg-channel">
             <option>1</option>

@@ -252,6 +252,20 @@ def live_device_kinds() -> Dict[Any, Optional[str]]:
     building; a top-level import ties the two together for one lookup.
     """
     kinds: Dict[Any, Optional[str]] = {}
+
+    # ⭐⭐ What the operator said, first. `carries` is set in the Receivers
+    # pane and is the only thing that can tell a headset bodypack from an
+    # instrument one -- the receiver reports the same for both, so the label
+    # below can never answer it.
+    for slot in _configured_slots():
+        number = slot.get('slot')
+        declared = config.normalize_carries(slot.get('carries'))
+        if number is not None and declared:
+            kinds[number] = declared
+
+    # ⚠️ The naming convention fills the gaps, for boards that have not set
+    # the field. It is a convention and not a fact, which is why it is the
+    # fallback and not the source.
     try:
         import shure  # noqa: PLC0415
     except Exception:  # noqa: BLE001
@@ -261,6 +275,8 @@ def live_device_kinds() -> Dict[Any, Optional[str]]:
         for channel in getattr(receiver, 'channels', []) or []:
             try:
                 number = channel.slot
+                if number in kinds:
+                    continue
                 kinds[number] = device_kind_for_slot(channel.device_id())
             except Exception:  # noqa: BLE001
                 continue
@@ -362,20 +378,20 @@ def find_multi_position(
         # intervention. Two of one kind -- or any slot whose equipment cannot
         # be identified -- is the case worth stopping on.
         slot_kinds = [kinds.get(number) for number in slots]
-        # ⛔ One voice, one handheld. Two handhelds is the only pairing the
-        # labels can prove impossible -- two bodypacks is a headset and an
-        # instrument, which is a shape people run, and a bodypack never says
-        # which of its two jobs it is doing.
+        # ⛔ One person, one voice. A handheld and a headset are both somebody
+        # talking, so two of them -- in any combination -- is impossible. Two
+        # bodypacks is fine when one is a headset and the other an instrument,
+        # which is why the test is the *voice* count and not the variety.
         #
-        # ⚠️ An unreadable label is not a clearance. On a board that does not
-        # use the HH/BP convention nothing can be proved either way, and
+        # ⚠️ Not knowing is not a clearance. Where `carries` is unset the kind
+        # comes from a naming convention that a board need not follow, and
         # writing both is how somebody already on a slot gets overwritten --
         # the whole of #260. So a pair is allowed only when every slot's
-        # equipment is known AND it is not two handhelds.
+        # equipment is known and at most one of them is a voice.
         known = [k for k in slot_kinds if k]
         typical = (
             len(known) == len(slots)
-            and len([k for k in known if k == 'handheld']) < 2
+            and len([k for k in known if k in config.CARRIES_VOICE]) < 2
         )
 
         name = entries[0].get('name') or ''

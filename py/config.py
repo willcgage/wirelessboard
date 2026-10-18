@@ -338,6 +338,29 @@ def os_config_path():
     return path
 
 
+# ⭐ What a channel carries, which the hardware never reports. A QLX-D serves
+# a handheld or a bodypack, and a bodypack is a headset on somebody's face or a
+# pack on a guitar -- the receiver says the same thing either way.
+#
+# ⛔ The board needs it because a person has ONE voice: two voice channels for
+# one person is impossible, while two bodypacks (a headset and an instrument)
+# is ordinary (#260). It was previously guessed from an "HH-"/"BP-" naming
+# convention, which is a convention and not a fact.
+#
+# ⚠️ An unknown value is dropped rather than stored. A field whose job is to
+# settle a question must not become a second source of nonsense.
+CARRIES_VALUES = ('handheld', 'headset', 'instrument', 'iem')
+
+# The two that are a person's voice. One each, at most.
+CARRIES_VOICE = ('handheld', 'headset')
+
+
+def normalize_carries(value):
+    """The stored form of a `carries` value, or '' when it is not one of ours."""
+    text = str(value or '').strip().lower()
+    return text if text in CARRIES_VALUES else ''
+
+
 def config_path(folder=None):
     config_path_arg = args.get('config_path') if isinstance(args, dict) else None
     if config_path_arg is not None:
@@ -734,6 +757,18 @@ def config_mix(slots):
                     slot.pop('extended_position', None)
             elif 'extended_position' in current:
                 slot['extended_position'] = current['extended_position']
+
+            # What the channel carries (#260). ⛔ Same reason as the three
+            # above: a save that does not send the key must not wipe it, and
+            # an unrecognised value is dropped rather than stored.
+            if 'carries' in slot:
+                value = normalize_carries(slot.get('carries'))
+                if value:
+                    slot['carries'] = value
+                else:
+                    slot.pop('carries', None)
+            elif 'carries' in current:
+                slot['carries'] = current['carries']
 
             if 'chan_name_raw' in current:
                 slot['chan_name_raw'] = current['chan_name_raw']
@@ -1241,6 +1276,7 @@ def update_slot(data):
     has_extended_id = 'extended_id' in data
     has_extended_name = 'extended_name' in data
     has_extended_position = 'extended_position' in data
+    has_carries = 'carries' in data
     has_chan_name = 'chan_name_raw' in data
 
     if has_extended_id:
@@ -1266,6 +1302,15 @@ def update_slot(data):
             slot_cfg['extended_position'] = value
         else:
             slot_cfg.pop('extended_position', None)
+
+    # ⚠️ Absent means "not editing this", empty means "clear it" -- the same
+    # partial shape as everything else here (#114).
+    if has_carries:
+        value = normalize_carries(data.get('carries'))
+        if value:
+            slot_cfg['carries'] = value
+        else:
+            slot_cfg.pop('carries', None)
 
     if has_chan_name:
         value = data.get('chan_name_raw')

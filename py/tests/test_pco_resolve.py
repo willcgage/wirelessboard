@@ -801,3 +801,69 @@ class TestWhatAPersonCanPhysicallyCarry:
             kinds={10: 'bodypack'},
         )
         assert found[0]['typical'] is False
+
+
+class TestCarriesIsWhatTheOperatorDeclared:
+    """⭐⭐ The `Carries` field on the Receivers pane (#260).
+
+    ⛔ The hardware never says this. A QLX-D serves a handheld or a bodypack,
+    and a bodypack is a headset on somebody's face or a pack on a guitar — the
+    receiver reports the same thing either way. So the one case the naming
+    convention can never settle is two bodypacks: is that a headset and an
+    instrument (fine) or two headsets (impossible)?
+    """
+
+    def board(self, monkeypatch, carries):
+        tree = {'slots': [
+            {'slot': 10, 'type': 'ulxd', 'extended_id': 'Headset',
+             **({'carries': carries[10]} if 10 in carries else {})},
+            {'slot': 11, 'type': 'ulxd', 'extended_id': 'Acoustic Guitar',
+             **({'carries': carries[11]} if 11 in carries else {})},
+        ]}
+        monkeypatch.setattr(config, 'config_tree', tree)
+        monkeypatch.setattr(config, 'save_current_config', lambda: None)
+        return tree['slots']
+
+    def resolve(self):
+        return pco.resolve_assignments([
+            person('Sam Reed', position='Headset'),
+            person('Sam Reed', position='Acoustic Guitar'),
+        ], {'strategy': 'position', 'number_fallback': False, 'seed_extended_id': False})[0]
+
+    def test_headset_plus_instrument_is_allowed(self, monkeypatch):
+        self.board(monkeypatch, {10: 'headset', 11: 'instrument'})
+        found = pco.find_multi_position(self.resolve())
+        assert found[0]['typical'] is True
+        assert pco.multi_position_slots(found) == set()
+
+    def test_two_headsets_is_impossible_which_the_label_could_never_tell(self, monkeypatch):
+        # ⭐ The case the field exists for. Both are BP- to the receiver, so the
+        # naming convention calls them a normal pair; only the operator knows
+        # that two headsets is one person with two voices.
+        self.board(monkeypatch, {10: 'headset', 11: 'headset'})
+        found = pco.find_multi_position(self.resolve())
+        assert found[0]['typical'] is False
+        assert sorted(found[0]['held']) == [10, 11]
+
+    def test_a_handheld_and_a_headset_is_still_two_voices(self, monkeypatch):
+        self.board(monkeypatch, {10: 'handheld', 11: 'headset'})
+        assert pco.find_multi_position(self.resolve())[0]['typical'] is False
+
+    def test_an_unset_slot_falls_back_and_is_not_assumed(self, monkeypatch):
+        # ⚠️ One declared, one not. Nothing can be proved, so nothing is written.
+        self.board(monkeypatch, {10: 'headset'})
+        found = pco.find_multi_position(self.resolve(), kinds=None)
+        assert found[0]['typical'] is False
+
+    def test_an_unknown_value_is_not_stored(self):
+        assert config.normalize_carries('handheld') == 'handheld'
+        assert config.normalize_carries(' HEADSET ') == 'headset'
+        # ⛔ A field whose job is to settle a question must not become a second
+        # source of nonsense.
+        assert config.normalize_carries('trombone') == ''
+        assert config.normalize_carries(None) == ''
+
+    def test_the_voice_pair_is_named_once(self):
+        # Both of the board's voices, and nothing else.
+        assert set(config.CARRIES_VOICE) == {'handheld', 'headset'}
+        assert set(config.CARRIES_VOICE).issubset(set(config.CARRIES_VALUES))
