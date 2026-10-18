@@ -2206,6 +2206,51 @@ def plan_watch_status() -> Dict[str, Any]:
     return dict(_PLAN_WATCH)
 
 
+def watch_report() -> Dict[str, Any]:
+    """What automation will do without anybody pressing anything.
+
+    ⭐⭐ The question this section has to answer is *"what happens if I walk
+    away"*, and until now nothing on screen answered it. The settings said the
+    board watches every 120 seconds; they did not say the watcher was **not
+    armed**, which it is not until a sync has run in this process -- so a board
+    configured to watch was quietly doing nothing, and looked identical to one
+    that was.
+
+    ⛔ Read-only, and cheap. It reports the watcher's own record and the
+    settings that govern it; it does not ask Planning Center anything, because
+    a status line must not cost a request every time a pane is opened.
+    """
+    try:
+        pco_cfg = get_pco_config()
+    except PcoConfigError as exc:
+        return {"ok": False, "error": str(exc)}
+
+    synced = last_sync()
+    watch = plan_watch_status()
+    mapping = auto_sync_mapping() if synced else {}
+
+    profile_id = synced.get('profile_id')
+    profile = pco_profiles.profile_by_id(pco_cfg, profile_id) if profile_id else None
+
+    return {
+        "ok": True,
+        # ⛔⛔ The fact nothing said out loud. `_LAST_SYNC` is in memory, so a
+        # restart disarms the watcher and the settings look unchanged.
+        "armed": bool(synced),
+        "watching": bool(pco_cfg.get('watch_active_plan')),
+        "auto_sync": bool(mapping.get('auto_sync')) if mapping else None,
+        "clear_unmatched": bool(mapping.get('clear_unmatched')) if mapping else None,
+        "plan_id": synced.get('plan_id'),
+        "profile": (profile or {}).get('name') or (profile or {}).get('id'),
+        "changed": watch.get('changed'),
+        "finished": watch.get('finished'),
+        "checked_at": watch.get('checked_at'),
+        "error": watch.get('error'),
+        "interval_seconds": pco_cfg.get('watch_interval_seconds'),
+        "grace_minutes": pco_cfg.get('watch_grace_minutes'),
+    }
+
+
 def forget_plan_watch() -> None:
     _PLAN_WATCH.clear()
     _AUTO_SYNC_TRIED.clear()
