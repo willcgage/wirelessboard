@@ -40,20 +40,48 @@ def _claimants_by_slot(conflicts: Optional[Iterable[Dict[str, Any]]]) -> Dict[An
     return out
 
 
+def _multi_position_by_slot(
+    entries: Optional[Iterable[Dict[str, Any]]],
+) -> Dict[Any, Dict[str, Any]]:
+    """Slot number -> the person holding several positions, and which ones."""
+    out: Dict[Any, Dict[str, Any]] = {}
+    for entry in entries or []:
+        positions = [
+            p.get('position') or p.get('label') or ''
+            for p in entry.get('positions') or []
+        ]
+        for number in entry.get('slots') or []:
+            if number is None:
+                continue
+            out[number] = {
+                'name': entry.get('name') or '',
+                'positions': [p for p in positions if p],
+            }
+    return out
+
+
 def build_changes(
-    resolved: Optional[Iterable[Dict[str, Any]]],
+    resolved: Optional[Iterable[Dict[str, Any]]] = None,
     stale: Optional[Iterable[Dict[str, Any]]] = None,
     conflicts: Optional[Iterable[Dict[str, Any]]] = None,
     skip_slots: Optional[Set] = None,
+    multi_position: Optional[Iterable[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """One row per slot the sync touches, in reading order.
 
     ``resolved`` and ``stale`` are the structures `finish_sync` already has;
-    ``skip_slots`` is what `_apply_assignments` will refuse to write, which is
-    exactly the contested set.
+    ``skip_slots`` is what `_apply_assignments` will refuse to write.
+
+    ⛔ A slot is skipped for one of two reasons and the row has to say which.
+    Contested means several people claim it; multi-position means one person
+    claims several (#260). A row that only says "skipped" sends an operator
+    looking for the wrong thing, and the reader downstream used to assume the
+    contested case and phrase every skip as "claimed by two people" -- which is
+    simply false for the other one.
     """
     skip = set(skip_slots or ())
     claimants = _claimants_by_slot(conflicts)
+    held = _multi_position_by_slot(multi_position)
     rows: List[Dict[str, Any]] = []
     seen = set()
 
@@ -86,6 +114,13 @@ def build_changes(
                 'matched_via': _name(entry.get('matched_via')),
                 'describe': slot.get('describe') or '',
                 'claimants': claimants.get(number, []),
+                'skip_reason': (
+                    ('contested' if number in claimants else 'multi-position')
+                    if action == 'skipped' else ''
+                ),
+                # The other positions the same person holds, so the row can say
+                # what the operator actually has to decide.
+                'held_by': held.get(number, {}),
             })
             seen.add(number)
 
@@ -105,6 +140,8 @@ def build_changes(
             'matched_via': '',
             'describe': '',
             'claimants': [],
+            'skip_reason': '',
+            'held_by': {},
         })
 
     order = {action: i for i, action in enumerate(ACTIONS)}

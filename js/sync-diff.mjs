@@ -113,6 +113,18 @@ export function describeRow(row) {
     return '';
   }
   if (row.action === 'skipped') {
+    // ⛔ A slot is skipped for one of two reasons and they are not the same
+    // sentence. Several people claiming one slot is a contest; one person
+    // claiming several is #260, and the operator has to decide which radio
+    // that person carries — not which of two people wins.
+    const held = row.held_by && typeof row.held_by === 'object' ? row.held_by : {};
+    const positions = Array.isArray(held.positions) ? held.positions.filter(Boolean) : [];
+    if (row.skip_reason === 'multi-position' || positions.length) {
+      const who = held.name || 'one person';
+      return positions.length
+        ? `${who} is on ${positions.join(' and ')}`
+        : `${who} holds more than one position`;
+    }
     const names = Array.isArray(row.claimants) ? row.claimants.filter(Boolean) : [];
     return names.length ? `${names.join(' and ')} both claim it` : 'claimed by two people';
   }
