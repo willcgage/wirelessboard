@@ -170,10 +170,20 @@ test('⚠️ --color-red-dark is not mistaken for --color-red', () => {
  * them keeps space for the same named value.
  */
 
-/** The body of the first rule whose selector mentions `needle`, braces counted. */
-function ruleBody(needle, index = 0) {
-  const found = rulesMentioning(needle);
-  return found[index] ? found[index].body : '';
+/**
+ * The body of the rule whose selector is EXACTLY `needle`.
+ *
+ * ⛔⛔ Not "the first rule that mentions it". This took the first match, and
+ * the moment `.chartzone .drawer-figures { grid-area: figures }` was added
+ * earlier in the stylesheet, the line-height guard below started reading that
+ * rule -- which sets no line-height -- and failed on a stylesheet that was
+ * perfectly correct. A guard that fails for the wrong reason is only one step
+ * better than one that passes for the wrong reason: both stop telling you
+ * anything.
+ */
+function ruleBody(needle) {
+  const found = rulesMentioning(needle).find((r) => r.selector.trim() === needle);
+  return found ? found.body : '';
 }
 
 test('⛔⛔ #273: the drawer keeps room for the bars that sit on top of it', () => {

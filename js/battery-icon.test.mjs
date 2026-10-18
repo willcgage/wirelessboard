@@ -48,10 +48,46 @@ test('it describes itself in bars, not invented percentages', () => {
   assert.equal(batteryDescription(BATTERY_UNKNOWN, ''), 'Battery unknown');
 });
 
-test('the icon is in the card band, beside the time', () => {
+test('⭐ the icon sits beside the signal rows, not in the band', () => {
+  // ⚠️ It was in the band under the person's name until the maintainer asked
+  // for it here, pointing at the gap: the sparklines are a fixed width, so
+  // everything right of them was empty card. This test changed with that
+  // decision rather than drifting -- if it ever fails, the question is whether
+  // the battery moved on purpose.
+  const chartzone = markup.split('<div class="chartzone">')[1].split('<div class="errorzone">')[0];
+  assert.match(chartzone, /class="batt-icon"/, 'the battery belongs beside the signal rows');
+  assert.match(chartzone, /class="runtime-text"/, 'and the time it is a measure of goes with it');
+
   const band = markup.split('<div class="card-band">')[1].split('</div>')[0];
-  assert.match(band, /class="batt-icon"/, 'the band needs a battery icon');
-  assert.match(band, /class="runtime-text"/, 'and a place to put the time');
+  assert.ok(
+    !band.includes('class="batt-icon"'),
+    'and it is not left behind in the band as well -- the board does not say a thing twice',
+  );
+});
+
+test('⛔⛔ the battery has a space of its own and cannot cover the rows', () => {
+  // The standing rule after #273 and #282: nothing on the card may be drawn
+  // over anything else. Both of those were a part with no space of its own,
+  // laid over a part that had one -- so a part arriving in the drawer has to
+  // bring its own track, not be positioned into a gap by eye.
+  assert.match(
+    css,
+    /\.chartzone\s*\{[^}]*grid-template-areas:[^;]*battery/,
+    'the chartzone names a battery area',
+  );
+  assert.match(
+    css,
+    /\.chartzone \.card-runtime\s*\{[^}]*grid-area:\s*battery/,
+    'and the battery is placed in it',
+  );
+  // ⚠️ `minmax(0, 1fr)`, never a bare `1fr`: a grid column's default minimum
+  // is its content, so a wide sparkline or a long frequency would push the
+  // battery off the card instead of staying inside its own track.
+  assert.match(
+    css,
+    /\.chartzone\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
+    'the signal column must be allowed to shrink',
+  );
 });
 
 test('⛔ writing the time does not delete the icon', () => {

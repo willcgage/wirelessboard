@@ -135,11 +135,41 @@ p.device-name {
   display: none !important;
 }
 
+/* ⭐ Two columns: the signal rows, and the battery beside them.
+ *
+ * The battery moved here from the band under the person's name, into the space
+ * right of the sparklines -- which are a fixed width, so everything beyond them
+ * was empty.
+ *
+ * ⛔⛔ It gets a grid area of its own spanning both rows, so it CANNOT cover
+ * them. That is the standing rule after #273 and #282 -- "I don't want to have
+ * anything that covers the information/data" -- and both of those were a part
+ * of the card with no space of its own, laid over a part that had one.
+ *
+ * ⚠️ `minmax(0, 1fr)` on the first column, not `1fr`: a grid column's default
+ * minimum is its content, so a long frequency or a wide sparkline would push
+ * the battery off the card instead of staying inside its own track.
+ */
 .chartzone {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "first  battery"
+    "second battery"
+    "figures figures";
+  align-items: center;
+  gap: 0.2rem 0.5rem;
   min-width: 0;
+}
+
+.chartzone .spark-row-first { grid-area: first; }
+.chartzone .spark-row-second { grid-area: second; }
+.chartzone .drawer-figures { grid-area: figures; }
+
+.chartzone .card-runtime {
+  grid-area: battery;
+  justify-self: end;
+  margin: 0;
 }
 
 /* ⭐ One signal: what it is, where it is now, and how it has been.
