@@ -278,3 +278,20 @@ class TestAMultiPositionSlotIsAPromiseToo:
             resolution({'Amy': [1, 2]}, multi_position=typical), dry_run=True)
 
         assert result['held'] == []
+
+    def test_an_allowed_pair_leaves_no_held_by_on_its_rows(self, slots):
+        # ⛔ Found on a real board: a handheld-and-instrument pair reports
+        # `held: []`, and `[] or slots` fell through to every slot — so rows
+        # that were written carried a `held_by` saying somebody was holding
+        # them. The data said the opposite of the action beside it.
+        typical = [{
+            'name': 'Amy', 'positions': [{'position': 'Vocal 2', 'label': 'Vocal 2', 'slots': [1, 2]}],
+            'slots': [1, 2], 'kinds': ['handheld', 'instrument'], 'typical': True,
+            'anchor_slot': None, 'held': [], 'skipped': False,
+        }]
+        result = pco.finish_sync(
+            resolution({'Amy': [1, 2]}, multi_position=typical), dry_run=True)
+
+        for row in result['changes']:
+            assert row['held_by'] == {}, f"slot {row['slot']} is not held by anybody"
+            assert row['skip_reason'] == ''

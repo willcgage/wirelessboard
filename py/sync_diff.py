@@ -52,7 +52,14 @@ def _multi_position_by_slot(
         ]
         # ⚠️ Only the slots actually held back. The one the person is kept on
         # is written like any other row and must not be explained as a skip.
-        for number in entry.get('held') or entry.get('slots') or []:
+        #
+        # ⛔ `is None`, not falsiness. An allowed pair -- a handheld and an
+        # instrument -- reports `held: []`, and `[] or slots` quietly fell
+        # through to every slot, tagging rows that were written as though
+        # something were holding them. Caught by reading a real board: slots 2
+        # and 11 carried a `held_by` while reading `unchanged`.
+        held = entry.get('held')
+        for number in (entry.get('slots') if held is None else held) or []:
             if number is None:
                 continue
             out[number] = {
