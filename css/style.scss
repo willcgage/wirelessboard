@@ -4173,13 +4173,34 @@ body.statusbar-top #container {
 
 /* The bar fills the strip rather than floating over a corner of the board. It
    was `bottom: 0` with a rounded corner, which is what sat on the last row. */
+/* ⛔⛔ `height`, never `min-height`. The strip reserved for this bar is a
+   constant, and it has to be: a bar that measures itself into the layout feeds
+   a loop -- taller bar, less room, lower capacity, more paging, taller bar.
+
+   So the bar fits the strip rather than the strip fitting the bar. At rest it
+   reads "Showing all N channels" on one line; when a channel needs attention it
+   gains a reason, the page dots and a countdown, and without this it wrapped to
+   two lines and sat on the top row of cards. */
 body.statusbar-bottom .rotation-bar,
 body.statusbar-top .rotation-bar {
   left: 0;
   right: 0;
+  height: var(--statusbar-height);
   min-height: var(--statusbar-height);
+  max-height: var(--statusbar-height);
+  box-sizing: border-box;
+  overflow: hidden;
+  /* One line, whatever it has to say. A reason that does not fit is cut rather
+     than allowed to push the board around. */
+  white-space: nowrap;
   border-top-right-radius: 0;
   justify-content: center;
+}
+
+body.statusbar-bottom .rotation-bar > *,
+body.statusbar-top .rotation-bar > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 body.statusbar-top .rotation-bar {
