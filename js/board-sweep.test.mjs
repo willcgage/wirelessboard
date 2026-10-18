@@ -113,6 +113,48 @@ test('⚠️ but choosing a different column count is allowed, not a fault', () 
   assert.deepEqual(compareArrangements(results), []);
 });
 
+test('⛔⛔ a taller card because the status bar moved is not a disagreement', () => {
+  // The false positive this check produced against a real board. The key held
+  // shape, wash and the resulting grid only, so it compared two boards whose
+  // status bar was in different places -- which takes height from the card by
+  // design -- and reported `fit: 420x347; grid: 420x322` as a fault with every
+  // number correct. A check that cannot see what it is holding constant is the
+  // same failure as one that cannot see a stale card.
+  const at = (arrangement, statusBar, height) => ({
+    config: {
+      arrangement, cardShape: 'auto', wash: 'band', columns: '4', statusBar, livePlacement: 'off',
+    },
+    columns: 4,
+    rows: 3,
+    cards: [{ ...card({}), box: box(0, height) }],
+  });
+  assert.deepEqual(compareArrangements([at('fit', 'top', 347), at('grid', 'off', 322)]), []);
+  // ⚠️ And it must still catch the real thing: everything held, cards differ.
+  const real = compareArrangements([at('fit', 'top', 347), at('grid', 'top', 322)]);
+  assert.equal(real.length, 1);
+  assert.match(real[0].detail, /statusBar=top/);
+  assert.match(real[0].detail, /fit: 100x347/);
+  assert.match(real[0].detail, /grid: 100x322/);
+});
+
+test('⚠\ufe0f one arrangement is named once per geometry, however many boards reached it', () => {
+  // The first version printed `fit/fit/fit/fit/grid/grid`, because the same
+  // arrangement reaches one geometry under several held configurations. That
+  // tells a reader nothing.
+  const at = (arrangement, columns) => ({
+    config: { arrangement, cardShape: 'auto', wash: 'band', columns },
+    columns: 4,
+    rows: 3,
+    cards: [{ ...card({}), box: box(0, arrangement === 'fit' ? 347 : 322) }],
+  });
+  const found = compareArrangements([
+    at('fit', '4'), at('fit', '4'), at('grid', '4'), at('grid', '4'),
+  ]);
+  assert.equal(found.length, 1);
+  assert.match(found[0].detail, /fit: 100x347/);
+  assert.doesNotMatch(found[0].detail, /fit\/fit/);
+});
+
 test('⛔⛔ a board that drew nothing is a failure, not a pass', () => {
   // The quietest way for a harness to lie: a step that rendered no cards has
   // no card to find fault with, and would otherwise report clean.
