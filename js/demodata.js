@@ -37,6 +37,22 @@ const batterySample = {
   },
 };
 
+// ⛔ The service position a channel is filling, which is what `id` carries --
+// `ch_json` sets `'id': name[0]`, and that is the slot's `extended_id`. The
+// demo set it to the device label instead, so `id` and `device_id` were always
+// equal and `updateRole` suppressed the line: a demo board could not show the
+// role at all, which is half of the card 2.0 added.
+//
+// ⚠️ Positions, not people and not equipment. "Vocal 1" is a job somebody is
+// doing this service; the person is the name in the band and the transmitter is
+// the label above it, and the card shows all three because they change
+// independently.
+const role_sample = [
+  'Vocal 1', 'Vocal 2', 'Vocal 3', 'Vocal 4', 'Acoustic', 'Bass',
+  'Keys', 'Drums', 'Electric', 'Message', 'Welcome', 'Giving Host',
+  'Worship Lead', 'Announcements', 'Kids', 'Spare',
+];
+
 const rfSample = ['AX', 'XB', 'XX', 'BRXX', 'XRXB', 'XXBR'];
 
 const name_sample = [
@@ -234,19 +250,23 @@ export function seedTransmitters(dl) {
       // const n = 'HH' + slot.toString().padStart(2, '0') + ' ' + names[i];
       const n = names[i];
       r.name = n;
-      r.id = deviceLabel(r.type, slot);
+      // ⛔ `id` is the service POSITION, not the device label. Setting it to
+      // the label made it equal `device_id`, and `updateRole` draws nothing
+      // when the two match -- so the role line was blank on every demo card.
+      r.id = role_sample[i % role_sample.length];
+      const label = deviceLabel(r.type, slot);
       // The device line, which the demo would otherwise leave permanently
       // blank. Deliberately a different name from the person: a transmitter
       // keeps whatever label the last person to hold it left on it, and that
       // gap between the hardware's label and who is actually on the channel is
       // the reason the board shows both.
-      r.name_raw = `${r.id} ${names[(i + 1) % len] || 'SPARE'}`;
+      r.name_raw = `${label} ${names[(i + 1) % len] || 'SPARE'}`;
       // ⛔ The receiver column heading reads this, not `id`. The demo never set
       // it, so `deviceHeading` fell back to "Slot N" on every card -- which is
       // the exact symptom of #186, reproduced by the demo for a completely
       // different reason. A demo that fakes a known fault is worse than one
       // that shows nothing.
-      r.device_id = r.id;
+      r.device_id = label;
       micboard.transmitters[slot] = r;
     }
   }
