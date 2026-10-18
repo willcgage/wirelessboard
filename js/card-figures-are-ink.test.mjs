@@ -227,3 +227,64 @@ test('⛔ the figure row\'s line box is taller than its own glyphs', () => {
     `line-height is ${lh[1]}; a line box the size of the font clips its own descenders`,
   );
 });
+
+/**
+ * ⛔⛔ #282: the status stripe must not be laid over the drawer.
+ *
+ * `.electrode` — the gear panel's **Status stripe** — was `position: absolute`
+ * in the same band the drawer occupies, and the drawer has been in ordinary
+ * flow since #195. The stripe therefore painted over the AF value, the RF
+ * value and the sparkline on every card in every arrangement, leaving only
+ * the labels, so the board read `AF` and `RF` with nothing after them.
+ *
+ * ⚠️ It read as a colour problem and was not. A receiver with no transmitter
+ * resolves `--status` to the neutral card ground, so the stripe hid the
+ * numbers invisibly; only a live transmitter showed the block that gave it
+ * away. That is also why 180 passing sweep configurations never saw it — the
+ * wash check skips a card whose status is indistinguishable from the ground.
+ */
+
+function elinfo11Electrode() {
+  return rulesMentioning('.elinfo11').find((r) => r.selector.includes('.electrode'));
+}
+
+test('⛔⛔ #282: the status stripe is in flow when the drawer is on', () => {
+  const rule = elinfo11Electrode();
+  assert.ok(rule, 'elinfo11 says what the stripe does');
+  assert.match(rule.body, /position\s*:\s*static/, 'the stripe must take its place in the flow');
+  assert.doesNotMatch(
+    rule.body,
+    /position\s*:\s*absolute/,
+    'absolute is what laid it over the drawer in the first place',
+  );
+});
+
+test('⛔ and it is a rule, not a block', () => {
+  // The base rule is 125px of card. Anything near that is a block again, and a
+  // block in the flow pushes the photograph out instead of covering the rows —
+  // a different fault, not a fix.
+  const rule = elinfo11Electrode();
+  const height = rule.body.match(/height:\s*calc\(var\(--tvmode-scale\)\s*\*\s*([\d.]+)px/);
+  assert.ok(height, 'the stripe states its own height in this mode');
+  assert.ok(
+    Number(height[1]) <= 40,
+    `the stripe is ${height[1]}px of scale; a rule, not the 125px block it replaces`,
+  );
+});
+
+test('⛔ the photograph reserves exactly the stripe plus the drawer', () => {
+  // ⚠️ This is the drift that caused #282: the reserve said 125 + 90 while the
+  // stripe and the drawer were laid out from numbers nothing related. The
+  // reserve has to keep naming the parts it is made of.
+  const DRAWER = 90;
+  const stripe = Number(elinfo11Electrode().body
+    .match(/height:\s*calc\(var\(--tvmode-scale\)\s*\*\s*([\d.]+)px/)[1]);
+  const photo = rulesMentioning('.elinfo11').find((r) => r.selector.includes('.mic_name'));
+  const reserve = Number(photo.body
+    .match(/max-height:\s*calc\(100% - \(var\(--tvmode-scale\)\s*\*\s*([\d.]+)px/)[1]);
+  assert.equal(
+    reserve,
+    stripe + DRAWER,
+    `the photo reserves ${reserve}px but the parts under it are ${stripe} + ${DRAWER}`,
+  );
+});
