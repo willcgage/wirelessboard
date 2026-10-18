@@ -10,6 +10,21 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.19] - 2026-10-18
+
+A follow-up to beta.18: the board was making the right decision and keeping the reason to itself.
+
+### Fixed
+- **A sync now tells you which slots it left alone because somebody is scheduled twice, and why.**
+  beta.18 stopped writing one person's name onto two channels, which was the point — but the
+  explanation only reached the row-by-row diff. The summary an operator actually reads said nothing,
+  so a slot appeared to have been skipped for no reason. It now says, in the preview and after a
+  sync: *"Slot 7 would be left alone — Christian Nuckels is on Welcome and Vocal 1, which is more
+  radios than one person carries. They are kept on slot 1."*
+
+  ⚠️ It is listed separately from channels two different people are claiming. Those are two
+  different problems: one has a second person to go and ask about, and this one does not.
+
 ## [2.0.0-beta.18] - 2026-10-18
 
 When somebody is scheduled for two things on the same plan, the board used to put their name on
