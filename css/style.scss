@@ -2920,6 +2920,28 @@ body.live-strip-bottom .wirelessboard-board {
   padding-bottom: var(--live-strip-height, 2.25rem);
 }
 
+/* Both bars at the top: the board has to clear BOTH.
+
+   ⛔⛔ Moving the rotation bar off the strip is only half the fix. The strip
+   is 37px on the venue board and the bar is 28, so the top edge needs 65 --
+   and this rule reserved the strip alone, which is why pushing the bar down
+   simply moved the overlap off the strip and onto the first row of cards.
+   Measured on the venue board: bar 37->65, first card top 37.
+
+   ⚠️ On the BOARD, not on `#container`. `body.statusbar-top #container`
+   already asks for exactly this and has never once applied: `.fullHeight`
+   carries `padding: 0 !important` (style.scss:17, there to kill Bootstrap's
+   gutter), and `!important` beats any specificity. That is a older fault than
+   this one and is filed separately -- this rule deliberately does not depend
+   on it being fixed.
+
+   ⛔ The pair only. Each bar on its own keeps the clearance it already had;
+   changing those means changing height arithmetic that can only be judged on
+   the wall. */
+body.statusbar-top.live-strip-top .wirelessboard-board {
+  padding-top: calc(var(--live-strip-height, 2.5rem) + var(--statusbar-height));
+}
+
 /* The rotation bar (#113).
 
    ⚠️ Quiet. It says which group is showing and whether the timer is held, and
@@ -4353,6 +4375,36 @@ body.statusbar-top .rotation-bar > * {
 body.statusbar-top .rotation-bar {
   bottom: auto;
   top: calc(env(safe-area-inset-top, 0px));
+}
+
+/* Keeps the rotation bar off the service strip when both are at the TOP.
+
+   ⛔⛔ The bottom case had this rule and the top case did not, and that
+   asymmetry WAS the bug. Reported from the wall: "when you move the channel
+   bar to the top, the planning center status bar hides the channel bar."
+   Exactly that -- both were pinned to the same edge, the strip paints at
+   z-index 1020 and the bar at 1015, so the bar was not hidden behind the
+   board, it was underneath its neighbour. Measured on the venue board with
+   both set to Top: bar 0->28, strip 0->37, the whole bar covered, and
+   `elementFromPoint` at the bar's centre returning the strip's own title.
+
+   ⚠️ The mirror of `body.live-strip-bottom .rotation-bar`, and deliberately
+   the same shape: the strip's MEASURED height, because its type scales with
+   the board and a television's strip is taller than any constant written
+   here. Three classes, so it outranks the two-class rule above whatever the
+   source order. */
+body.statusbar-top.live-strip-top .rotation-bar {
+  /* ⛔⛔ The SAME fallback as the board rule below, not the 2.5rem its
+     board rule below. Measured on the venue board, where the variable is not
+     set at all: two different fallbacks (2.5rem here, 2.25rem there) left a
+     4px overlap of the fix's own making -- two places that have to agree,
+     disagreeing exactly when the measurement is missing.
+
+     ⚠️ And 2.5rem rather than 2.25, because a fallback must OVER-book. The
+     strip measures 37.58px on the venue board: 2.25rem (36px) put the bar
+     1.6px inside it, while 2.5rem (40px) clears it with 2px to spare. Under-
+     booking overlaps; over-booking costs a sliver of board. */
+  top: calc(var(--live-strip-height, 2.5rem) + env(safe-area-inset-top, 0px));
 }
 
 /* ⭐ The bar at rest: the board is not paging and says so, rather than the
