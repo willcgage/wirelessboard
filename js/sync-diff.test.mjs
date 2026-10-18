@@ -188,3 +188,36 @@ test('⛔ a contested row is unaffected by the multi-position branch', () => {
     'Amy and Zoe both claim it',
   );
 });
+
+/**
+ * ⛔⛔ The seam between the two languages.
+ *
+ * `sync_diff.py` builds these rows and `describeRow` reads them, and until now
+ * each side was only tested against rows it made up itself. A field renamed in
+ * Python would leave both suites green and the board explaining a skip as
+ * "claimed by two people" — the exact sentence #260 removed.
+ */
+test('⛔ the fields this reader depends on are the ones Python emits', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const source = fs.readFileSync(
+    path.join(import.meta.dirname, '..', 'py', 'sync_diff.py'),
+    'utf8',
+  );
+
+  for (const field of ['skip_reason', 'held_by', 'claimants', 'action']) {
+    assert.ok(
+      new RegExp(`'${field}':`).test(source),
+      `sync_diff.py should emit \`${field}\`, which describeRow reads`,
+    );
+  }
+
+  // ⚠️ And the values, not just the key. `skip_reason` is branched on by
+  // string, so a Python-side rename of either case is the same silent break.
+  for (const value of ['contested', 'multi-position']) {
+    assert.ok(
+      source.includes(`'${value}'`),
+      `sync_diff.py should still produce the skip reason "${value}"`,
+    );
+  }
+});
