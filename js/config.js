@@ -4235,15 +4235,21 @@ function previewRuleSets() {
     if (index >= sets.length) return;
     const set = sets[index];
 
+    // ⛔ The vocabulary this page already has, not a new one. The first cut
+    // invented `pco-example__title` and `pco-example__body`, neither of which
+    // is styled anywhere -- so a card that should have matched the panes
+    // around it rendered as unstyled browser defaults.
     const card = document.createElement('div');
-    card.className = 'pco-example mb-3';
+    card.className = 'pco-example';
     const title = document.createElement('p');
-    title.className = 'pco-example__title';
+    title.className = 'pco-example__headline';
     title.textContent = set.name || set.id;
     card.appendChild(title);
     const body = document.createElement('div');
-    body.className = 'pco-example__body';
-    body.textContent = 'Checking…';
+    const waiting = document.createElement('p');
+    waiting.className = 'pco-example__note';
+    waiting.textContent = 'Checking…';
+    body.appendChild(waiting);
     card.appendChild(body);
     host.appendChild(card);
 
@@ -4257,7 +4263,11 @@ function previewRuleSets() {
         renderWorkedExample(workedExample(preview, { slotCount }), body);
       })
       .catch((err) => {
-        body.textContent = `Could not check this rule set: ${formatError(err)}`;
+        body.textContent = '';
+        const note = document.createElement('p');
+        note.className = 'pco-example__note is-error';
+        note.textContent = `Could not check this rule set: ${formatError(err)}`;
+        body.appendChild(note);
       })
       .finally(() => run(index + 1));
   };

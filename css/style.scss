@@ -3998,6 +3998,52 @@ body.live-strip-bottom .rotation-bar {
   &.is-error { color: #E8705F; }
 }
 
+/* One card per rule set, stacked (#298).
+
+   ⛔ The gap lives here rather than on each card: the first cut hung a
+   Bootstrap `mb-3` on every card, which is the old look's spacing system and
+   left a trailing margin under the last one. */
+.pco-ruleset-previews {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* What the watcher will do on its own (#298).
+
+   ⛔⛔ These classes had NO rules at all in beta.20, so the one pane whose
+   job is to say "this board is quietly doing nothing" rendered as unstyled
+   browser defaults -- the old look, beside panes that had been restyled.
+
+   ⚠️ The three levels reuse the colours this page already assigns them:
+   amber for something that needs a person, red for a failure, muted for a
+   fact that is merely true. Nothing new is invented here. */
+.pco-watch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 4px;
+}
+
+.pco-watch__line {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: rgba(215, 215, 215, 0.8);
+
+  /* ⛔ Scoped to the component. `is-ok` / `is-warn` / `is-off` are generic
+     enough that an unscoped rule would reach other people's markup. */
+  &.is-warn { color: rgba(239, 157, 81, 0.9); }
+  &.is-off { color: rgba(215, 215, 215, 0.55); }
+
+  /* The leading mark, so a line that needs somebody reads as one at a glance
+     rather than only by its colour. */
+  &::before {
+    content: '2 a0';
+    opacity: 0.6;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The log viewer, inside the administration page (#222)
 // ---------------------------------------------------------------------------
