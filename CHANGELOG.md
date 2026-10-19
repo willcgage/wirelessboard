@@ -10,6 +10,41 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.21] - 2026-10-18
+
+beta.20 put the new Planning Center panes on the board and they looked wrong — some of them
+were still wearing the old styling, and one control that should have been unavailable was not.
+
+### Fixed
+- **The Planning Center panes match the rest of the administration page.** Four of the pieces
+  added in beta.20 had no styling at all, so they rendered as plain browser defaults beside
+  panes that had been restyled for 2.0 — and the status lines under "What happens on its own"
+  drew a row of stray characters in front of every line. The cards, the status lines and the
+  button rows now use the same shapes, spacing and colours as every other pane.
+
+- **"Sync Now" is no longer clickable on a board with no Planning Center connection.** The
+  Preview Sync and Sync Now buttons, and the "Check again" button beside the watcher status,
+  sat just outside the part of each section that is switched off when there is no connection.
+  Everything around them was greyed out and inert; those three were live.
+
+  ⛔ Nothing could come of pressing them, but a sync button that answers on a board with no
+  account attached is the wrong promise to make.
+
+- **The watcher status reads as a list again.** It was being drawn inside the button row, so
+  it appeared beside "Check again" rather than above it.
+
+### Changed
+- **"This week's plan" now sits at the end of the Planning Center list, and is unavailable
+  until the board is connected.** It was first, on the reasoning that it is the only part most
+  weeks need — true of a board already set up, and wrong for the board in front of somebody
+  setting one up. Every other item in that list is a prerequisite for it.
+
+  ⭐ The list now reads as the job: connect, say how names match, add rules if the week needs
+  them, decide what happens unattended, then run it.
+
+  ⚠️ It is shown and marked "Needs a connection" rather than hidden, so a board that is not
+  connected yet does not look like a board missing a feature.
+
 ## [2.0.0-beta.20] - 2026-10-18
 
 Three things the board was getting right and then describing wrongly — or not describing at all.
