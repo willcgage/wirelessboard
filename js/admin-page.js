@@ -46,6 +46,12 @@ function facts() {
   return (deps && typeof deps.getFacts === 'function' && deps.getFacts()) || {};
 }
 
+/** The stored Planning Center block, or `{}` before the first payload. */
+function pcoConfig() {
+  const { config } = facts();
+  return config && typeof config.pco === 'object' && config.pco ? config.pco : {};
+}
+
 function lockState() {
   return deps && typeof deps.getLockState === 'function' ? deps.getLockState() : 'off';
 }
@@ -134,7 +140,10 @@ function renderItem(item) {
     button.classList.add('is-refused');
     const note = document.createElement('span');
     note.className = 'admin-item__state is-refused';
-    note.textContent = refusalNote(item.action) || 'Locked to display only.';
+    // ⛔ The item's own note first: an item can be refused for a reason that
+    // is not the lock (the weekly plan with no Planning Center connection),
+    // and the lock's wording would be wrong for it.
+    note.textContent = item.refusedNote || refusalNote(item.action) || 'Locked to display only.';
     button.appendChild(note);
     return button;
   }
@@ -210,7 +219,7 @@ function renderRail() {
     rail.appendChild(note);
   }
 
-  sectionsFor({ lockState: lockState() }).forEach((section) => {
+  sectionsFor({ lockState: lockState(), pco: pcoConfig() }).forEach((section) => {
     const group = document.createElement('section');
     group.className = 'admin-group';
 

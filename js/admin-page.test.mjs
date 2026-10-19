@@ -142,9 +142,46 @@ test('⛔ display only refuses every guarded item, and still lists them', () => 
   assert.equal(items.length, allItems().length);
 });
 
-test('an unlocked board refuses nothing', () => {
-  sectionsFor({ lockState: 'off' }).flatMap((s) => s.items)
-    .forEach((item) => assert.equal(item.refused, false));
+test('an unlocked, connected board refuses nothing', () => {
+  // ⚠️ `pco` matters now: the weekly plan is refused without a Planning Center
+  // connection, which is a second reason an item can be refused and has
+  // nothing to do with the lock. A connected board is the case this asserts.
+  sectionsFor({ lockState: 'off', pco: { auth: { has_credentials: true } } })
+    .flatMap((s) => s.items)
+    .forEach((item) => assert.equal(item.refused, false, `${item.id} was refused`));
+});
+
+test('⛔⛔ the weekly plan is refused until the board is connected', () => {
+  // It opens the weekly panel, whose plan picker, Preview Sync and Sync Now
+  // all read lists that live in the Planning Center account. With no
+  // connection it opens onto controls that cannot do anything, while the five
+  // sections beside it correctly say "Needs a connection".
+  const weekly = (pco) => sectionsFor({ lockState: 'off', pco })
+    .flatMap((s) => s.items).find((i) => i.id === 'pco');
+
+  const unconnected = weekly(undefined);
+  assert.equal(unconnected.refused, true);
+  assert.equal(unconnected.refusedNote, 'Needs a connection');
+
+  // ⛔ Refused, never hidden — a rail that drops an item reads as a board
+  // missing features.
+  assert.ok(
+    sectionsFor({ lockState: 'off' }).flatMap((s) => s.items).some((i) => i.id === 'pco'),
+    'it is still listed',
+  );
+
+  assert.equal(weekly({ auth: { has_credentials: true } }).refused, false);
+});
+
+test('⚠️ the lock’s wording wins when a board is both locked and unconnected', () => {
+  // ⛔ Being locked to display only is the bigger fact, and it is the one with
+  // an undo. "Needs a connection" would send somebody to Planning Center when
+  // the answer is on this board.
+  const item = sectionsFor({ lockState: 'on', pco: {} })
+    .flatMap((s) => s.items).find((i) => i.id === 'pco');
+
+  assert.equal(item.refused, true);
+  assert.equal(item.refusedNote, null, 'the renderer falls back to the lock note');
 });
 
 test('⛔ the count of what a locked board refuses, and the line that says so', () => {
@@ -781,13 +818,22 @@ test('⛔⛔ a registered route with no rail item is unreachable', () => {
   }
 });
 
-test('⭐ the weekly plan is the first thing under Planning Center', () => {
+test('⛔⛔ the weekly plan is LAST under Planning Center, after its prerequisites', () => {
   const group = SECTIONS.find((s) => s.title === 'Planning Center');
   assert.ok(group, 'the group exists');
 
-  // It is the only part most weeks need; connecting is done once ever.
-  assert.equal(group.items[0].id, 'pco');
-  assert.match(group.items[0].label, /plan/i);
+  // ⛔ It used to be first, on the argument that it is the only part most
+  // weeks need. True of a board already set up — and wrong for the board in
+  // front of somebody setting one up, which is the state this rail is read in.
+  // Syncing a plan is the one thing here that cannot be done at all without a
+  // connection, so it led a list whose every other item is a prerequisite.
+  const last = group.items[group.items.length - 1];
+  assert.equal(last.id, 'pco');
+  assert.match(last.label, /plan/i);
+
+  // ⭐ The order reads as the job: connect, say how names match, add rules,
+  // decide what happens unattended — then run it.
+  assert.equal(group.items[0].id, 'pco-connection');
 });
 
 test('⚠️ and it is the one Planning Center item that is not drawn in the page', () => {
