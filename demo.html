@@ -604,19 +604,25 @@
               <span id="pco-example-note" class="pco-example__note" role="status" aria-live="polite"></span>
             </div>
           </div>
-        </div>
-        <div class="admin-actions">
           <!-- ⭐ The sync controls here too. The worked example above says what
                these rules WOULD do; until now the only way to act on that was
                to leave the section, and the weekly panel had no door at all
                (#297). ⛔ They run in the weekly panel rather than rendering a
                second diff here: one surface for the slot-by-slot result, so a
                preview and a sync can never be read from two places that
-               disagree. -->
+               disagree.
+
+               ⛔⛔ INSIDE the section body, not in the trailing actions row
+               (#303). `applyPcoGate` only reaches `#pco-matching-body`, so out
+               there these escaped it entirely: on a board with no Planning
+               Center connection every other control in the section was inert
+               and disabled, and **Sync Now was still clickable**. -->
           <div class="admin-actions">
             <button type="button" id="pco-matching-preview" class="admin-btn">Preview Sync</button>
             <button type="button" id="pco-matching-sync" class="admin-btn">Sync Now</button>
           </div>
+        </div>
+        <div class="admin-actions">
           <button type="button" id="pco-matching-save" class="admin-btn admin-btn--primary">Save matching</button>
           <span id="pco-matching-status" class="admin-status" role="status" aria-live="polite"></span>
         </div>
@@ -723,13 +729,17 @@
               </div>
             </div>
 
-        </div>
-        <div class="admin-actions">
           <!-- ⛔⛔ What happens if nobody touches it. The settings above said the
                board watches every 120 seconds; they did not say the watcher was
                NOT ARMED, which it is not until a sync has run in this process.
                A board configured to watch was quietly doing nothing and looked
-               exactly like one that was working. -->
+               exactly like one that was working.
+
+               ⛔⛔ INSIDE the section body, not in the trailing actions row
+               (#303). Out there it was outside `#pco-calendar-body`, so the
+               status line drew *in* the button row rather than above it, and
+               `applyPcoGate` never reached it — the refresh button stayed live
+               on a board with no Planning Center connection. -->
           <div class="admin-section__head admin-section__head--sub">
             <h4 class="admin-section__subtitle">What happens on its own</h4>
             <p class="admin-section__lead">&#11088; The state of the watcher itself, not the
@@ -739,6 +749,8 @@
           <div class="admin-actions">
             <button type="button" id="pco-watch-refresh" class="admin-btn">Check again</button>
           </div>
+        </div>
+        <div class="admin-actions">
           <button type="button" id="pco-calendar-save" class="admin-btn admin-btn--primary">Save calendar</button>
           <span id="pco-calendar-status" class="admin-status" role="status" aria-live="polite"></span>
         </div>

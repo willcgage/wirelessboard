@@ -4039,7 +4039,12 @@ body.live-strip-bottom .rotation-bar {
   /* The leading mark, so a line that needs somebody reads as one at a glance
      rather than only by its colour. */
   &::before {
-    content: '2 a0';
+    // ⛔ The bullet as a literal character, never an escape. `2` written
+    // through a script became an OCTAL escape and put two control
+    // characters into this file, which the browser drew as mojibake in
+    // front of every line.
+    content: '•';
+    margin-right: 0.4em;
     opacity: 0.6;
   }
 }

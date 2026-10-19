@@ -127,3 +127,129 @@ test('⚠️ the new button rows use the 2.0 row, not Bootstrap utilities', () =
     );
   }
 });
+
+test('⛔⛔ the stylesheet contains no control characters', () => {
+  // ⛔ It did, and they reached a screenshot. A `\2022` escape written through
+  // a script was read as an OCTAL escape, so the file ended up holding the raw
+  // bytes 0x82 and 0x00 — and `content:` drew them as mojibake in front of
+  // every watch line. Nothing failed: the markup was right, the selector was
+  // right, and the bytes were wrong.
+  //
+  // ⚠️ The lesson is narrower than "be careful": a CSS escape that has to
+  // survive a shell, a heredoc and a string literal usually should not be an
+  // escape at all. Write the character.
+  const offenders = [];
+  for (let i = 0; i < scss.length; i += 1) {
+    const code = scss.charCodeAt(i);
+    // Tab, newline and carriage return are the only control codes allowed.
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+      offenders.push(`0x${code.toString(16)} at ${i}: ${JSON.stringify(scss.slice(i - 40, i + 10))}`);
+    }
+  }
+  assert.deepEqual(offenders, [], 'raw control characters in the stylesheet');
+});
+
+test('⚠️ no CSS escape is written where a literal character would do', () => {
+  // The specific shape that broke: a quoted `content:` holding a backslash.
+  //
+  // ⛔ Written without a regular expression on purpose. The first version of
+  // THIS TEST was a regex literal, and the heredoc carrying it ate the very
+  // backslash it was looking for — turning `\\/g` into `\/g` and leaving an
+  // unterminated expression. The trap caught the guard written to catch it.
+  const BACKSLASH = String.fromCharCode(92);
+  const offenders = [];
+  let at = scss.indexOf('content:');
+  while (at !== -1) {
+    const open = scss.indexOf("'", at);
+    const semi = scss.indexOf(';', at);
+    if (open !== -1 && (semi === -1 || open < semi)) {
+      const close = scss.indexOf("'", open + 1);
+      const value = close === -1 ? '' : scss.slice(open + 1, close);
+      if (value.includes(BACKSLASH)) {
+        offenders.push(value);
+      }
+    }
+    at = scss.indexOf('content:', at + 1);
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'write the character itself — an escape here has to survive a shell, a '
+    + 'heredoc and a string literal, and it did not',
+  );
+});
+
+/**
+ * ⛔⛔ A control outside its section body escapes the gate entirely.
+ *
+ * `applyPcoGate` sets `inert`, toggles `is-gated` and disables every
+ * `input, select, textarea, button` — but only within `#<section>-body`. The
+ * three controls #298 added were inserted into the section's trailing actions
+ * row, which is a SIBLING of that body. On a board with no Planning Center
+ * connection every other control in the section was inert and disabled, and
+ * these stayed live — **including Sync Now**.
+ *
+ * ⚠️ It also explains the layout: the trailing row is `display: flex`, so the
+ * watch status drew *beside* the buttons instead of above them. One mistake,
+ * two symptoms, and only the cosmetic one was visible.
+ */
+const SECTION_CONTROLS = [
+  ['pco-matching', ['pco-matching-preview', 'pco-matching-sync']],
+  ['pco-rulesets', ['pco-rulesets-check', 'pco-ruleset-previews']],
+  ['pco-calendar', ['pco-watch-status', 'pco-watch-refresh']],
+];
+
+/** The slice of markup between `#<id>` opening and the matching close. */
+function bodyOf(section) {
+  const open = html.indexOf(`id="${section}-body"`);
+  assert.notEqual(open, -1, `${section}-body exists`);
+  let i = html.indexOf('>', open) + 1;
+  let depth = 1;
+  const start = i;
+  while (depth > 0 && i < html.length) {
+    const nextOpen = html.indexOf('<div', i);
+    const nextClose = html.indexOf('</div>', i);
+    if (nextClose === -1) break;
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth += 1;
+      i = nextOpen + 4;
+    } else {
+      depth -= 1;
+      if (depth === 0) return html.slice(start, nextClose);
+      i = nextClose + 6;
+    }
+  }
+  throw new Error(`could not find the end of ${section}-body`);
+}
+
+test('⛔⛔ every Planning Center control sits inside its gated section body', () => {
+  const escaped = [];
+  for (const [section, ids] of SECTION_CONTROLS) {
+    const body = bodyOf(section);
+    for (const id of ids) {
+      if (!body.includes(`id="${id}"`)) escaped.push(`${id} is outside ${section}-body`);
+    }
+  }
+  assert.deepEqual(
+    escaped,
+    [],
+    'applyPcoGate only reaches the section body — a control outside it stays '
+    + 'live on a board with no Planning Center connection',
+  );
+});
+
+test('⚠️ every section still has the save button the gate disables by id', () => {
+  // ⛔ The counterpart to the rule above, and it is deliberately NOT about
+  // placement. `applyPcoGate` disables the save button by id, so a save works
+  // inside the body or in the trailing row — and the sections genuinely
+  // differ: `pco-rulesets-save` is inside its body while the other two are
+  // not. Asserting a single position here would have been inventing a rule the
+  // code does not have. What must hold is that the id exists for the gate to
+  // find.
+  for (const [section] of SECTION_CONTROLS) {
+    assert.ok(
+      html.includes(`id="${section}-save"`),
+      `${section}-save must exist — applyPcoGate disables it by id`,
+    );
+  }
+});
