@@ -33,7 +33,9 @@
  */
 
 import { GUARDED_ACTIONS, allows } from './viewer-lock.mjs';
-import { PCO_SECTIONS, PCO_SECTION_IDS, pcoStateLine } from './pco-sections.mjs';
+import {
+  PCO_SECTIONS, PCO_SECTION_IDS, pcoStateLine, isConnected,
+} from './pco-sections.mjs';
 // ⭐ The one place that knows what counts as a slot number, reused rather than
 // re-derived — `Number(null)` is 0, and that trap has already been walked into
 // once (#243).
@@ -93,16 +95,24 @@ export const SECTIONS = [
       // ⚠️ The id is `pco` because routes are keyed by item id and that
       // route was already registered. It is the one Planning Center item NOT
       // in `IN_PAGE_ITEMS`, which is exactly what sends it to the route.
-      //
-      // ⭐ First in the group, because it is the only part most weeks need --
-      // the same argument the group's own note makes about connecting being
-      // done once ever.
-      { id: 'pco', label: "This week's plan", action: 'pco' },
       ...PCO_SECTIONS.map((section) => ({
         id: section.id,
         label: section.label,
         action: 'pco',
       })),
+      // ⛔⛔ LAST in the group, and refused until the board is connected.
+      //
+      // It was first, on the argument that it is the only part most weeks
+      // need. True once a board is set up -- and wrong for the board in front
+      // of somebody setting one up, which is the state this rail is read in.
+      // Syncing a plan is the one thing here that cannot be done at all
+      // without a connection, so it led a list whose every other item is a
+      // prerequisite for it.
+      //
+      // ⭐ The order now reads as the job: connect, say how names match, add
+      // rules if the week needs them, decide what happens unattended -- and
+      // then run it.
+      { id: 'pco', label: "This week's plan", action: 'pco' },
     ],
   },
   {
@@ -164,13 +174,30 @@ export function offeredActions() {
  * reads as a board missing features, and somebody will go looking for the
  * fault; the refusal says what it is and where to undo it (`refusalNote`).
  */
-export function sectionsFor({ lockState } = {}) {
+export function sectionsFor({ lockState, pco } = {}) {
   return SECTIONS.map((section) => ({
     title: section.title,
-    items: section.items.map((item) => ({
-      ...item,
-      refused: !allows(lockState, item.action),
-    })),
+    items: section.items.map((item) => {
+      const locked = !allows(lockState, item.action);
+      // ⛔⛔ The second reason an item can be refused, and it is not the lock.
+      //
+      // "This week's plan" opens the weekly panel, whose plan picker, Preview
+      // Sync and Sync Now all read lists that live in the Planning Center
+      // account. With no connection there is nothing to pick and nothing to
+      // sync, so the panel opens onto controls that cannot do anything --
+      // while the five sections beside it correctly say "Needs a connection".
+      //
+      // ⚠️ Refused rather than hidden, for the same reason as the lock: a rail
+      // that silently drops an item reads as a board missing features.
+      const needsConnection = item.id === 'pco' && !isConnected(pco);
+      return {
+        ...item,
+        refused: locked || needsConnection,
+        // ⛔ The lock's note still wins when both apply: being locked to
+        // display only is the bigger fact, and it is the one with an undo.
+        refusedNote: locked || !needsConnection ? null : 'Needs a connection',
+      };
+    }),
   }));
 }
 
