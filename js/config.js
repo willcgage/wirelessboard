@@ -4468,12 +4468,14 @@ function showPCOView() {
   if (settings) settings.style.display = 'none';
   const pcoView = document.getElementById('pco-settings');
   if (pcoView) pcoView.style.display = 'block';
+  // ⛔⛔ This used to force the button's text and Bootstrap classes on every
+  // open -- `textContent = 'Close'`, `classList.add('btn-outline-secondary')`
+  // -- which meant the markup could not restyle it: whatever the page said,
+  // opening the view put the old look back. It only renames the legacy
+  // `pco-back` id now, and leaves appearance to the stylesheet.
   const backBtn = document.getElementById('pco-close') || document.getElementById('pco-back');
   if (backBtn) {
     backBtn.id = 'pco-close';
-    backBtn.textContent = 'Close';
-    backBtn.classList.remove('btn-link');
-    backBtn.classList.add('btn-outline-secondary');
   }
   try { document.getElementById('pco-settings').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
   const p = micboard.config.pco || {};
