@@ -10,6 +10,30 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.22] - 2026-10-21
+
+The last Planning Center screen that still looked like the old application.
+
+### Changed
+- **"This week's plan" is in the 2.0 look.** Choosing a plan, previewing, syncing, loading people,
+  assigning them to slots and reading the log all sat in a screen that had never been restyled —
+  pale bordered boxes, centred headings and blue-and-green Bootstrap buttons, one tap from the
+  board. It now matches the administration page beside it: the same surfaces, the same quiet
+  headings, the same buttons, with the one control that empties the board marked as the only
+  destructive thing on the screen.
+
+  ⚠️ Nothing about how it works has changed. Every control is the same control, in the same
+  order, doing the same thing.
+
+- **It uses the whole screen.** The panel was capped at 960px wide, which on a 1920px television
+  left half the screen empty and pushed the log off the bottom. The explanations still wrap at a
+  comfortable reading width rather than stretching across the wall.
+
+- **The opening note no longer points somewhere that does not exist.** It read "The only part most
+  weeks need. Everything else is under Setup below" — but there is no Setup below any more, and
+  since the previous release this is the last item in the Planning Center list rather than the
+  first. It now says where its settings live.
+
 ## [2.0.0-beta.21] - 2026-10-18
 
 beta.20 put the new Planning Center panes on the board and they looked wrong — some of them
