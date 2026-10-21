@@ -253,3 +253,89 @@ test('⚠️ every section still has the save button the gate disables by id', (
     );
   }
 });
+
+/**
+ * ⛔⛔ The weekly surface, which #222 deliberately left in the old look.
+ *
+ * Its rules were scoped to `.admin-section--moved` and the stylesheet said why:
+ * "the weekly surface still lives in `#pco-settings` and still uses every one
+ * of these classes; restyling them globally would silently redraw a screen
+ * this change never looked at." Nobody had looked — until it was photographed
+ * on the wall reading as a different application one tap from the board.
+ */
+function weeklyPanel() {
+  const at = html.indexOf('id="pco-settings"');
+  assert.notEqual(at, -1, '#pco-settings exists');
+  const start = html.lastIndexOf('<', at);
+  let i = start;
+  let depth = 0;
+  while (i < html.length) {
+    const open = html.indexOf('<div', i);
+    const close = html.indexOf('</div>', i);
+    if (close === -1) break;
+    if (open !== -1 && open < close) {
+      depth += 1;
+      i = open + 4;
+    } else {
+      depth -= 1;
+      if (depth === 0) return html.slice(start, close + 6);
+      i = close + 6;
+    }
+  }
+  throw new Error('could not find the end of #pco-settings');
+}
+
+/** Bootstrap's vocabulary, which is what "the old look" means here. */
+const OLD_LOOK = [
+  'btn', 'btn-primary', 'btn-outline-secondary', 'btn-outline-primary',
+  'btn-success', 'btn-outline-warning', 'btn-link', 'card', 'config-header',
+  'p-3', 'border', 'rounded', 'bg-dark', 'bg-light', 'text-light', 'container',
+];
+
+test('⛔⛔ the weekly surface is not wearing the old look', () => {
+  const panel = weeklyPanel();
+  const worn = new Set();
+  const re = /class="([^"]+)"/g;
+  let m = re.exec(panel);
+  while (m) {
+    m[1].split(/\s+/).filter(Boolean).forEach((c) => {
+      if (OLD_LOOK.includes(c)) worn.add(c);
+    });
+    m = re.exec(panel);
+  }
+  assert.deepEqual(
+    [...worn].sort(),
+    [],
+    'this screen sits one tap from the board and must not read as another app',
+  );
+});
+
+test('⛔⛔ and the close button is not restyled back by JavaScript', () => {
+  // The markup could not fix this on its own: `showPCOView` forced
+  // `textContent = 'Close'` and `classList.add('btn-outline-secondary')` on
+  // every open, so whatever the page said, opening the view put the old look
+  // back. It only renames the legacy `pco-back` id now.
+  //
+  // ⚠️ Matched on the statement, not the string. The first version of this
+  // guard searched for `classList.add('btn-outline-secondary')` and failed on
+  // the COMMENT above the fix, which quotes the old line -- a guard that
+  // cannot tell code from prose about code.
+  assert.ok(
+    !config.includes('backBtn.classList.add('),
+    'showPCOView must not re-apply Bootstrap classes to the close button',
+  );
+  assert.ok(
+    !config.includes('backBtn.textContent ='),
+    'the button’s label belongs to the markup, not to the open handler',
+  );
+});
+
+test('⚠️ the weekly surface is not capped to a narrow column', () => {
+  // ⛔ It was Bootstrap's `.container` — 960px — which on the venue's 1920px
+  // television is half the screen with the rest empty. Prose still wraps:
+  // `.admin-section__lead` carries its own max-width.
+  const panel = weeklyPanel();
+  const opening = panel.slice(0, panel.indexOf('>') + 1);
+  assert.ok(!/\bcontainer\b/.test(opening), `#pco-settings opened as: ${opening}`);
+  assert.ok(scss.includes('.admin-section__lead'), 'prose keeps its own width');
+});
