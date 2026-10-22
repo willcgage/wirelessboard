@@ -1782,6 +1782,9 @@ def record_sync(plan_id: Optional[str], updated_at: Optional[str], profile_id: O
         return
     _PLAN_WATCH.clear()
     _LAST_SYNC.clear()
+    # ⛔ The cached live position describes the plan that WAS active. Serving
+    # ten seconds of it after a sync would say the wrong service is on screen.
+    _LIVE_CACHE.clear()
     _LAST_SYNC.update({
         'plan_id': str(plan_id),
         'updated_at': updated_at or '',
@@ -1797,6 +1800,7 @@ def last_sync() -> Dict[str, Any]:
 
 def forget_last_sync() -> None:
     _LAST_SYNC.clear()
+    _LIVE_CACHE.clear()
 
 
 def _watching_active_plan(pco_cfg: Dict[str, Any]) -> bool:
@@ -2103,6 +2107,36 @@ def _item_time(payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     return pco_live.describe_item(attrs, times, item_id)
 
 
+# ⛔⛔ One answer, shared by every board.
+#
+# The strip polls `/api/pco/live` every 15 seconds **from each open board**,
+# and each poll made its own Planning Center request: three boards cost three
+# requests a tick, forever, whether or not Live is running. Measured at the
+# venue: 7.3 requests a minute with two or three boards open, ~10k a day
+# against one account's allowance, for a strip that mostly says "not running".
+#
+# ⭐ Cached by elapsed time, not by request: whichever board asks first pays,
+# and every other board inside the window is served that same answer. The cost
+# stops scaling with the number of boards.
+#
+# ⚠️ Ten seconds, under the 15-second poll on purpose. A board is never shown
+# a position more than one tick stale, which is the resolution the strip has
+# anyway -- and the window is short enough that nobody watching a service sees
+# the timer freeze.
+_LIVE_TTL_SECONDS = 10
+_LIVE_CACHE: Dict[str, Any] = {}
+
+
+def forget_live_status() -> None:
+    """Drop the cached position.
+
+    ⛔ Called wherever the thing it describes changes underneath it -- a new
+    sync makes a different plan the active one, and serving ten seconds of the
+    old plan's position would be a lie about which service is on screen.
+    """
+    _LIVE_CACHE.clear()
+
+
 def live_status() -> Dict[str, Any]:
     """Where the service has got to, or why that cannot be said (#121).
 
@@ -2121,6 +2155,29 @@ def live_status() -> Dict[str, Any]:
     if not _live_enabled(pco_cfg):
         return {'state': 'off'}
 
+    # ⚠️ After the enablement check and before anything is asked: a disabled
+    # strip must still cost nothing, and a cached answer must not outlive the
+    # switch being turned off.
+    cached = _LIVE_CACHE.get('answer')
+    if cached is not None and (time.time() - _LIVE_CACHE.get('at', 0)) < _LIVE_TTL_SECONDS:
+        return dict(cached)
+
+    # ⛔ Delegated rather than wrapped, so no return path can skip the store.
+    # The body below has six of them; a cache written at each would be five
+    # chances to forget one.
+    answer = _live_status_fresh(pco_cfg)
+    _LIVE_CACHE['answer'] = dict(answer)
+    _LIVE_CACHE['at'] = time.time()
+    return answer
+
+
+def _live_status_fresh(pco_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Ask Planning Center where the service has got to.
+
+    ⛔ Always asks. `live_status` owns whether asking is wanted -- the
+    enablement switch and the shared cache both live there, so this stays the
+    one place that knows how to read a live position.
+    """
     plan_id = last_sync().get('plan_id')
     if not plan_id:
         return {'state': 'no_plan', 'label': pco_live.state_label('no_plan')}
