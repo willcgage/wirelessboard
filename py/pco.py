@@ -611,6 +611,7 @@ def _http_get(
     params: Optional[Dict[str, Any]] = None,
     *,
     probe: bool = False,
+    expected: Tuple[int, ...] = (),
 ) -> Optional[Dict[str, Any]]:
     """GET one PCO URL.
 
@@ -634,6 +635,17 @@ def _http_get(
             if probe:
                 _note_probe(url, resp.status_code)
                 logger.debug('PCO probe %s: %s %s', url, resp.status_code, resp.text[:200])
+            elif resp.status_code in expected:
+                # ⛔⛔ This status is the ANSWER here, not a failure. The live
+                # position 404s on any plan nobody has started Live on, and the
+                # strip polls it every 15 seconds per open board -- which put
+                # 129 WARNING lines into the venue's log in 18 minutes and made
+                # a healthy board look like one that was failing.
+                #
+                # ⚠️ Not `probe=True`: that is for the roster sweep and it fills
+                # a capped journal those diagnostics depend on. This says only
+                # "I expected this one", and every other status still warns.
+                logger.debug('PCO GET %s: %s (expected here)', url, resp.status_code)
             else:
                 logger.warning('PCO GET %s failed: %s %s', url, resp.status_code, resp.text[:200])
             return None
@@ -2117,14 +2129,27 @@ def live_status() -> Dict[str, Any]:
     headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
 
     params = {'include': 'item'}
-    current_raw = _http_get(f"{BASE_URL}/plans/{plan_id}/live/current_item_time", headers, params)
-    if current_raw is None:
+    # ⛔⛔ 404 is the NORMAL answer here. Planning Center has no live position
+    # for a plan nobody has started Live on, which is most plans most of the
+    # time -- so it is declared expected and logged at DEBUG.
+    current_raw = _http_get(
+        f"{BASE_URL}/plans/{plan_id}/live/current_item_time", headers, params,
+        expected=(404,),
+    )
+    if current_raw is None and _LAST_HTTP_ERROR != 404:
+        # A real failure: a rejected token, a network that is down. Those are
+        # worth saying out loud, and `_fetch_error` explains which it was.
         return {
             'state': 'error',
             'label': pco_live.state_label('error'),
             'plan_id': plan_id,
             'detail': _fetch_error('Unable to read the live position'),
         }
+    # ⭐ A 404 falls through with `current_raw` still None, so `pco_live.state`
+    # reaches its own answer for it -- "not running" -- which is the state it
+    # has always had and was never given. The board was reading
+    # **"Cannot reach Planning Center"** on a board that could reach it
+    # perfectly well, every 15 seconds, on a wall in the Green Room.
 
     current = _item_time(current_raw)
     # ⚠️ Only asked for when something is actually running. A plan nobody has

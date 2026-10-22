@@ -297,3 +297,92 @@ class TestTheTimerReachesTheStrip:
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
 
         assert pco.live_status()['timer_label'] == 'Full item length'
+
+
+class TestA404IsNotAnError:
+    """⛔⛔ Read off the venue board, which was showing this on the wall:
+
+        state:  error
+        label:  "Cannot reach Planning Center"
+        detail: "Unable to read the live position (Planning Center returned 404)"
+
+    The board could reach Planning Center perfectly well. A 404 on
+    `live/current_item_time` means nobody has started Live on that plan, which
+    is most plans most of the time — and `pco_live.state` has always had a
+    state for exactly that. `live_status` short-circuited to `error` before
+    ever consulting it.
+
+    ⚠️ It polls every 15 seconds **per open board**, so this was on screen
+    continuously and put 129 WARNING lines in the log in 18 minutes.
+    """
+
+    def _answer_404(self, pco_mod, monkeypatch, calls):
+        def fake_get(url, headers, params=None, *, probe=False, expected=()):
+            calls.append({'url': url, 'expected': expected})
+            pco_mod._LAST_HTTP_ERROR = 404
+            return None
+        monkeypatch.setattr(pco_mod, '_http_get', fake_get)
+
+    def test_a_404_reads_as_live_not_running(self, live_on, monkeypatch):
+        pco.record_sync('91062752', 'stamp', None)
+        calls = []
+        self._answer_404(pco, monkeypatch, calls)
+
+        out = pco.live_status()
+
+        assert out['state'] == 'not_running', out
+        assert out['label'] == 'Live not running'
+        # ⛔ The words that were on the wall. They must not come back.
+        assert 'Cannot reach' not in out.get('label', '')
+        assert 'detail' not in out or '404' not in str(out.get('detail'))
+
+    def test_the_404_is_declared_expected_so_it_does_not_warn(self, live_on, monkeypatch):
+        # ⛔ The log storm, not the label. 404 has to be passed as an expected
+        # status or `_http_get` warns on every single poll.
+        pco.record_sync('91062752', 'stamp', None)
+        calls = []
+        self._answer_404(pco, monkeypatch, calls)
+
+        pco.live_status()
+
+        assert calls, 'it asked for the live position'
+        assert 404 in calls[0]['expected'], calls[0]
+
+    def test_a_real_failure_is_still_an_error(self, live_on, monkeypatch):
+        # ⚠️ The other half. A rejected token or a network that is down must
+        # still say so — the strip's value is that its states mean something.
+        pco.record_sync('91062752', 'stamp', None)
+
+        def fake_get(url, headers, params=None, *, probe=False, expected=()):
+            pco._LAST_HTTP_ERROR = 401
+            return None
+        monkeypatch.setattr(pco, '_http_get', fake_get)
+
+        out = pco.live_status()
+
+        assert out['state'] == 'error'
+        assert out['label'] == 'Cannot reach Planning Center'
+
+    def test_a_connection_error_is_still_an_error(self, live_on, monkeypatch):
+        # `_LAST_HTTP_ERROR` is None for an exception rather than a status, so
+        # "not 404" has to cover that too.
+        pco.record_sync('91062752', 'stamp', None)
+
+        def fake_get(url, headers, params=None, *, probe=False, expected=()):
+            pco._LAST_HTTP_ERROR = None
+            return None
+        monkeypatch.setattr(pco, '_http_get', fake_get)
+
+        assert pco.live_status()['state'] == 'error'
+
+    def test_it_does_not_ask_for_the_next_item_when_live_is_not_running(self, live_on, monkeypatch):
+        # One request per poll, not two. The second was already guarded; this
+        # pins that the 404 path does not undo that.
+        pco.record_sync('91062752', 'stamp', None)
+        calls = []
+        self._answer_404(pco, monkeypatch, calls)
+
+        pco.live_status()
+
+        assert len(calls) == 1, [c['url'] for c in calls]
+        assert 'next_item_time' not in calls[0]['url']
