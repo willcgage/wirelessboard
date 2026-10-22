@@ -8,7 +8,23 @@ import runtime_estimate
 from channel import ChannelDevice, data_update_list, chart_update_list
 
 
-BATTERY_TIMEOUT = 30*60
+# ⛔⛔ How long a switched-off transmitter keeps its last known state.
+#
+# Only a real battery level (1-5) moves `timestamp`, so when a pack is switched
+# off the clock stops and `tx_state` holds `PREV_GOOD` / `PREV_REPLACE` /
+# `PREV_CRITICAL` until this expires. That hold is deliberate -- somebody who
+# switches off between segments should not have their name and status vanish
+# off the wall -- but it was **thirty minutes**.
+#
+# Reported from the venue: "the status and other information stays on the board
+# even after a mic is switched off. HH-7 for example right now seems stuck."
+# It was not stuck. HH-7 and HH-8 had been off for under half an hour while
+# every other idle channel had been off for longer, which is why only those two
+# were still blue.
+#
+# ⭐ Two minutes, chosen by the maintainer: long enough to cover a segment
+# break, short enough that a board left alone tells the truth about what is on.
+BATTERY_TIMEOUT = 2*60
 PEAK_TIMEOUT = 10
 
 
