@@ -386,3 +386,99 @@ class TestA404IsNotAnError:
 
         assert len(calls) == 1, [c['url'] for c in calls]
         assert 'next_item_time' not in calls[0]['url']
+
+
+class TestOneAnswerSharedByEveryBoard:
+    """⛔⛔ The strip polls every 15 seconds FROM EACH OPEN BOARD, and each poll
+    used to make its own Planning Center request.
+
+    Measured at the venue: 7.3 requests a minute with two or three boards open,
+    ~10k a day against one account's allowance, for a strip that mostly says
+    "not running". The cost scaled with the number of boards, which is the
+    wrong thing for it to scale with.
+    """
+
+    @pytest.fixture(autouse=True)
+    def drop_cache(self):
+        pco.forget_live_status()
+        yield
+        pco.forget_live_status()
+
+    def counting_get(self, monkeypatch, calls):
+        def fake_get(url, headers, params=None, *, probe=False, expected=()):
+            calls.append(url)
+            pco._LAST_HTTP_ERROR = 404
+            return None
+        monkeypatch.setattr(pco, '_http_get', fake_get)
+
+    def test_a_second_board_inside_the_window_costs_nothing(self, live_on, monkeypatch):
+        pco.record_sync('91062752', 'stamp', None)
+        calls = []
+        self.counting_get(monkeypatch, calls)
+
+        first = pco.live_status()
+        second = pco.live_status()
+        third = pco.live_status()
+
+        assert len(calls) == 1, f'three boards asked, {len(calls)} requests were made'
+        assert first == second == third
+
+    def test_it_asks_again_once_the_window_passes(self, live_on, monkeypatch):
+        pco.record_sync('91062752', 'stamp', None)
+        calls = []
+        self.counting_get(monkeypatch, calls)
+
+        pco.live_status()
+        # ⚠️ Age the entry rather than patching the clock: `time.time` is read
+        # all over this module and moving it would change more than the cache.
+        pco._LIVE_CACHE['at'] -= pco._LIVE_TTL_SECONDS + 1
+        pco.live_status()
+
+        assert len(calls) == 2
+
+    def test_the_window_is_shorter_than_the_board_poll(self):
+        # ⛔ The strip polls every 15s. A window at or above that would show a
+        # position more than one tick stale, which is a timer that visibly
+        # freezes during a service.
+        assert pco._LIVE_TTL_SECONDS < 15
+
+    def test_a_sync_drops_it(self, live_on, monkeypatch):
+        # ⛔⛔ A sync makes a DIFFERENT plan active. Serving the old plan's
+        # position for another ten seconds says the wrong service is on screen.
+        pco.record_sync('91062752', 'stamp', None)
+        calls = []
+        self.counting_get(monkeypatch, calls)
+
+        pco.live_status()
+        pco.record_sync('91062999', 'stamp', None)
+        pco.live_status()
+
+        assert len(calls) == 2, 'the new plan must be asked about'
+        assert '/plans/91062999/' in calls[1]
+
+    def test_turning_the_strip_off_is_not_served_from_the_cache(self, monkeypatch):
+        # ⚠️ The switch is checked BEFORE the cache, so an operator who turns
+        # the strip off does not keep seeing it for another ten seconds.
+        monkeypatch.setattr(pco, 'get_pco_config', lambda: {
+            'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
+            'live_strip': True})
+        pco.record_sync('91062752', 'stamp', None)
+        monkeypatch.setattr(pco, '_http_get', lambda *a, **k: None)
+        pco.live_status()
+
+        monkeypatch.setattr(pco, 'get_pco_config', lambda: {
+            'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
+            'live_strip': False})
+
+        assert pco.live_status() == {'state': 'off'}
+
+    def test_a_caller_cannot_poison_the_cache(self, live_on, monkeypatch):
+        # The answer is handed out as a copy. A caller that mutates what it got
+        # must not change what the next board is told.
+        pco.record_sync('91062752', 'stamp', None)
+        self.counting_get(monkeypatch, [])
+
+        first = pco.live_status()
+        first['state'] = 'tampered'
+
+        assert pco.live_status()['state'] != 'tampered'

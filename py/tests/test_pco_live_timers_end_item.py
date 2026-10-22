@@ -205,6 +205,12 @@ class TestWhenItCannotTell:
         board.setattr(pco, '_http_get', lambda url, *a, **k: (
             None if '/items' in url else (TIMES if '/plan_times' in url else item_time())))
         pco._RUNNING_ORDER.clear()  # force it past the cache
+        # ⚠️ And past the shared live cache, for the same reason. This test
+        # freezes the clock and calls `live_status` twice to stand for two
+        # successive polls — which are 15s apart in reality, outside the 10s
+        # window. With time frozen the window never expires, so the second
+        # poll has to be said out loud.
+        pco.forget_live_status()
 
         assert pco.live_status()['timer']['known'] is False, 'nothing cached yet, so it says so'
 
