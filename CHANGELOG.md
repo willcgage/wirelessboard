@@ -10,6 +10,31 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.24] - 2026-10-22
+
+### Changed
+- **"This week's plan" opens as a panel beside the menu, like everything else on the
+  administration page.** It was the one item that took over the whole screen and hid the board
+  behind it — a different way of getting around for one entry in a list of six, which is why its
+  appearance kept drifting away from the pages around it. Closing it now puts you back where you
+  were instead of reloading the board.
+
+  ⚠️ Nothing about how it works has changed. Same controls, same order, same behaviour.
+
+- **A long settings panel scrolls instead of squashing what is inside it.** On any panel taller
+  than the space available, blocks were being compressed rather than scrolled — on "This week's
+  plan" the explanation under "Remember each person's position" ran down over the buttons beneath
+  it. Every panel scrolls properly now; it only ever showed on the longest one.
+
+### Fixed
+- **Several boards no longer cost several times the Planning Center allowance.** The service strip
+  asks Planning Center where the service has got to every fifteen seconds, and every open board was
+  asking separately — three boards meant three times the requests, all day, for the same answer.
+  They now share one answer, so the cost no longer grows with the number of screens.
+
+  ⚠️ The strip is no less current: the shared answer is never more than one refresh old, and a
+  sync still updates it immediately so a new plan is never reported as the old one.
+
 ## [2.0.0-beta.23] - 2026-10-22
 
 Two things the board was saying that were not true, both found by reading the board in the
