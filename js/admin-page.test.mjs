@@ -836,12 +836,25 @@ test('⛔⛔ the weekly plan is LAST under Planning Center, after its prerequisi
   assert.equal(group.items[0].id, 'pco-connection');
 });
 
-test('⚠️ and it is the one Planning Center item that is not drawn in the page', () => {
-  // That is what sends it to the route rather than to a pane — the exact
-  // distinction the five setup sections get wrong by design.
+test('⛔⛔ EVERY Planning Center item is drawn in the page, the weekly one included', () => {
+  // ⛔ This asserted the opposite: `pco` was the one item NOT in the list, so
+  // it handed over to a route that hid the board and took the whole screen.
+  // One entry in a list of six navigating differently from the other five is
+  // what kept its look drifting away from the page around it -- it was
+  // restyled twice before anyone asked why it was a page at all.
   const group = SECTIONS.find((s) => s.title === 'Planning Center');
   const inPage = group.items.filter((i) => IN_PAGE_ITEMS.includes(i.id));
 
-  assert.equal(inPage.length, group.items.length - 1);
-  assert.ok(!IN_PAGE_ITEMS.includes('pco'));
+  assert.equal(inPage.length, group.items.length, 'no Planning Center item hands over');
+  assert.ok(IN_PAGE_ITEMS.includes('pco'), 'the weekly surface is a pane');
+});
+
+test('⛔ and nothing on the rail hands over to a route any more except the two that must', () => {
+  // ⚠️ `demo` reloads the board and `about` is drawn by the page itself, so
+  // neither is a pane in the same sense. Everything else is.
+  const handing = SECTIONS.flatMap((s) => s.items)
+    .filter((i) => i.action !== null && !IN_PAGE_ITEMS.includes(i.id))
+    .map((i) => i.id);
+
+  assert.deepEqual(handing, ['demo'], `these still take the whole screen: ${handing}`);
 });

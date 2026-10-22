@@ -264,25 +264,15 @@ test('⚠️ every section still has the save button the gate disables by id', (
  * on the wall reading as a different application one tap from the board.
  */
 function weeklyPanel() {
-  const at = html.indexOf('id="pco-settings"');
-  assert.notEqual(at, -1, '#pco-settings exists');
-  const start = html.lastIndexOf('<', at);
-  let i = start;
-  let depth = 0;
-  while (i < html.length) {
-    const open = html.indexOf('<div', i);
-    const close = html.indexOf('</div>', i);
-    if (close === -1) break;
-    if (open !== -1 && open < close) {
-      depth += 1;
-      i = open + 4;
-    } else {
-      depth -= 1;
-      if (depth === 0) return html.slice(start, close + 6);
-      i = close + 6;
-    }
-  }
-  throw new Error('could not find the end of #pco-settings');
+  // ⭐ A pane now, not a page. The surface moved into the administration page
+  // as `#admin-section-pco`, which also means its boundary is a `</section>`
+  // rather than a div depth walk.
+  const at = html.indexOf('id="admin-section-pco"');
+  assert.notEqual(at, -1, '#admin-section-pco exists');
+  const start = html.lastIndexOf('<section', at);
+  const end = html.indexOf('</section>', start);
+  assert.notEqual(end, -1, 'the pane closes');
+  return html.slice(start, end + '</section>'.length);
 }
 
 /** Bootstrap's vocabulary, which is what "the old look" means here. */
@@ -330,12 +320,41 @@ test('⛔⛔ and the close button is not restyled back by JavaScript', () => {
   );
 });
 
-test('⚠️ the weekly surface is not capped to a narrow column', () => {
+test('⚠️ the weekly surface is a pane, not a page with a width of its own', () => {
   // ⛔ It was Bootstrap's `.container` — 960px — which on the venue's 1920px
-  // television is half the screen with the rest empty. Prose still wraps:
-  // `.admin-section__lead` carries its own max-width.
+  // television is half the screen with the rest empty. It takes its width from
+  // the administration page now, like every other section; prose still wraps,
+  // because `.admin-section__lead` carries its own max-width.
   const panel = weeklyPanel();
   const opening = panel.slice(0, panel.indexOf('>') + 1);
-  assert.ok(!/\bcontainer\b/.test(opening), `#pco-settings opened as: ${opening}`);
+  assert.ok(!/\bcontainer\b/.test(opening), `the pane opened as: ${opening}`);
+  assert.ok(opening.includes('admin-section--moved'), 'it is a moved section');
   assert.ok(scss.includes('.admin-section__lead'), 'prose keeps its own width');
+});
+
+test('⛔⛔ a pane scrolls instead of squashing the blocks inside it', () => {
+  // A `.admin-section--moved` pane is a column flex container, so its children
+  // are flex items — and a flex item shrinks below its own content before the
+  // container overflows. On a pane taller than the space it has, that silently
+  // COMPRESSES blocks rather than scrolling.
+  //
+  // Measured on the weekly pane: the "Remember each person's position" check
+  // was clamped to 24px while its own grid rows needed 60, and the help text
+  // inside it ran 19px down over the buttons below.
+  //
+  // ⚠️ It only shows on a pane long enough to overflow, which is why eleven
+  // panes looked right and the twelfth did not — the guard is here so the next
+  // long pane does not have to rediscover it.
+  const at = scss.indexOf('.admin-section--moved > * {');
+  assert.notEqual(at, -1, 'pane children must pin their own height');
+
+  const block = scss.slice(at, scss.indexOf('}', at));
+  assert.ok(
+    block.includes('flex-shrink: 0'),
+    'children of a pane must not shrink below their content',
+  );
+  // ⛔ `flex: none` would also stop the shrink and would break the nested rows:
+  // `.row`, `.form-row` and `.input-group` children are handed `flex` values
+  // that have to keep growing and wrapping.
+  assert.ok(!block.includes('flex: none'), 'pin the shrink only, not the whole shorthand');
 });

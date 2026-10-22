@@ -2583,19 +2583,6 @@ async function saveBackgroundDirectory(path, { useDefault = false, defaultMode =
   }
 }
 
-function closePCOView() {
-  const pcoView = document.getElementById('pco-settings');
-  if (pcoView) pcoView.style.display = 'none';
-  const settings = document.querySelector('.settings');
-  if (settings) settings.style.display = 'block';
-  const mb = document.getElementById('micboard');
-  if (mb) mb.style.display = '';
-  micboard.settingsMode = 'CONFIG';
-  micboard.url.background = undefined;
-  invokeUpdateHash();
-  try { initConfigEditor(true); } catch (_) {}
-}
-
 /**
  * Which boards a change here reaches (#116).
  *
@@ -3161,7 +3148,7 @@ export function initConfigEditor(force = false) {
   applyScreensToForm(micboard.config || {});
 
   // ⛔ Guarded, like #save below. This function runs again on every settings
-  // open and on closePCOView(), and an unguarded binding stacked one more
+  // open and on leaving the pane, and an unguarded binding stacked one more
   // listener per visit -- so one click eventually added every discovered
   // channel several times over. Same shape as the bug that destroyed a config.
   const addDisc = document.getElementById('add-discovered');
@@ -3224,7 +3211,7 @@ export function initConfigEditor(force = false) {
 
   // #save lives in the served markup, so it outlives this function -- and this
   // function runs again every time the settings view is opened, and again on
-  // closePCOView(). Binding unconditionally stacked one more click listener per
+  // leaving the pane. Binding unconditionally stacked one more click listener per
   // visit, and a single click then fired that many concurrent POSTs to
   // /api/config. Three of them arriving together is what destroyed an
   // operator's config.json on site. Same dataset.bound guard the other
@@ -3397,17 +3384,18 @@ function populatePCOFormFromServer() {
 /**
  * How Planning Center gets opened.
  *
- * ⛔ The delegated click on `#go-pco` is gone with the menu bar (#188). The
- * administration page's route dispatches `wirelessboard:open-pco`, so the event
- * is now the only way in -- and `showPCOView` guards the display-only lock
- * itself, which is what makes that safe.
+ * ⛔⛔ These events no longer draw anything themselves. The weekly surface is
+ * a pane on the administration page, so opening it means asking that page to
+ * show the `pco` section -- which `app.js` does, because it is the module that
+ * owns the page. This file still owns what goes *in* the pane
+ * (`fillPcoWeekly`), which is the same split every other moved section uses.
  *
- * ⚠️ `micboard:open-pco` is kept: it is the pre-fork name and something outside
- * this repository may still fire it.
+ * ⚠️ `micboard:open-pco` is kept: it is the pre-fork name and something
+ * outside this repository may still fire it.
  */
 export function bindPcoNav() {
-  window.addEventListener('micboard:open-pco', showPCOView);
-  window.addEventListener('wirelessboard:open-pco', showPCOView);
+  // Nothing to bind here any more. Kept as the documented seam, and because
+  // `app.js` calls it during start-up; the listeners live beside the page.
 }
 
 // Planning Center carries the mic name and number on the team position, so the
@@ -4451,7 +4439,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-function showPCOView() {
+export function fillPcoWeekly() {
   // ⛔ A locked device must not reach Planning Center either: a sync rewrites
   // every slot name on every board (#116).
   if (isLocked(micboard.viewerLock)) {
@@ -4459,25 +4447,16 @@ function showPCOView() {
     return;
   }
   stopLogAutoRefresh(true);
-  micboard.settingsMode = 'PCO';
-  micboard.url.background = undefined;
-  invokeUpdateHash();
-  const mb = document.getElementById('micboard');
-  if (mb) mb.style.display = 'none';
-  const settings = document.querySelector('.settings');
-  if (settings) settings.style.display = 'none';
-  const pcoView = document.getElementById('pco-settings');
-  if (pcoView) pcoView.style.display = 'block';
-  // ⛔⛔ This used to force the button's text and Bootstrap classes on every
-  // open -- `textContent = 'Close'`, `classList.add('btn-outline-secondary')`
-  // -- which meant the markup could not restyle it: whatever the page said,
-  // opening the view put the old look back. It only renames the legacy
-  // `pco-back` id now, and leaves appearance to the stylesheet.
-  const backBtn = document.getElementById('pco-close') || document.getElementById('pco-back');
-  if (backBtn) {
-    backBtn.id = 'pco-close';
-  }
-  try { document.getElementById('pco-settings').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+  // ⛔⛔ No view switching left. This used to set `settingsMode = 'PCO'`, hide
+  // the board, show a full-screen `#pco-settings`, rewrite the hash to
+  // `#pco=true` and force the close button's Bootstrap classes back on.
+  //
+  // The weekly surface is a pane on the administration page now, like the
+  // other eleven, so the page decides what is on screen and this only fills
+  // it. Everything above was one item in a list of six navigating differently
+  // from the rest -- which is why its look kept drifting away from the page
+  // around it, and why it was restyled twice before anyone asked why it was a
+  // page at all.
   const p = micboard.config.pco || {};
   const eEnabled = document.getElementById('pco-enabled');
   if (eEnabled) eEnabled.checked = !!p.enabled;
@@ -5494,10 +5473,6 @@ document.addEventListener('change', (e) => {
 document.addEventListener('click', (e) => {
   const t = e.target;
   if (!t) return;
-  if (t.id === 'pco-close') {
-    e.preventDefault();
-    closePCOView();
-  }
   if (t.id === 'pco-apply-assignments') {
     e.preventDefault();
     applyAssignmentsFromSelects();

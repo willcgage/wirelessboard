@@ -1826,7 +1826,7 @@ p.device-name {
  * --bs-secondary-color. Both are near-black, which is invisible against these
  * panels: an untreated label measured 1.36:1 against the background, where
  * WCAG AA asks for 4.5:1. Panels had been growing their own override one at a
- * time, at three different opacities, and #pco-settings and #background-settings
+ * time, at three different opacities, and #admin-section-pco and #background-settings
  * never got one at all — so this is the single place that sets them.
  *
  * .text-muted needs !important only because Bootstrap's own utility carries
@@ -1837,7 +1837,7 @@ p.device-name {
 .settings,
 .log-settings,
 .cfg-row,
-#pco-settings,
+#admin-section-pco,
 #background-settings,
 #discovery-settings-panel {
   .form-label,
@@ -3360,6 +3360,24 @@ body.live-strip-bottom .rotation-bar {
   padding-right: 4px;
 }
 
+// ⛔⛔ A pane is a COLUMN FLEX container, so its children are flex items --
+// and a flex item shrinks below its own content before the container ever
+// overflows. On a pane taller than the space it has, that silently compresses
+// blocks instead of scrolling: the "Remember each person's position" check on
+// the weekly surface was clamped to 24px while its own grid rows needed 60,
+// and the help text inside it ran 19px down over the buttons below.
+//
+// ⚠️ It only shows on a pane long enough to overflow, which is why eleven
+// panes looked fine and the twelfth did not. The container already says
+// `overflow-y: auto`; this is what lets it do that job.
+//
+// ⛔ `flex-shrink` alone, not `flex: none` -- the nested rules below hand
+// `flex` to children of `.row`, `.form-row` and `.input-group`, and those must
+// keep growing and wrapping as they do.
+.admin-section--moved > * {
+  flex-shrink: 0;
+}
+
 .admin-section__head {
   display: flex;
   flex-direction: column;
@@ -3658,10 +3676,14 @@ body.live-strip-bottom .rotation-bar {
 // ---------------------------------------------------------------------------
 // The Planning Center panes, in the 2.0 look (#222)
 //
-// ⛔⛔ Scoped to `.admin-section--moved`, never to the classes themselves. The
-// weekly surface -- choose a plan, preview, sync -- still lives in
-// `#pco-settings` and still uses every one of these classes; restyling them
-// globally would silently redraw a screen this change never looked at.
+// ⛔ Scoped to `.admin-section--moved`. That scoping was first written to
+// protect the weekly surface, which used to live outside this page in
+// `#pco-settings` and wear every one of these classes unrestyled -- restyling
+// them globally would have silently redrawn a screen nobody had looked at.
+//
+// ✅ That screen is a pane now and wears `--moved` itself, so the scope no
+// longer divides anything. It stays because it is the honest statement of what
+// these rules are for: sections of this page, not every form in the build.
 //
 // ⭐ Re-laid-out rather than rewritten, which is the pattern #222 already set
 // for the screens editor: the markup is `config.js`'s and rewriting it would
@@ -5024,28 +5046,3 @@ body.statusbar-off .rotation-bar {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
 }
 
-// ---------------------------------------------------------------------------
-// The weekly surface's own frame (#303 follow-up)
-//
-// ⛔⛔ It was Bootstrap's `.container`, which caps at 960px. On the venue's
-// 1920px television that is half the screen, with the rest empty — the narrow
-// column photographed on the wall. The administration page beside it goes edge
-// to edge, and a board is read from a few feet away.
-//
-// ⚠️ Nothing here stretches prose: `.admin-section__lead` carries its own
-// `max-width: 78ch`, so the explanations stay readable while the tables and
-// the plan picker get the width they actually need.
-// ---------------------------------------------------------------------------
-.pco-week {
-  // The same gutters as `.admin-panel`, which is the surface this sits beside
-  // in a reader's memory even though it is reached by its own route.
-  padding:
-    calc(18px + env(safe-area-inset-top, 0px))
-    calc(22px + env(safe-area-inset-right, 0px))
-    calc(18px + env(safe-area-inset-bottom, 0px))
-    calc(22px + env(safe-area-inset-left, 0px));
-
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
