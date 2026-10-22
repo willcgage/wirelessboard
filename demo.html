@@ -32,7 +32,6 @@
     <style>
       /* Hide secondary views immediately to avoid startup flash */
       .settings { display: none; }
-      #pco-settings { display: none; }
       #background-settings { display: none; }
     </style>
   </head>
@@ -806,6 +805,134 @@
           <span id="pco-live-status" class="admin-status" role="status" aria-live="polite"></span>
         </div>
       </section>
+      <!-- ⛔⛔ The weekly surface, as a pane like the other eleven (#222's
+           direction, finished here).
+
+           It was the one Planning Center item NOT in `IN_PAGE_ITEMS`, so it
+           handed over to a route that hid the board and took the whole
+           screen -- a second kind of navigation for one item in a list of
+           six, and the reason it kept drifting out of the page's look.
+
+           ⭐ Last in the rail and last here, so the markup reads in the
+           order the rail does. -->
+      <section class="admin-section admin-section--moved" id="admin-section-pco" hidden>
+        <div class="admin-section__head">
+          <h3 class="admin-section__title">Choose a plan, then preview or sync it</h3>
+          <!-- ⛔ The old copy read "The only part most weeks need. Everything
+               else is under Setup below." Both halves are now wrong: Setup is
+               not below, it is the rail on the administration page, and this
+               is no longer the first thing in that list -- it is the last,
+               after the four sections it depends on. -->
+          <p class="admin-section__lead">Everything this needs is set under Planning
+            Center on the administration page. This is where the week is run.</p>
+        </div>
+          <form id="pco-form" autocomplete="off" novalidate>
+            <div class="row g-2 align-items-end">
+              <div class="col-md-8 col-12">
+                <label for="pco-plan-select" class="form-label">Plan</label>
+                <div class="d-flex gap-2">
+                  <select class="form-select" id="pco-plan-select">
+                    <option value="">Select a plan...</option>
+                  </select>
+                  <button type="button" id="pco-refresh-plans" class="admin-btn">Refresh Plans</button>
+                </div>
+              </div>
+            </div>
+            <div class="admin-actions">
+              <button type="button" id="pco-preview-sync" class="admin-btn admin-btn--primary">Preview Sync</button>
+              <button type="button" id="pco-sync" class="admin-btn">Sync Now</button>
+            </div>
+            <!-- ⭐ The diff lands here, beside the button that produces it. It used to
+                 render at the bottom of the page under a heading called "PCO API Log",
+                 which is where you put something nobody is expected to read (#120). -->
+          <div id="pco-sync-summary" class="mb-2"></div>
+          <div class="table-responsive" id="pco-assignments-table" style="display:none;">
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr><th>Plan position</th><th>Person</th><th>Team</th><th>Slots</th><th>Matched by</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="pco-conflicts" class="admin-section__lead"></div>
+          <div id="pco-unmatched" class="admin-section__lead"></div>
+          </form>
+
+        <div class="admin-section__head admin-section__head--sub">
+          <h4 class="admin-section__subtitle">People on this plan</h4>
+          <p class="admin-section__lead">Everyone on the selected plan who is on a ticked
+            team. Available once a plan is chosen.</p>
+        </div>
+        <div class="admin-actions">
+          <button type="button" id="pco-load-people" class="admin-btn" disabled>Load People</button>
+        </div>
+          <div id="pco-people-summary" class="mb-2"></div>
+          <div class="table-responsive" id="pco-people-table" style="display:none;">
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr><th>Name</th><th>Team</th><th>Plan position</th><th>Note</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+        <div class="admin-section__head admin-section__head--sub">
+          <h4 class="admin-section__subtitle">Assign people to slots</h4>
+        </div>
+          <div id="pco-assign-summary"></div>
+          <div class="table-responsive" id="pco-assign-table" style="display:none;">
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Role</th><th>Person</th><th>Select Person</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="form-check mt-3">
+            <input type="checkbox" class="form-check-input" id="pco-remember-positions" checked>
+            <label class="form-check-label" for="pco-remember-positions">
+              Remember each person&rsquo;s position on the slot
+            </label>
+            <div class="form-text">
+              Writes the Planning Center position &mdash; &ldquo;Electric Guitar 3&rdquo;,
+              not the person&rsquo;s name &mdash; into the slot&rsquo;s ID, so next
+              week&rsquo;s plan matches that slot on its own. Slots that already
+              have an ID are left alone.
+            </div>
+          </div>
+          <div class="admin-actions">
+            <button type="button" id="pco-autofill-assignments" class="admin-btn">Auto-Fill From Notes</button>
+            <button type="button" id="pco-apply-assignments" class="admin-btn admin-btn--primary">Apply Assignments</button>
+            <!-- Renamed in #135. It was "Clear Selections", which sat a few
+                 pixels from a button that clears the board itself -- two very
+                 different things reading almost the same. -->
+            <button type="button" id="pco-clear-assignment-selects" class="admin-btn">Reset Dropdowns</button>
+          </div>
+          <!-- Taking people off slots, which until #135 meant a trip to the Slot
+               Configuration page to empty one field and save everything. -->
+          <!-- ⛔ The one destructive control here, and the only `--danger` on
+               this screen: it takes everybody off every slot. -->
+          <div class="admin-actions admin-section__head--sub">
+            <button type="button" id="pco-clear-assignments" class="admin-btn admin-btn--danger">
+              Clear all assignments
+            </button>
+            <span id="pco-clear-summary" class="admin-status"></span>
+          </div>
+          <div class="admin-section__lead">
+            For moving to the next plan. Takes everybody off every slot on the board &mdash;
+            it says how many and asks first. Roles are kept, so next week&rsquo;s plan still
+            matches. To clear one slot, pick &ldquo;clear this slot&rdquo; in its dropdown and
+            apply.
+          </div>
+
+        <div class="admin-section__head admin-section__head--sub">
+          <h4 class="admin-section__subtitle">Planning Center log</h4>
+          <p class="admin-section__lead">What was asked of Planning Center, and what came
+            back. Worth reading when a sync did not do what you expected.</p>
+        </div>
+        <div id="pco-log-entries" class="pco-log"></div>
+        <pre id="pco-sync-json" class="pco-log__json"></pre>
+      </section>
       <section class="admin-section admin-section--moved" id="admin-section-logs" hidden>
         <div class="admin-section__head">
           <h3 class="admin-section__title">Logs</h3>
@@ -1047,144 +1174,7 @@
     </div>
   </div>
 
-  <!-- ⛔⛔ The weekly surface, in the 2.0 look (#303 follow-up).
-
-       #222 restyled eleven panes and deliberately scoped every rule to
-       `.admin-section--moved`, saying so out loud: "the weekly surface still
-       lives in `#pco-settings` and still uses every one of these classes;
-       restyling them globally would silently redraw a screen this change
-       never looked at." Somebody has now looked at it -- on the wall, where it
-       read as a different application one tap from the board.
-
-       ⭐ Re-laid-out, not rewritten: the ids and the logic are untouched, so
-       `config.js` still drives every control. Only the frame changes, which is
-       the pattern #222 already set for the screens editor. -->
-  <div class="pco-week" id="pco-settings">
-    <div class="admin-head">
-      <h2 class="admin-title">This week&rsquo;s plan</h2>
-      <button type="button" id="pco-close" class="admin-close"
-              aria-label="Close this week&rsquo;s plan">&times;</button>
-    </div>
-    <div class="admin-section admin-section--moved">
-        <div class="admin-section__head">
-          <h3 class="admin-section__title">Choose a plan, then preview or sync it</h3>
-          <!-- ⛔ The old copy read "The only part most weeks need. Everything
-               else is under Setup below." Both halves are now wrong: Setup is
-               not below, it is the rail on the administration page, and this
-               is no longer the first thing in that list -- it is the last,
-               after the four sections it depends on. -->
-          <p class="admin-section__lead">Everything this needs is set under Planning
-            Center on the administration page. This is where the week is run.</p>
-        </div>
-          <form id="pco-form" autocomplete="off" novalidate>
-            <div class="row g-2 align-items-end">
-              <div class="col-md-8 col-12">
-                <label for="pco-plan-select" class="form-label">Plan</label>
-                <div class="d-flex gap-2">
-                  <select class="form-select" id="pco-plan-select">
-                    <option value="">Select a plan...</option>
-                  </select>
-                  <button type="button" id="pco-refresh-plans" class="admin-btn">Refresh Plans</button>
-                </div>
-              </div>
-            </div>
-            <div class="admin-actions">
-              <button type="button" id="pco-preview-sync" class="admin-btn admin-btn--primary">Preview Sync</button>
-              <button type="button" id="pco-sync" class="admin-btn">Sync Now</button>
-            </div>
-            <!-- ⭐ The diff lands here, beside the button that produces it. It used to
-                 render at the bottom of the page under a heading called "PCO API Log",
-                 which is where you put something nobody is expected to read (#120). -->
-          <div id="pco-sync-summary" class="mb-2"></div>
-          <div class="table-responsive" id="pco-assignments-table" style="display:none;">
-            <table class="table table-sm table-striped">
-              <thead>
-                <tr><th>Plan position</th><th>Person</th><th>Team</th><th>Slots</th><th>Matched by</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div id="pco-conflicts" class="admin-section__lead"></div>
-          <div id="pco-unmatched" class="admin-section__lead"></div>
-          </form>
-
-        <div class="admin-section__head admin-section__head--sub">
-          <h4 class="admin-section__subtitle">People on this plan</h4>
-          <p class="admin-section__lead">Everyone on the selected plan who is on a ticked
-            team. Available once a plan is chosen.</p>
-        </div>
-        <div class="admin-actions">
-          <button type="button" id="pco-load-people" class="admin-btn" disabled>Load People</button>
-        </div>
-          <div id="pco-people-summary" class="mb-2"></div>
-          <div class="table-responsive" id="pco-people-table" style="display:none;">
-            <table class="table table-sm table-striped">
-              <thead>
-                <tr><th>Name</th><th>Team</th><th>Plan position</th><th>Note</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-
-        <div class="admin-section__head admin-section__head--sub">
-          <h4 class="admin-section__subtitle">Assign people to slots</h4>
-        </div>
-          <div id="pco-assign-summary"></div>
-          <div class="table-responsive" id="pco-assign-table" style="display:none;">
-            <table class="table table-sm table-striped">
-              <thead>
-                <tr><th>Slot</th><th>Device</th><th>Device Name</th><th>Role</th><th>Person</th><th>Select Person</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div class="form-check mt-3">
-            <input type="checkbox" class="form-check-input" id="pco-remember-positions" checked>
-            <label class="form-check-label" for="pco-remember-positions">
-              Remember each person&rsquo;s position on the slot
-            </label>
-            <div class="form-text">
-              Writes the Planning Center position &mdash; &ldquo;Electric Guitar 3&rdquo;,
-              not the person&rsquo;s name &mdash; into the slot&rsquo;s ID, so next
-              week&rsquo;s plan matches that slot on its own. Slots that already
-              have an ID are left alone.
-            </div>
-          </div>
-          <div class="admin-actions">
-            <button type="button" id="pco-autofill-assignments" class="admin-btn">Auto-Fill From Notes</button>
-            <button type="button" id="pco-apply-assignments" class="admin-btn admin-btn--primary">Apply Assignments</button>
-            <!-- Renamed in #135. It was "Clear Selections", which sat a few
-                 pixels from a button that clears the board itself -- two very
-                 different things reading almost the same. -->
-            <button type="button" id="pco-clear-assignment-selects" class="admin-btn">Reset Dropdowns</button>
-          </div>
-          <!-- Taking people off slots, which until #135 meant a trip to the Slot
-               Configuration page to empty one field and save everything. -->
-          <!-- ⛔ The one destructive control here, and the only `--danger` on
-               this screen: it takes everybody off every slot. -->
-          <div class="admin-actions admin-section__head--sub">
-            <button type="button" id="pco-clear-assignments" class="admin-btn admin-btn--danger">
-              Clear all assignments
-            </button>
-            <span id="pco-clear-summary" class="admin-status"></span>
-          </div>
-          <div class="admin-section__lead">
-            For moving to the next plan. Takes everybody off every slot on the board &mdash;
-            it says how many and asks first. Roles are kept, so next week&rsquo;s plan still
-            matches. To clear one slot, pick &ldquo;clear this slot&rdquo; in its dropdown and
-            apply.
-          </div>
-
-        <div class="admin-section__head admin-section__head--sub">
-          <h4 class="admin-section__subtitle">Planning Center log</h4>
-          <p class="admin-section__lead">What was asked of Planning Center, and what came
-            back. Worth reading when a sync did not do what you expected.</p>
-        </div>
-        <div id="pco-log-entries" class="pco-log"></div>
-        <pre id="pco-sync-json" class="pco-log__json"></pre>
-    </div>
-  </div>
-    <div class="container-fluid fullHeight deskmode" id="container">
+      <div class="container-fluid fullHeight deskmode" id="container">
 
       <div id="qr-modal" class="modal fade bd-example-modal-lg" tabindex="-1" role="dialog" aria-labelledby="myLargeModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">

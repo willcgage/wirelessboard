@@ -92,9 +92,9 @@ export const SECTIONS = [
       // not be synced. Reported from the venue as "You have no preview button,
       // nor do you have a Sync button!", and the only way in was a URL.
       //
-      // ⚠️ The id is `pco` because routes are keyed by item id and that
-      // route was already registered. It is the one Planning Center item NOT
-      // in `IN_PAGE_ITEMS`, which is exactly what sends it to the route.
+      // ⚠️ The id is `pco`, which is also what the `#pco=true` deep link and
+      // the plan-change notice open. It is in `IN_PAGE_ITEMS` now and draws as
+      // a pane like every other item on this rail.
       ...PCO_SECTIONS.map((section) => ({
         id: section.id,
         label: section.label,
@@ -551,6 +551,12 @@ export function resetAdminRoutes() {
  */
 export const IN_PAGE_ITEMS = [
   'about', 'screens', 'slots', 'logs', 'backgrounds', 'receivers', 'groups',
+  // ⛔⛔ `pco` -- the weekly surface -- is in the list now, which is the last
+  // of #222's moves. It was the one item that still handed over to a route
+  // that hid the board and took the whole screen: a second kind of navigation
+  // for one entry in a list of six, and the reason its look kept drifting away
+  // from the page around it.
+  'pco',
   ...PCO_SECTION_IDS,
 ];
 

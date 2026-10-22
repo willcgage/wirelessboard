@@ -15,15 +15,24 @@ import {
   isFullscreen, setFullscreen,
 } from './display.js';
 import { drawerBits, drawerModeWith, DRAWER_MODES } from './panel-controls.mjs';
-import { registerAdminRoute, runAdminRoute } from './admin-page.mjs';
+import { registerAdminRoute } from './admin-page.mjs';
 import { initAdminPage, openAdminPage } from './admin-page.js';
 import { initViewPanel, toggleViewPanel } from './view-panel.js';
 import { setTimeMode } from './signal-view.js';
 import {
-  initConfigEditor, bindPcoNav, bindPcoHandlers, bindScreenHandlers,
-  configureConfigModule, scheduleBackgroundFilenameGuide, refreshScreensEditor,
-  showLogsSection, hideLogsSection, showBackgroundsSection, showConfigHealth,
+  initConfigEditor,
+  bindPcoNav,
+  bindPcoHandlers,
+  bindScreenHandlers,
+  configureConfigModule,
+  scheduleBackgroundFilenameGuide,
+  refreshScreensEditor,
+  showLogsSection,
+  hideLogsSection,
+  showBackgroundsSection,
+  showConfigHealth,
   fillPcoSection,
+  fillPcoWeekly,
 } from './config.js';
 import { startTvLayoutWatchers } from './tv-layout.js';
 import {
@@ -263,10 +272,14 @@ function mapGroups() {
 
   // Ensure single-view visibility helper
   /**
-   * ⛔ Two views now, not three. The configuration pane was retired by #222 --
-   * everything it held is a section of the administration page, which is an
-   * overlay and hides nothing underneath it. So this chooses between Planning
-   * Center and the board.
+   * ⛔ ONE view now, not two. #222 retired the configuration pane and the
+   * weekly Planning Center surface is a pane on the administration page, so
+   * every secondary surface is an overlay that hides nothing underneath it.
+   * There is nothing left to choose between: the board is always the view.
+   *
+   * ⚠️ Kept rather than deleted because the callers are about *returning* to
+   * the board — picking a preset, and start-up — and a named "show the board"
+   * is clearer at those call sites than an inlined property write.
    *
    * ⚠️ The log auto-refresh stop that used to live in the `wasConfig` branch
    * is not lost: the administration page releases a section when it closes,
@@ -274,15 +287,12 @@ function mapGroups() {
    */
   function resetViews() {
     const mb = document.getElementById('micboard');
-    const pcoView = document.getElementById('pco-settings');
-    const wantPCO = (micboard.settingsMode === 'PCO' || micboard.url.pco === 'true');
     // ⛔ `hidden`, not an inline `display`. Writing `display: grid` here put an
     // inline style on the board that beat every stylesheet rule -- so Rack
     // could not lay its channels out as a list however the stylesheet asked
     // (#233). The base rule already says `grid`; what this has to decide is
     // whether the board is on screen, not how it is arranged.
-    if (mb) mb.hidden = wantPCO;
-    if (pcoView) pcoView.style.display = wantPCO ? 'block' : 'none';
+    if (mb) mb.hidden = false;
   }
 
   /**
@@ -309,11 +319,16 @@ function mapGroups() {
   // Logs, so the rail renders it in place rather than handing over. The editor
   // that used to take the whole board is gone with it (`slots-table.js`).
   registerAdminRoute('demo', toggleDemoMode);
-  // ⭐ `showPCOView` guards the lock itself, so the event route is as safe as
-  // the menu item and needs no second check here.
-  registerAdminRoute('pco', () => {
-    window.dispatchEvent(new Event('wirelessboard:open-pco'));
-  });
+  // ⛔⛔ No route for `pco` any more. It is in `IN_PAGE_ITEMS`, so the rail
+  // draws it as a pane; a registered route would be unreachable, and
+  // `admin-page.test.mjs` fails on a route with no item.
+  //
+  // ⭐ The legacy events still open it, for the `#pco=true` deep link and the
+  // plan-change notice. They ask the PAGE to show the section rather than
+  // drawing anything themselves.
+  const openWeeklyPlan = () => openAdminPage('pco');
+  window.addEventListener('micboard:open-pco', openWeeklyPlan);
+  window.addEventListener('wirelessboard:open-pco', openWeeklyPlan);
 
   // ⛔ The one control a board can always reach (#110, #111). It opens the view
   // panel, which carries the switch for the bar itself -- so hiding the bar can
@@ -597,8 +612,6 @@ export function updateHash() {
     } else {
       hash = '#settings=true';
     }
-  } else if (micboard.settingsMode === 'PCO') {
-    hash = '#pco=true';
   }
   hash = hash.replace('&', '');
   window.history.replaceState(undefined, undefined, hash);
@@ -744,9 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Early guard: hide secondary views before any rendering
   try {
     const s = document.querySelector('.settings');
-    const p = document.getElementById('pco-settings');
     if (s) s.style.display = 'none';
-    if (p) p.style.display = 'none';
   } catch (_) {}
   keybindings();
   // Bind PCO navbar and handlers
@@ -772,6 +783,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // ⭐ #179: five Planning Center sections, each filled from the stored
         // configuration when it is opened and each saving only its own keys.
         if (id.startsWith('pco-')) fillPcoSection(id);
+        // ⭐ The weekly surface, filled the same way the other eleven are. It
+        // used to fill itself as a side effect of switching the whole view.
+        if (id === 'pco') fillPcoWeekly();
       },
       // ⛔ The other edge, and the reason it exists: the log viewer follows the
       // file on a timer. A section that is hidden, or a page that is closed,
@@ -852,22 +866,17 @@ document.addEventListener('DOMContentLoaded', () => {
       updateHash();
       try {
         const mb = document.getElementById('micboard');
-        const pcoView = document.getElementById('pco-settings');
         if (mb) mb.style.display = 'none';
-        if (pcoView) pcoView.style.display = 'none';
         const settings = document.querySelector('.settings');
         if (settings?.style) settings.style.display = 'block';
       } catch (_) {}
     }, 100);
   }
   if (micboard.url.pco === 'true' && !isLocked(micboard.viewerLock)) {
-    setTimeout(() => {
-      // ⛔ The registered route, not a click on a menu item -- #188 retired
-      // the bar, and `showPCOView` guards the lock itself.
-      if (!runAdminRoute('pco')) {
-        window.dispatchEvent(new Event('wirelessboard:open-pco'));
-      }
-    }, 100);
+    // ⭐ `#pco=true` opens the administration page straight onto the weekly
+    // pane, the same as `#settings=logs` does for Logs. It used to run a
+    // route that replaced the whole view.
+    setTimeout(() => openAdminPage('pco'), 100);
   }
   // ⚠️ `#background=true` named a view of its own until #222 moved the pane
   // into the administration page. Answered where it now lives, rather than
