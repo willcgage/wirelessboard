@@ -10,6 +10,32 @@
 ### Fixed
 - _Nothing yet._
 
+## [2.0.0-beta.23] - 2026-10-22
+
+Two things the board was saying that were not true, both found by reading the board in the
+Green Room while it was running.
+
+### Fixed
+- **The board no longer says "Cannot reach Planning Center" when it can.** The service strip
+  asks Planning Center where the service has got to. On a plan nobody has started Live on —
+  which is most plans, most of the time — Planning Center answers "there is no live position",
+  and the board reported that as a failure to reach it. It said so on the wall, refreshed every
+  fifteen seconds, and wrote a warning into the log each time: 129 of them in eighteen minutes.
+
+  It now says **"Live not running"**, which is what is actually true, and the log stays quiet
+  about it.
+
+  ⚠️ A real problem — a rejected token, a network that is down — still says "Cannot reach
+  Planning Center". That distinction is the whole point of the strip.
+
+- **A microphone switched off lets go of the board after two minutes.** It used to hold its last
+  battery and status for **thirty**, so a channel somebody had turned off half an hour ago could
+  still be showing a good battery. Reported from the venue as a channel that looked stuck.
+
+  ⚠️ The pause is deliberate and still there: switch a pack off between segments and the name and
+  status stay up, so a board does not blank mid-service every time somebody sets a microphone
+  down. Two minutes covers that; thirty covered the rest of the evening as well.
+
 ## [2.0.0-beta.22] - 2026-10-21
 
 The last Planning Center screen that still looked like the old application.
