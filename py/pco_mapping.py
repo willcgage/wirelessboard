@@ -17,7 +17,10 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 # ⚠️ Duplicates knowledge the vendor adapter now holds -- `device_class(type)`
 # answers this -- and every new model has to be added here too or PCO silently
 # stops matching it. Folding the two together is part of #91.
-MIC_SLOT_TYPES = frozenset({'uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus'})
+MIC_SLOT_TYPES = frozenset({
+    'uhfr', 'qlxd', 'ulxd', 'axtd', 'slxd', 'slxdplus',
+    'atw-r5220', 'atw-r5220dan', 'atw-dr3120', 'atw-dr3120dan', 'atw-r3210n',
+})
 
 # Shure PSM1000 transmitter -- an in-ear monitor channel.
 IEM_SLOT_TYPES = frozenset({'p10t'})
