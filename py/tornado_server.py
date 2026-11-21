@@ -10,6 +10,7 @@ import time
 from typing import Any, cast, Iterable
 
 import tornado.websocket as websocket
+from tornado.iostream import StreamClosedError
 import tornado.web as web
 import tornado.ioloop as ioloop
 import tornado.escape as escape
@@ -71,13 +72,47 @@ def background_file_lists():
     the same thread that serves the whole board -- the fault this project has
     now hit three times. The folder is usually local and fast, but it can be a
     network share, and there is no reason to walk it once per format.
+
+    ⛔⛔ And it survives the folder blinking out (#183). At the venue the folder
+    is a Google Drive mount, which disappears for a few seconds now and then --
+    seen twice in one week, three failed listings a second apart. Every board
+    that loaded in that window was handed EMPTY lists and showed no faces until
+    somebody reloaded it. A folder that was there a moment ago is still the
+    folder; its last listing is a far better answer than nothing.
+
+    ⚠️ Keyed by path, so pointing the board at a different folder never serves
+    the old one's files. A folder that has never been listed still raises, and
+    `_section` reports it exactly as before.
     """
-    dir_list = os.listdir(config.get_gif_dir())
-    return {
+    folder = config.get_gif_dir()
+    try:
+        dir_list = os.listdir(folder)
+    except OSError as exc:
+        last = _LAST_MEDIA.get(folder)
+        if last is None:
+            raise
+        if not _MEDIA_OUTAGE.get(folder):
+            logger.warning('The background folder could not be read (%s); serving the '
+                           'last listing of it until it is back', exc)
+            _MEDIA_OUTAGE[folder] = True
+        return {kind: list(files) for kind, files in last.items()}
+
+    media = {
         'gif': file_list('.gif', dir_list),
         'image': file_list(IMAGE_EXTENSIONS, dir_list),
         'video': file_list(VIDEO_EXTENSIONS, dir_list),
     }
+    if _MEDIA_OUTAGE.pop(folder, None):
+        logger.info('The background folder can be read again')
+    _LAST_MEDIA.clear()
+    _LAST_MEDIA[folder] = {kind: list(files) for kind, files in media.items()}
+    return media
+
+
+# The last good listing of the background folder, by path (#183).
+_LAST_MEDIA = {}
+# Whether an outage has been said already: a long one is one line, not one a request.
+_MEDIA_OUTAGE = {}
 
 # The last resolved address. Written only by the background refresh below;
 # localURL() reads it and never resolves anything itself.
@@ -402,6 +437,16 @@ class JsonHandler(web.RequestHandler):
         self.set_header('Content-Type', 'application/json')
         self.set_status(200)
 
+def _consume_send_result(sent):
+    """Read a sent frame's outcome, so a closed board is not an ERROR."""
+    if sent.cancelled():
+        return
+    exc = sent.exception()
+    if exc is None or isinstance(exc, (websocket.WebSocketClosedError, StreamClosedError)):
+        return
+    logger.warning('WebSocket send failed: %s', exc)
+
+
 class SocketHandler(websocket.WebSocketHandler):
     clients = set()
 
@@ -412,7 +457,8 @@ class SocketHandler(websocket.WebSocketHandler):
         self.clients.add(self)
 
     def on_close(self):
-        self.clients.remove(self)
+        # ⚠️ `discard`: a close can be reported for a socket already gone.
+        self.clients.discard(self)
 
     @classmethod
     def viewer_count(cls):
@@ -431,11 +477,31 @@ class SocketHandler(websocket.WebSocketHandler):
 
     @classmethod
     def broadcast(cls, data):
-        for c in cls.clients:
+        """Send one update to every connected board.
+
+        ⛔⛔ `write_message` returns a future, and a board that goes away while
+        a frame is in flight fails THAT future, not the call. Nothing read it,
+        so asyncio logged every one as "Task exception was never retrieved"
+        with a traceback: 815 ERROR entries in three days on the venue board,
+        burying anything real. A board closing is ordinary -- a phone locks, a
+        tab is shut -- so it is consumed quietly; anything else is still said.
+
+        ⚠️ Iterates a copy: a close can be handled during the loop and would
+        change the set underneath it.
+        """
+        for c in list(cls.clients):
+            conn = getattr(c, 'ws_connection', None)
+            if conn is None or conn.is_closing():
+                continue
             try:
-                c.write_message(data)
+                sent = c.write_message(data)
+            except websocket.WebSocketClosedError:
+                continue
             except Exception as exc:
                 logger.warning('WebSocket broadcast failed: %s', exc)
+                continue
+            if sent is not None and hasattr(sent, 'add_done_callback'):
+                sent.add_done_callback(_consume_send_result)
 
     @classmethod
     def ws_dump(cls):
