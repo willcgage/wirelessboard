@@ -2531,13 +2531,28 @@ def run_plan_watch() -> Dict[str, Any]:
 
     result = check_active_plan()
     if result.get('ok') and result.get('known'):
+        was_reported = (
+            _PLAN_WATCH.get('changed')
+            and _PLAN_WATCH.get('plan_id') == result.get('plan_id')
+            and _PLAN_WATCH.get('updated_at') == result.get('updated_at')
+        )
         _PLAN_WATCH.clear()
         _PLAN_WATCH.update({
             'changed': bool(result.get('changed')),
             'plan_id': result.get('plan_id'),
+            # ⛔⛔ The automatic sync identifies a change by plan AND this
+            # (`pco_auto_sync.attempt_key`). It was never stored, so every
+            # check on the venue board ended in "the change could not be
+            # identified" and automatic sync never once ran -- while the board
+            # said "changed" for 41 hours. The rule's tests handed it a status
+            # with the field filled in, so they could not see it was missing.
+            'updated_at': result.get('updated_at'),
             'checked_at': time.time(),
         })
-        if result.get('changed'):
+        # ⚠️ Once per change, not once per check. Logged every pass it was 986
+        # of the 1,000 lines the venue's log keeps, and pushed out everything
+        # else -- including any record of the syncs it was warning about.
+        if result.get('changed') and not was_reported:
             logger.info(
                 'PCO: plan %s has changed in Planning Center since it was synced',
                 result.get('plan_id'),

@@ -16,6 +16,13 @@
   the last fallback asked Planning Center for plans with no date filter, which lists them oldest
   first, so a sync could quietly load the church's very first plan. It now says no upcoming plan
   was found.
+- **Automatic sync actually runs.** It never had: the watcher did not keep the version of the
+  plan it saw, and the automatic sync needs that to know which change it is acting on. On the
+  venue board a plan read "changed in Planning Center" for 41 hours with automatic sync on, and
+  nothing synced.
+- **"The plan has changed" is logged once per change, not on every check.** Repeated every two
+  and a half minutes, it filled 986 of the 1,000 lines the log keeps and pushed out everything
+  else.
 - **The board backs off when Planning Center says "too many requests".** A 429 used to be just
   another failed request: the roster search kept going through every service type, keeping the
   account limited for longer, and the operator could be told nobody was scheduled. The board now
