@@ -8,6 +8,12 @@
 - _Nothing yet._
 
 ### Fixed
+- **The live strip asks Planning Center for the live position at the address Planning Center
+  documents.** It never showed what was live, even with somebody driving Live. It asked for
+  `plans/{plan}/live/current_item_time`, but the item times sit under the plan's Live record
+  (`.../live/{live_id}/current_item_time`). Every request came back "not found", and the strip
+  read that as "Live not running". The board now looks up the Live record once per plan, under
+  the plan's service type, and logs which address answered.
 - **An automatic sync refreshes the plan that is on the board, with the rules that put it
   there.** The watcher checked the plan you last synced, but the sync it started worked out
   "next plan" and the rule set all over again. A plan picked by hand, or a hand-picked rule set
