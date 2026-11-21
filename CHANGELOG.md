@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 ### Added
+- _Nothing yet._
+
+### Changed
+- _Nothing yet._
+
+### Fixed
+- _Nothing yet._
+
+## [2.0.0-beta.25] - 2026-11-21
+
+Planning Center automation that works as designed, and a board that is honest about what it
+cannot see. Automatic sync runs for the first time, the live strip finds the live position, and
+the log stops filling with noise, so a receiver dropping out or the photo folder blinking out
+now leaves a readable line instead of being buried.
+### Added
 - **A receiver coming and going is in the log.** "Receiver 10.100.50.55 (qlxd) stopped
   answering", then "is answering again after 12s". The log's device view was empty after five
   days on the venue board, so a dropout in a service left no trace.
