@@ -12,9 +12,20 @@ html,body {
   padding: 0px;
 }
 
+// ⛔⛔ Horizontal only (#300). This is here to kill Bootstrap's `.container-fluid`
+// gutter, which is `padding-left` / `padding-right` and nothing else. It used to
+// be `padding: 0 !important`, and that also killed the two rules that clear the
+// status bar -- `body.statusbar-top #container` and its bottom twin -- which had
+// never once applied. The bar then sat over the first row of cards, with the
+// same height left unused at the bottom.
+//
+// ⚠️ `border-box`, so the clearance comes out of the 100% rather than being added
+// to it: the container stays exactly one screen tall and the page cannot scroll.
 .fullHeight {
   height: 100%;
-  padding: 0px !important;
+  box-sizing: border-box;
+  padding-left: 0px !important;
+  padding-right: 0px !important;
 }
 
 .col-sm {
@@ -1085,18 +1096,6 @@ p.device-name {
     font-size: clamp(0.5rem, calc(var(--tvmode-type) * 0.032), calc(1.8rem * var(--tvmode-type-scale)));
   }
 
-  .errortype {
-    bottom: calc(var(--tvmode-scale) * 80px);
-  }
-
-  .ip {
-    bottom: calc(var(--tvmode-scale) * 60px);
-  }
-
-  .rxinfo {
-    bottom: calc(var(--tvmode-scale) * 40px);
-  }
-
   .powerlock {
     bottom: calc(var(--tvmode-scale) * 15px);
     left: calc(var(--tvmode-scale) * 5px);
@@ -1204,22 +1203,27 @@ p.device-name {
     display: block;
   }
 
-  .errortype{
-    position: absolute;
-    bottom: 80px;
-    right: 5px
-  }
-
-  .ip {
-    position: absolute;
-    bottom: 60px;
-    right: 5px;
-  }
-
-  .rxinfo {
+  // ⭐ #286: the three fault lines are one block in ordinary flow, so they are
+  // spaced by their own line height by construction. They used to be three
+  // absolutely positioned lines at hand-kept offsets 20px apart, each with a
+  // 24px line box -- so every pair overlapped by 4px, and nothing kept the
+  // offsets in step with the type.
+  // ⚠️ The zone is placed, not the lines. Nothing between it and the card is
+  // positioned, so it is placed against the card exactly as the lines were.
+  .errorzone {
     position: absolute;
     bottom: 40px;
     right: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .errorzone .errortype,
+  .errorzone .ip,
+  .errorzone .rxinfo {
+    position: static;
+    margin: 0;
   }
 
   // ⛔ There was a `.navbar { display: none }` here, which read as "TV mode
@@ -1323,22 +1327,27 @@ p.device-name {
     border-width: 1px;
   }
 
-  .errortype{
-    position: absolute;
-    bottom: 75px;
-    right: 5px
-  }
-
-  .ip {
-    position: absolute;
-    bottom: 55px;
-    right: 5px;
-  }
-
-  .rxinfo {
+  // ⭐ #286: the three fault lines are one block in ordinary flow, so they are
+  // spaced by their own line height by construction. They used to be three
+  // absolutely positioned lines at hand-kept offsets 20px apart, each with a
+  // 24px line box -- so every pair overlapped by 4px, and nothing kept the
+  // offsets in step with the type.
+  // ⚠️ The zone is placed, not the lines. Nothing between it and the card is
+  // positioned, so it is placed against the card exactly as the lines were.
+  .errorzone {
     position: absolute;
     bottom: 35px;
     right: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .errorzone .errortype,
+  .errorzone .ip,
+  .errorzone .rxinfo {
+    position: static;
+    margin: 0;
   }
 
   .above-mid {
@@ -1426,6 +1435,29 @@ p.device-name {
     var(--color-black) 40px,
     var(--color-black) 80px
   );
+}
+
+// ⭐ #186: a slot with no receiver behind it. Unmistakable without reading the
+// heading, and deliberately not an alarm: a dashed edge says "a place for a
+// channel", the chip says it in words, and nothing that could be read as a
+// measurement is drawn -- no battery outline, no sparklines, no figures.
+// ⚠️ `visibility`, not `display`, so the card keeps its size and the row of
+// cards does not shift when a receiver is added or taken away.
+.col-sm.no-receiver .mic_name {
+  outline: 2px dashed var(--color-gray);
+  outline-offset: -2px;
+}
+
+.col-sm.no-receiver .card-runtime,
+.col-sm.no-receiver .chartzone,
+.col-sm.no-receiver .errorzone,
+.col-sm.no-receiver .drawer-figures,
+.col-sm.no-receiver .electrode {
+  visibility: hidden;
+}
+
+.col-sm.no-receiver .mic_name .status-chip .chip-glyph {
+  color: var(--color-gray);
 }
 
 .UNASSIGNED {
@@ -2920,26 +2952,22 @@ body.live-strip-bottom .wirelessboard-board {
   padding-bottom: var(--live-strip-height, 2.25rem);
 }
 
-/* Both bars at the top: the board has to clear BOTH.
+/* Both bars at the top.
 
-   ⛔⛔ Moving the rotation bar off the strip is only half the fix. The strip
-   is 37px on the venue board and the bar is 28, so the top edge needs 65 --
-   and this rule reserved the strip alone, which is why pushing the bar down
-   simply moved the overlap off the strip and onto the first row of cards.
-   Measured on the venue board: bar 37->65, first card top 37.
+   ⭐ The status bar's half is now `#container`'s, through
+   `body.statusbar-top #container` -- which finally applies, since `.fullHeight`
+   stopped zeroing vertical padding (#300). So the board reserves the strip
+   alone, exactly as it does with the bar anywhere else.
 
-   ⚠️ On the BOARD, not on `#container`. `body.statusbar-top #container`
-   already asks for exactly this and has never once applied: `.fullHeight`
-   carries `padding: 0 !important` (style.scss:17, there to kill Bootstrap's
-   gutter), and `!important` beats any specificity. That is a older fault than
-   this one and is filed separately -- this rule deliberately does not depend
-   on it being fixed.
+   ⛔⛔ It used to reserve both here, as a workaround for that rule never
+   applying. Left in after the fix, the bar's 28px would be booked twice and the
+   last row clipped -- #171 again.
 
-   ⛔ The pair only. Each bar on its own keeps the clearance it already had;
-   changing those means changing height arithmetic that can only be judged on
-   the wall. */
+   ⚠️ The pair rule stays, only to keep the same FALLBACK as
+   `body.statusbar-top.live-strip-top .rotation-bar`: a client that never
+   measured the strip must reserve the same height the bar is pushed down by. */
 body.statusbar-top.live-strip-top .wirelessboard-board {
-  padding-top: calc(var(--live-strip-height, 2.5rem) + var(--statusbar-height));
+  padding-top: var(--live-strip-height, 2.5rem);
 }
 
 /* The rotation bar (#113).

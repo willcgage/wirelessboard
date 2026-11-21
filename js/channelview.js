@@ -6,6 +6,7 @@ import { seedTransmitters, autoRandom } from './demodata.js';
 import { updateEditor } from './dnd.js';
 import { deviceHeading } from './device-label.mjs';
 import { batteryFraction, batteryDescription } from './battery-icon.mjs';
+import { hasNoReceiver, NO_RECEIVER_CHIP } from './no-receiver.mjs';
 
 function allSlots() {
   const slot = micboard.config.slots;
@@ -114,7 +115,7 @@ function updateStatusChip(slotSelector, data) {
   if (!chip) {
     return;
   }
-  const shown = STATUS_CHIP[data.status];
+  const shown = hasNoReceiver(data) ? NO_RECEIVER_CHIP : STATUS_CHIP[data.status];
   const glyph = chip.querySelector('.chip-glyph');
   const word = chip.querySelector('.chip-word');
 
@@ -247,6 +248,17 @@ function updateStatus(slotSelector, data) {
   const quiet = data.status === 'RX_COM_ERROR';
   slotSelector.querySelector('.chartzone').hidden = quiet;
   slotSelector.querySelector('.errorzone').hidden = !quiet;
+
+  // ⭐ #186: the card itself says "nothing is behind this slot", so the
+  // stylesheet can take away everything that would read as a measurement.
+  // `slotSelector` is the card on a live update and the template fragment
+  // on the first render, so look for the card in both places.
+  const card = (typeof slotSelector.matches === 'function' && slotSelector.matches('div.col-sm'))
+    ? slotSelector
+    : slotSelector.querySelector('div.col-sm');
+  if (card) {
+    card.classList.toggle('no-receiver', hasNoReceiver(data));
+  }
 }
 
 function updateIP(slotSelector, data) {

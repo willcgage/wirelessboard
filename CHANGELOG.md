@@ -2,12 +2,30 @@
 
 ## [Unreleased]
 ### Added
-- _Nothing yet._
+- **A receiver coming and going is in the log.** "Receiver 10.100.50.55 (qlxd) stopped
+  answering", then "is answering again after 12s". The log's device view was empty after five
+  days on the venue board, so a dropout in a service left no trace.
 
 ### Changed
-- _Nothing yet._
+- **A slot with no receiver says so.** It carries a "No receiver" chip and a dashed edge, and
+  draws no battery, sparklines or figures that could be taken for a reading. It used to look
+  like an ordinary quiet channel (#186).
+- Electron 43.8.1, with fast-uri and undici bumps.
 
 ### Fixed
+- **A board that loads while the background folder blinks out keeps its faces.** On the venue
+  board the folder is a Google Drive mount that went missing for a few seconds twice in one week,
+  and every board that loaded then got no photos until it was reloaded. The board now serves the
+  last listing of the folder until it is back, and logs the outage once (#183).
+- **The status bar no longer sits over the first row of cards.** The rule that makes room for it
+  had never applied: `.fullHeight` zeroed all padding with `!important`, not just Bootstrap's
+  side gutter. The space the bar needs used to be left empty at the other end of the screen
+  instead (#300).
+- **The three fault lines on a card in error no longer overlap.** They were placed at offsets
+  20px apart with 24px lines; they are now stacked in flow (#286).
+- **A board closing no longer writes an error to the log.** Every update sent to a board that
+  had just gone away logged "Task exception was never retrieved" with a traceback: 815 of them
+  in three days at the venue.
 - **The live strip asks Planning Center for the live position at the address Planning Center
   documents.** It never showed what was live, even with somebody driving Live. It asked for
   `plans/{plan}/live/current_item_time`, but the item times sit under the plan's Live record

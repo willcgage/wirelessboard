@@ -26,6 +26,8 @@ class ShureNetworkDevice:
         self.type = type
         self.channels = []
         self.rx_com_status = 'DISCONNECTED'
+        # When it last stopped answering; None while it is answering or never has.
+        self._dropped_at = None
         self.writeQueue = queue.Queue()
         self.f = None
         self.socket_watchdog = int(time.perf_counter())
@@ -68,7 +70,31 @@ class ShureNetworkDevice:
         return self.f.fileno()
 
     def set_rx_com_status(self, status):
+        """Record the link state, and say so when the receiver comes or goes.
+
+        ⛔⛔ This used to be a bare assignment, so a receiver dropping out in the
+        middle of a service left nothing behind: the log's `device` source was
+        empty on the venue board after five days. Afterwards, nobody could say
+        whether a pack or a receiver had gone.
+
+        ⚠️ Transitions only. `CONNECTED` is set again on every packet read, and
+        a receiver that is switched off fails to connect every twenty seconds;
+        neither is news. What is logged is answering -> not answering, and back.
+        """
+        previous = self.rx_com_status
         self.rx_com_status = status
+        if status == previous:
+            return
+        if status == 'CONNECTED':
+            if getattr(self, "_dropped_at", None) is not None:
+                logger.info('Receiver %s (%s) is answering again after %ds',
+                            self.ip, self.type, int(time.monotonic() - self._dropped_at))
+                self._dropped_at = None
+            else:
+                logger.info('Receiver %s (%s) connected', self.ip, self.type)
+        elif previous == 'CONNECTED':
+            self._dropped_at = time.monotonic()
+            logger.warning('Receiver %s (%s) stopped answering', self.ip, self.type)
 
     def add_channel_device(self, cfg):
         if self.adapter.device_class(self.type) == 'WirelessMic':
