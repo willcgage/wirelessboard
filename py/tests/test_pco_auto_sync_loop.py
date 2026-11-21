@@ -36,7 +36,7 @@ class AutoSyncStaysOffTheLoopOnlyWhereItMay(AsyncTestCase):
 
     @gen_test
     async def test_the_writes_run_on_the_loop_and_the_http_does_not(self):
-        decision = {'go': True, 'reason': 'changed', 'key': ('42', 'v2')}
+        decision = {'go': True, 'reason': 'changed', 'key': ('42', 'v2'), 'plan_id': '42'}
         resolution = {'ok': True, 'resolved': []}
         result = {'ok': True, 'updates': 2, 'cleared': 0, 'skipped': []}
 
@@ -86,7 +86,7 @@ class AutoSyncStaysOffTheLoopOnlyWhereItMay(AsyncTestCase):
             raise RuntimeError('network gone')
 
         with mock.patch.object(tornado_server.pco, 'auto_sync_decision',
-                               lambda running=False: {'go': True, 'key': ('42', 'v2')}), \
+                               lambda running=False: {'go': True, 'key': ('42', 'v2'), 'plan_id': '42'}), \
              mock.patch.object(tornado_server.pco, 'note_auto_sync_attempt',
                                lambda key: order.append('marked')), \
              mock.patch.object(tornado_server.pco, 'begin_sync',
@@ -104,7 +104,7 @@ class AutoSyncStaysOffTheLoopOnlyWhereItMay(AsyncTestCase):
         # ⚠️ The running flag is held across an await. A sync that throws has
         # to clear it, or automatic sync is dead until the server restarts.
         with mock.patch.object(tornado_server.pco, 'auto_sync_decision',
-                               lambda running=False: {'go': True, 'key': ('42', 'v2')}), \
+                               lambda running=False: {'go': True, 'key': ('42', 'v2'), 'plan_id': '42'}), \
              mock.patch.object(tornado_server.pco, 'note_auto_sync_attempt'), \
              mock.patch.object(tornado_server.pco, 'begin_sync',
                                mock.Mock(side_effect=RuntimeError('boom'))):
@@ -123,3 +123,48 @@ class AutoSyncStaysOffTheLoopOnlyWhereItMay(AsyncTestCase):
              mock.patch.object(tornado_server, '_auto_sync_if_due',
                                mock.Mock(side_effect=RuntimeError('boom'))):
             await tornado_server._plan_watch_tick()
+
+
+class AutoSyncSyncsThePlanItWasWatching(AsyncTestCase):
+    """⛔⛔ The watcher checks the plan last synced, under the rules last used.
+    The sync it triggers must read that plan with those rules. It used to pass
+    neither, so "next" and the calendar were worked out again -- and a plan
+    chosen by hand, or a hand-picked rule set, was replaced mid-service."""
+
+    def _run(self, decision):
+        seen = {}
+
+        def resolve(config, plan_id=None, profile_id=None):
+            seen['args'] = (plan_id, profile_id)
+            return {'ok': True, 'resolved': []}
+
+        patches = [
+            mock.patch.object(tornado_server.pco, 'auto_sync_decision',
+                              lambda running=False: decision),
+            mock.patch.object(tornado_server.pco, 'begin_sync',
+                              lambda: {'ok': True, 'config': {}}),
+            mock.patch.object(tornado_server.pco, 'resolve_sync', resolve),
+            mock.patch.object(tornado_server.pco, 'finish_sync',
+                              lambda *a, **k: {'ok': True}),
+            mock.patch.object(tornado_server.pco, 'note_auto_sync_attempt'),
+            mock.patch.object(tornado_server.pco, 'record_auto_sync',
+                              lambda result: {}),
+        ]
+        return seen, patches
+
+    @gen_test
+    async def test_the_watched_plan_and_profile_are_passed_through(self):
+        seen, patches = self._run({'go': True, 'key': ('91062751', 'v2'),
+                                   'plan_id': '91062751', 'profile_id': 'christmas'})
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            await tornado_server._auto_sync_if_due()
+
+        assert seen['args'] == ('91062751', 'christmas')
+
+    @gen_test
+    async def test_no_watched_plan_means_no_sync_not_whatever_next_is(self):
+        seen, patches = self._run({'go': True, 'key': None})
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            await tornado_server._auto_sync_if_due()
+
+        assert 'args' not in seen
