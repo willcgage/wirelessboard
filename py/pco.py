@@ -1843,7 +1843,12 @@ def plan_updated_at(plan_id: str, headers: Dict[str, str]) -> Optional[str]:
     return (attrs.get('updated_at') or '').strip() or None
 
 
-def record_sync(plan_id: Optional[str], updated_at: Optional[str], profile_id: Optional[str]) -> None:
+def record_sync(
+    plan_id: Optional[str],
+    updated_at: Optional[str],
+    profile_id: Optional[str],
+    service_type_id: Optional[Any] = None,
+) -> None:
     """Remember what was synced, for change detection to compare against.
 
     ⚠️ Clears the watch as well. Syncing is what makes a plan the active one,
@@ -1858,10 +1863,18 @@ def record_sync(plan_id: Optional[str], updated_at: Optional[str], profile_id: O
     # ⛔ The cached live position describes the plan that WAS active. Serving
     # ten seconds of it after a sync would say the wrong service is on screen.
     _LIVE_CACHE.clear()
+    # ⚠️ And where to ask: one more /live lookup per sync is cheap, and it
+    # means a bad cached Live id cannot outlive the next sync.
+    _LIVE_IDS.clear()
+    _LIVE_PARENTS.clear()
     _LAST_SYNC.update({
         'plan_id': str(plan_id),
         'updated_at': updated_at or '',
         'profile_id': profile_id or '',
+        # ⭐ Where the plan lives. The Live endpoints are nested under a
+        # parent, and the sync already knows which one; without it the strip
+        # has to ask again every time the server starts.
+        'service_type_id': str(service_type_id) if service_type_id else '',
         'at': time.time(),
     })
 
@@ -2244,6 +2257,81 @@ def live_status() -> Dict[str, Any]:
     return answer
 
 
+# ⛔⛔ The live position never once showed at the venue, even with somebody
+# driving Live. The strip asked for `plans/{plan}/live/current_item_time`, but
+# Planning Center documents the item times as associations of a Live record:
+#
+#     .../plans/{plan_id}/live/{live_id}/current_item_time
+#
+# The `{live_id}` segment was missing, so every request 404'd -- and a 404 had
+# been declared "Live not running", logged at DEBUG, which hid the wrong URL
+# behind a believable answer for every service since #121. So: ask for the
+# plan's Live record once, keep its id, and build the documented path from it.
+# Scoped to the plan's service type when known, which is also documented
+# ("Belongs To": service_types/{id}/plans/{id}/live).
+#
+# ⚠️ Logged at INFO the first time per plan, with the path that answered, so
+# the venue's own log says whether this is right instead of a guess.
+_LIVE_IDS: Dict[str, str] = {}
+_LIVE_PARENTS: Dict[str, str] = {}
+_LIVE_PATH_LOGGED: set = set()
+
+
+def _live_parent(plan_id: str, headers: Dict[str, str]) -> str:
+    """`.../plans/{id}`, scoped to its service type when that is known."""
+    key = str(plan_id)
+    known = _LIVE_PARENTS.get(key)
+    if known:
+        return known
+    stid = last_sync().get('service_type_id') if last_sync().get('plan_id') == key else ''
+    if not stid:
+        # ⚠️ Once per plan, then remembered either way: the strip polls every
+        # 15 seconds and must not pay for this lookup on each tick.
+        found = _get_plan_service_type_id(key, headers)
+        stid = str(found) if found else ''
+    parent = (f"{BASE_URL}/service_types/{stid}/plans/{key}" if stid
+              else f"{BASE_URL}/plans/{key}")
+    _LIVE_PARENTS[key] = parent
+    return parent
+
+
+def _live_base(plan_id: str, headers: Dict[str, str]) -> Optional[str]:
+    """The documented base for this plan's Live associations, or None.
+
+    None with `_LAST_HTTP_ERROR == 404` means Planning Center has no Live
+    record for the plan; any other None is a failure the caller reports.
+    """
+    global _LAST_HTTP_ERROR
+    key = str(plan_id)
+    parent = _live_parent(key, headers)
+    live_id = _LIVE_IDS.get(key)
+    if not live_id:
+        payload = _http_get(f"{parent}/live", headers, expected=(404,))
+        data = (payload or {}).get('data')
+        if isinstance(data, list):
+            data = data[0] if data else None
+        live_id = str((data or {}).get('id') or '') if payload is not None else ''
+        if not live_id:
+            if payload is not None:
+                # Answered, but with no Live record: the same as never started.
+                _LAST_HTTP_ERROR = 404
+            if key not in _LIVE_PATH_LOGGED and _LAST_HTTP_ERROR == 404:
+                _LIVE_PATH_LOGGED.add(key)
+                logger.info('PCO live: no Live record for plan %s at %s/live', key, parent)
+            return None
+        _LIVE_IDS[key] = live_id
+        if key not in _LIVE_PATH_LOGGED:
+            _LIVE_PATH_LOGGED.add(key)
+            logger.info('PCO live: plan %s reads its position from %s/live/%s', key, parent, live_id)
+    return f"{parent}/live/{live_id}"
+
+
+def forget_live_ids() -> None:
+    _LIVE_IDS.clear()
+    _LIVE_PARENTS.clear()
+    _LIVE_PATH_LOGGED.clear()
+
+
 def _live_status_fresh(pco_cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Ask Planning Center where the service has got to.
 
@@ -2259,13 +2347,15 @@ def _live_status_fresh(pco_cfg: Dict[str, Any]) -> Dict[str, Any]:
     headers = {'Authorization': _basic_auth_header(auth['token'], auth['secret'])}
 
     params = {'include': 'item'}
-    # ⛔⛔ 404 is the NORMAL answer here. Planning Center has no live position
-    # for a plan nobody has started Live on, which is most plans most of the
-    # time -- so it is declared expected and logged at DEBUG.
-    current_raw = _http_get(
-        f"{BASE_URL}/plans/{plan_id}/live/current_item_time", headers, params,
-        expected=(404,),
-    )
+    base = _live_base(plan_id, headers)
+    if base is not None:
+        # ⚠️ A 404 on the item time itself is still "nothing current", and is
+        # declared expected so a plan between items does not warn every tick.
+        current_raw = _http_get(f"{base}/current_item_time", headers, params, expected=(404,))
+    else:
+        # No Live record (status 404) falls through as "not running" below;
+        # anything else is a failure and is said out loud.
+        current_raw = None
     if current_raw is None and _LAST_HTTP_ERROR != 404:
         # A real failure: a rejected token, a network that is down. Those are
         # worth saying out loud, and `_fetch_error` explains which it was.
@@ -2287,7 +2377,7 @@ def _live_status_fresh(pco_cfg: Dict[str, Any]) -> Dict[str, Any]:
     nxt = None
     if current and current.get('started_at'):
         nxt = _item_time(
-            _http_get(f"{BASE_URL}/plans/{plan_id}/live/next_item_time", headers, params))
+            _http_get(f"{base}/next_item_time", headers, params, expected=(404,)))
 
     asked_at = time.time()
     state = pco_live.live_state(
@@ -3229,7 +3319,8 @@ def finish_sync(resolution: Dict[str, Any], dry_run: bool = False) -> Dict[str, 
     # here would make the next check report "no change" about a plan nobody
     # ever applied.
     if not dry_run:
-        record_sync(plan_id, resolution.get('plan_updated_at'), profile.get('id'))
+        record_sync(plan_id, resolution.get('plan_updated_at'), profile.get('id'),
+                    resolution.get('service_type_id'))
 
     return {
         "ok": True,

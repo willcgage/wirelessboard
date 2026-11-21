@@ -38,9 +38,11 @@ def item_time(item_id='5', title='Worship', started=STARTED_AT, length=900):
 @pytest.fixture(autouse=True)
 def clean():
     pco.forget_last_sync()
+    pco.forget_live_ids()
     pco._LAST_HTTP_ERROR = None
     yield
     pco.forget_last_sync()
+    pco.forget_live_ids()
     pco._LAST_HTTP_ERROR = None
 
 
@@ -100,7 +102,7 @@ class TestLiveNotRunning:
     def test_an_empty_edge_means_live_was_never_started(self, live_on, monkeypatch):
         # ⭐ The only honest test available: the API has no "is it running"
         # flag, and the `can_*` fields are permissions.
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: {'data': None})
 
         result = pco.live_status()
@@ -111,7 +113,7 @@ class TestLiveNotRunning:
     def test_it_does_not_ask_for_the_next_item_when_nothing_is_running(self, live_on, monkeypatch):
         # ⚠️ Otherwise a plan nobody has started Live on pays for two requests
         # a tick, forever.
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         asked = []
         monkeypatch.setattr(pco, '_http_get',
                             lambda url, *a, **k: asked.append(url) or {'data': None})
@@ -121,7 +123,7 @@ class TestLiveNotRunning:
         assert not any('next_item_time' in u for u in asked)
 
     def test_an_item_time_with_no_live_start_is_still_not_running(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(started=None))
 
         assert pco.live_status()['state'] == 'not_running'
@@ -129,7 +131,7 @@ class TestLiveNotRunning:
 
 class TestLiveRunning:
     def test_the_current_item_is_reported(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda url, *a, **k: (
             item_time(title='Next thing') if 'next_item_time' in url else item_time()))
 
@@ -141,7 +143,7 @@ class TestLiveRunning:
         assert result['next']['title'] == 'Next thing'
 
     def test_elapsed_is_measured_from_the_live_start(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
         # 15:10Z, ten minutes after the item started.
         monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
@@ -149,14 +151,14 @@ class TestLiveRunning:
         assert pco.live_status()['elapsed'] == 600
 
     def test_running_over_is_reported_only_once_it_is_true(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(length=300))
         monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)  # ten minutes in
 
         assert pco.live_status()['over_by'] == 300
 
     def test_an_item_inside_its_length_is_not_over(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(length=1800))
         monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
 
@@ -164,7 +166,7 @@ class TestLiveRunning:
 
     def test_it_follows_the_plan_that_was_synced(self, live_on, monkeypatch):
         # ⚠️ Not the next upcoming one. The strip is about what is on screen.
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         asked = []
         monkeypatch.setattr(pco, '_http_get',
                             lambda url, *a, **k: asked.append(url) or item_time())
@@ -176,7 +178,7 @@ class TestLiveRunning:
 
 class TestFailuresAreStatesNotExceptions:
     def test_an_unreachable_api_is_an_error_state(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: None)
 
         result = pco.live_status()
@@ -187,14 +189,14 @@ class TestFailuresAreStatesNotExceptions:
     def test_an_error_is_never_reported_as_not_running(self, live_on, monkeypatch):
         # ⛔ The two are different facts, and a board showing the second as the
         # first teaches its operator the strip is decorative.
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: None)
 
         assert pco.live_status()['label'] != 'Live not running'
 
     def test_a_failed_next_item_lookup_does_not_lose_the_current_one(self, live_on, monkeypatch):
         # The position is the point; what comes after it is a nicety.
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda url, *a, **k: (
             None if 'next_item_time' in url else item_time()))
 
@@ -205,7 +207,7 @@ class TestFailuresAreStatesNotExceptions:
         assert result['next'] is None
 
     def test_an_unparseable_start_time_does_not_crash_the_strip(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(started='half past'))
 
         result = pco.live_status()
@@ -217,7 +219,7 @@ class TestFailuresAreStatesNotExceptions:
         import config
         writes = []
         monkeypatch.setattr(config, 'save_current_config', lambda: writes.append(1))
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
 
         pco.live_status()
@@ -227,7 +229,7 @@ class TestFailuresAreStatesNotExceptions:
 
 class TestTheTimerReachesTheStrip:
     def test_the_default_mode_counts_the_item_down(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(length=900))
         monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
 
@@ -238,7 +240,7 @@ class TestTheTimerReachesTheStrip:
         assert result['clock'] == '5:00'
 
     def test_an_overrunning_item_counts_up(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(length=300))
         monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
 
@@ -251,7 +253,7 @@ class TestTheTimerReachesTheStrip:
         monkeypatch.setattr(pco, 'get_pco_config', lambda: {
             'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
             'live_strip': True, 'live_timer_mode': 'end_service_on_time'})
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
         monkeypatch.setattr(pco, 'plan_end', lambda *a, **k: ('2026-10-11T16:00:00+00:00', False))
         monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
@@ -265,7 +267,7 @@ class TestTheTimerReachesTheStrip:
     def test_the_other_modes_never_ask_for_the_service_end(self, live_on, monkeypatch):
         # ⚠️ Full item length does not need it, and paying for it every tick
         # would be the same mistake the watcher made before #140 was gated.
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
 
         def explode(*_a, **_k):
@@ -283,7 +285,7 @@ class TestTheTimerReachesTheStrip:
         monkeypatch.setattr(pco, 'get_pco_config', lambda: {
             'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
             'live_strip': True, 'live_timer_mode': 'end_item_on_time'})
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time(length=900))
         monkeypatch.setattr(pco.time, 'time', lambda: STARTED_EPOCH + 600)
 
@@ -293,7 +295,7 @@ class TestTheTimerReachesTheStrip:
         assert result['clock'] == '--:--'
 
     def test_the_mode_is_named_for_the_strip_to_show(self, live_on, monkeypatch):
-        pco.record_sync('77', 'stamp', None)
+        pco.record_sync('77', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: item_time())
 
         assert pco.live_status()['timer_label'] == 'Full item length'
@@ -324,7 +326,7 @@ class TestA404IsNotAnError:
         monkeypatch.setattr(pco_mod, '_http_get', fake_get)
 
     def test_a_404_reads_as_live_not_running(self, live_on, monkeypatch):
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
         calls = []
         self._answer_404(pco, monkeypatch, calls)
 
@@ -339,7 +341,7 @@ class TestA404IsNotAnError:
     def test_the_404_is_declared_expected_so_it_does_not_warn(self, live_on, monkeypatch):
         # ⛔ The log storm, not the label. 404 has to be passed as an expected
         # status or `_http_get` warns on every single poll.
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
         calls = []
         self._answer_404(pco, monkeypatch, calls)
 
@@ -351,7 +353,7 @@ class TestA404IsNotAnError:
     def test_a_real_failure_is_still_an_error(self, live_on, monkeypatch):
         # ⚠️ The other half. A rejected token or a network that is down must
         # still say so — the strip's value is that its states mean something.
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
 
         def fake_get(url, headers, params=None, *, probe=False, expected=()):
             pco._LAST_HTTP_ERROR = 401
@@ -366,7 +368,7 @@ class TestA404IsNotAnError:
     def test_a_connection_error_is_still_an_error(self, live_on, monkeypatch):
         # `_LAST_HTTP_ERROR` is None for an exception rather than a status, so
         # "not 404" has to cover that too.
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
 
         def fake_get(url, headers, params=None, *, probe=False, expected=()):
             pco._LAST_HTTP_ERROR = None
@@ -378,7 +380,7 @@ class TestA404IsNotAnError:
     def test_it_does_not_ask_for_the_next_item_when_live_is_not_running(self, live_on, monkeypatch):
         # One request per poll, not two. The second was already guarded; this
         # pins that the 404 path does not undo that.
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
         calls = []
         self._answer_404(pco, monkeypatch, calls)
 
@@ -412,7 +414,7 @@ class TestOneAnswerSharedByEveryBoard:
         monkeypatch.setattr(pco, '_http_get', fake_get)
 
     def test_a_second_board_inside_the_window_costs_nothing(self, live_on, monkeypatch):
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
         calls = []
         self.counting_get(monkeypatch, calls)
 
@@ -424,7 +426,7 @@ class TestOneAnswerSharedByEveryBoard:
         assert first == second == third
 
     def test_it_asks_again_once_the_window_passes(self, live_on, monkeypatch):
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
         calls = []
         self.counting_get(monkeypatch, calls)
 
@@ -445,12 +447,12 @@ class TestOneAnswerSharedByEveryBoard:
     def test_a_sync_drops_it(self, live_on, monkeypatch):
         # ⛔⛔ A sync makes a DIFFERENT plan active. Serving the old plan's
         # position for another ten seconds says the wrong service is on screen.
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
         calls = []
         self.counting_get(monkeypatch, calls)
 
         pco.live_status()
-        pco.record_sync('91062999', 'stamp', None)
+        pco.record_sync('91062999', 'stamp', None, '162905')
         pco.live_status()
 
         assert len(calls) == 2, 'the new plan must be asked about'
@@ -462,7 +464,7 @@ class TestOneAnswerSharedByEveryBoard:
         monkeypatch.setattr(pco, 'get_pco_config', lambda: {
             'auth': {'token': 't', 'secret': 's'}, 'services': {}, 'mapping': {},
             'live_strip': True})
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
         monkeypatch.setattr(pco, '_http_get', lambda *a, **k: None)
         pco.live_status()
 
@@ -475,10 +477,105 @@ class TestOneAnswerSharedByEveryBoard:
     def test_a_caller_cannot_poison_the_cache(self, live_on, monkeypatch):
         # The answer is handed out as a copy. A caller that mutates what it got
         # must not change what the next board is told.
-        pco.record_sync('91062752', 'stamp', None)
+        pco.record_sync('91062752', 'stamp', None, '162905')
         self.counting_get(monkeypatch, [])
 
         first = pco.live_status()
         first['state'] = 'tampered'
 
         assert pco.live_status()['state'] != 'tampered'
+
+
+class TestTheDocumentedLivePath:
+    """⛔⛔ The strip never showed a live position at the venue, even with
+    somebody driving Live. It asked for `plans/{plan}/live/current_item_time`;
+    Planning Center documents `.../plans/{plan}/live/{live_id}/current_item_time`.
+    Without the Live id every request 404'd, and a 404 read as "not running"."""
+
+    def _api(self, monkeypatch, asked, live=None):
+        live = live if live is not None else {'data': {'type': 'Live', 'id': 'L9'}}
+
+        def fake_get(url, headers, params=None, *, probe=False, expected=()):
+            asked.append(url)
+            if url.endswith('/live'):
+                return live
+            if url.endswith('/live/L9/current_item_time'):
+                return item_time()
+            if url.endswith('/live/L9/next_item_time'):
+                return item_time(item_id='6', title='Message')
+            pco._LAST_HTTP_ERROR = 404
+            return None
+        monkeypatch.setattr(pco, '_http_get', fake_get)
+
+    def test_it_reads_the_position_under_the_live_record(self, live_on, monkeypatch):
+        pco.record_sync('92179141', 'stamp', None, '162905')
+        asked = []
+        self._api(monkeypatch, asked)
+
+        out = pco.live_status()
+
+        assert out['state'] == 'running', out
+        assert out['current']['title'] == 'Worship'
+        assert out['next']['title'] == 'Message'
+        base = 'https://api.planningcenteronline.com/services/v2/service_types/162905/plans/92179141'
+        assert asked[0] == base + '/live'
+        assert asked[1] == base + '/live/L9/current_item_time'
+
+    def test_the_old_path_without_a_live_id_is_never_asked(self, live_on, monkeypatch):
+        pco.record_sync('92179141', 'stamp', None, '162905')
+        asked = []
+        self._api(monkeypatch, asked)
+
+        pco.live_status()
+
+        assert not any(u.endswith('/live/current_item_time') for u in asked), asked
+
+    def test_the_live_id_is_looked_up_once_per_plan(self, live_on, monkeypatch):
+        pco.record_sync('92179141', 'stamp', None, '162905')
+        asked = []
+        self._api(monkeypatch, asked)
+
+        pco.live_status()
+        pco.forget_live_status()
+        pco.live_status()
+
+        assert sum(1 for u in asked if u.endswith('/live')) == 1
+
+    def test_the_path_that_answered_is_logged_once(self, live_on, monkeypatch, caplog):
+        import logging
+        pco.record_sync('92179141', 'stamp', None, '162905')
+        self._api(monkeypatch, [])
+
+        with caplog.at_level(logging.INFO, logger=pco.logger.name):
+            pco.live_status()
+            pco.forget_live_status()
+            pco.live_status()
+
+        lines = [r for r in caplog.records if 'reads its position from' in r.getMessage()]
+        assert len(lines) == 1
+        assert '/live/L9' in lines[0].getMessage()
+
+    def test_without_a_known_service_type_it_looks_once_then_remembers(self, live_on, monkeypatch):
+        pco.record_sync('92179141', 'stamp', None)
+        asked = []
+        self._api(monkeypatch, asked)
+        looked = []
+        monkeypatch.setattr(pco, '_get_plan_service_type_id',
+                            lambda plan_id, headers: looked.append(plan_id) or 162905)
+
+        pco.live_status()
+        pco.forget_live_status()
+        pco.live_status()
+
+        assert looked == ['92179141']
+        assert '/service_types/162905/plans/92179141/live' in asked[0]
+
+    def test_no_live_record_is_not_running_not_an_error(self, live_on, monkeypatch):
+        pco.record_sync('92179141', 'stamp', None, '162905')
+        asked = []
+        self._api(monkeypatch, asked, live={'data': []})
+
+        out = pco.live_status()
+
+        assert out['state'] == 'not_running'
+        assert not any('current_item_time' in u for u in asked)
