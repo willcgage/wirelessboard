@@ -8,7 +8,19 @@
 - _Nothing yet._
 
 ### Fixed
-- _Nothing yet._
+- **An automatic sync refreshes the plan that is on the board, with the rules that put it
+  there.** The watcher checked the plan you last synced, but the sync it started worked out
+  "next plan" and the rule set all over again. A plan picked by hand, or a hand-picked rule set
+  such as Christmas Eve, could be swapped mid-service for whatever "next" and the calendar said.
+- **"Next plan" never falls back to the oldest plan.** With nothing upcoming in a service type,
+  the last fallback asked Planning Center for plans with no date filter, which lists them oldest
+  first, so a sync could quietly load the church's very first plan. It now says no upcoming plan
+  was found.
+- **The board backs off when Planning Center says "too many requests".** A 429 used to be just
+  another failed request: the roster search kept going through every service type, keeping the
+  account limited for longer, and the operator could be told nobody was scheduled. The board now
+  waits as long as Planning Center asks (`Retry-After`, 20 seconds if it doesn't say) without
+  sending anything, and says "try again in about N seconds".
 
 ## [2.0.0-beta.24] - 2026-10-22
 

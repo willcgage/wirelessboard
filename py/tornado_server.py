@@ -169,6 +169,11 @@ async def _auto_sync_if_due():
     decision = await _run_pco(pco.auto_sync_decision, _AUTO_SYNC_RUNNING)
     if not decision.get('go'):
         return
+    if not decision.get('plan_id'):
+        # ⛔ Never "whatever next is". The watcher only ever reports on a plan
+        # that was synced, so a decision without one is not a decision to act on.
+        logger.warning('Automatic PCO sync skipped: no watched plan to sync')
+        return
 
     _AUTO_SYNC_RUNNING = True
     try:
@@ -182,7 +187,11 @@ async def _auto_sync_if_due():
             logger.warning('Automatic PCO sync aborted: %s', started.get('error'))
             return
 
-        resolution = await _run_pco(pco.resolve_sync, started['config'], None, None)
+        # ⛔⛔ The watched plan under the rules that put it there -- see
+        # `pco.auto_sync_decision`. Passing None re-resolved both.
+        resolution = await _run_pco(
+            pco.resolve_sync, started['config'],
+            decision.get('plan_id'), decision.get('profile_id'))
         result = pco.finish_sync(resolution)
         status = pco.record_auto_sync(result)
         logger.info('PCO: %s', (status.get('auto_sync') or {}).get('summary'))

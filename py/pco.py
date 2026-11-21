@@ -576,6 +576,53 @@ BASE_URL = 'https://api.planningcenteronline.com/services/v2'
 _LAST_HTTP_ERROR: Optional[int] = None
 
 
+# ⛔ Planning Center's rate limit (HTTP 429). It allows roughly 100 requests per
+# 20 seconds per account and says how long to wait in `Retry-After`. Before
+# this, a 429 was just another failed GET: the roster sweep carried on through
+# every service type, each request another 429, and the account stayed limited
+# for longer -- and the venue's sweep has hit it. Once told to wait, the board
+# does not ask again until the time is up; callers get None with status 429,
+# exactly as if Planning Center had answered, without spending a request.
+_RATE_LIMIT_STATUS = 429
+_RATE_LIMIT_DEFAULT_SECONDS = 20
+_RATE_LIMIT_MAX_SECONDS = 300
+_RATE_LIMITED_UNTIL: float = 0.0
+
+
+def _retry_after_seconds(resp) -> int:
+    """How long Planning Center asked us to wait, within sane bounds."""
+    raw = None
+    try:
+        raw = resp.headers.get('Retry-After')
+    except Exception:
+        raw = None
+    try:
+        seconds = int(float(str(raw).strip()))
+    except (TypeError, ValueError):
+        seconds = _RATE_LIMIT_DEFAULT_SECONDS
+    return max(1, min(seconds, _RATE_LIMIT_MAX_SECONDS))
+
+
+def rate_limit_remaining() -> int:
+    """Seconds until Planning Center may be asked again; 0 when it may now."""
+    left = _RATE_LIMITED_UNTIL - time.monotonic()
+    return int(left + 0.999) if left > 0 else 0
+
+
+def forget_rate_limit() -> None:
+    """For tests."""
+    global _RATE_LIMITED_UNTIL
+    _RATE_LIMITED_UNTIL = 0.0
+
+
+def _rate_limited_error() -> str:
+    wait = rate_limit_remaining() or _RATE_LIMIT_DEFAULT_SECONDS
+    return (
+        'Planning Center asked the board to slow down (too many requests). '
+        'Try again in about {} seconds.'
+    ).format(wait)
+
+
 # Every attempt made during the roster read in progress, so the one summary
 # line at the end can say what was tried. Reset by `_begin_roster_read`.
 #
@@ -627,9 +674,27 @@ def _http_get(
     A probe's miss goes to DEBUG and into the journal. The *outcome* is logged
     once, by whoever asked for the roster.
     """
-    global _LAST_HTTP_ERROR
+    global _LAST_HTTP_ERROR, _RATE_LIMITED_UNTIL
+    if rate_limit_remaining():
+        # ⛔ Told to wait and still waiting. Not a request, not a warning: the
+        # 429 that started this was logged once, when it arrived.
+        _LAST_HTTP_ERROR = _RATE_LIMIT_STATUS
+        if probe:
+            _note_probe(url, _RATE_LIMIT_STATUS)
+        logger.debug('PCO GET %s skipped: rate limited for %ss more', url, rate_limit_remaining())
+        return None
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if resp.status_code == _RATE_LIMIT_STATUS:
+            wait = _retry_after_seconds(resp)
+            _RATE_LIMITED_UNTIL = time.monotonic() + wait
+            _LAST_HTTP_ERROR = _RATE_LIMIT_STATUS
+            if probe:
+                _note_probe(url, _RATE_LIMIT_STATUS)
+            logger.warning(
+                'PCO GET %s: rate limited by Planning Center (429); not asking again for %ss',
+                url, wait)
+            return None
         if resp.status_code != 200:
             _LAST_HTTP_ERROR = resp.status_code
             if probe:
@@ -839,6 +904,8 @@ def _fetch_error(default: str) -> str:
     fetch..." string, so telling them apart meant reading the server log.
     """
     status = _LAST_HTTP_ERROR
+    if status == _RATE_LIMIT_STATUS:
+        return _rate_limited_error()
     if status in (401, 403):
         return (
             'Planning Center rejected these credentials ({}). PCO credentials are kept '
@@ -860,11 +927,17 @@ def _http_get_collection(url: str, headers: Dict[str, str], params: Optional[Dic
 
 def _get_next_plan_id(service_type_id: int, headers: Dict[str, str]) -> Optional[str]:
     # Try to fetch future plans and pick the first upcoming
+    #
+    # ⛔⛔ Every candidate keeps `filter: future`. There used to be a last one of
+    # just `{"per_page": 1}`, and with no filter Planning Center lists a service
+    # type's plans oldest first -- so a service type with nothing scheduled yet
+    # resolved "next" to the first plan the church ever made, and a sync put
+    # that roster on the board without a word. No upcoming plan is an answer;
+    # the caller already says so.
     url = f"{BASE_URL}/service_types/{service_type_id}/plans"
     params_candidates = [
         {"filter": "future", "per_page": 1, "order": "sort_date"},
         {"filter": "future", "per_page": 1},
-        {"per_page": 1},
     ]
     for params in params_candidates:
         data = _http_get(url, headers, params)
@@ -2368,7 +2441,19 @@ def auto_sync_decision(running: bool = False) -> Dict[str, Any]:
         attempted=_AUTO_SYNC_TRIED,
         running=running,
     )
-    return {"go": go, "reason": reason, "key": pco_auto_sync.attempt_key(status)}
+    # ⛔⛔ The plan and the rules the sync must use are the ones the watcher was
+    # checking -- the plan last synced, under the profile last used. Leaving
+    # them for `resolve_sync` to work out again re-resolves "next" and re-picks
+    # the rule set by date, so a plan chosen by hand, or a hand-picked rule set
+    # such as Christmas Eve, was silently replaced by whatever "next" and the
+    # calendar said -- by the very sync that was meant to refresh it.
+    return {
+        "go": go,
+        "reason": reason,
+        "key": pco_auto_sync.attempt_key(status),
+        "plan_id": status.get('plan_id') or None,
+        "profile_id": last_sync().get('profile_id') or None,
+    }
 
 
 def note_auto_sync_attempt(key) -> None:
@@ -2690,6 +2775,15 @@ def _plan_people_error(
     status = failure.status if failure else None
     probes = _probe_count()
     where = failure.where if failure else 'the roster read'
+
+    # ⛔ A 429 anywhere in the sweep means the rest of it was never asked, so
+    # the scoped request's status is not the whole story. Checked first: a
+    # rate-limited sweep must not be reported as "nobody scheduled".
+    if status == _RATE_LIMIT_STATUS or _LAST_HTTP_ERROR == _RATE_LIMIT_STATUS:
+        logger.warning(
+            'PCO plan %s: roster not read -- Planning Center is rate limiting '
+            'this account (%s path(s) tried).', plan_id, probes)
+        return _rate_limited_error()
 
     if status == 404:
         if _plan_is_really_gone(plan_id, headers):
